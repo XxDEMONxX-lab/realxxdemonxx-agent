@@ -119,7 +119,7 @@ export async function editText(initial="",filename="untitled"){
  const render=()=>{
   process.stdout.write("\\x1b[2J\\x1b[H");
   process.stdout.write(bold(violet("EDITOR"))+"  "+filename+(dirty?yellowMark():"")+"\\n");
-  if(row<top)top=row;if(row>=top+visible)top=row-visible+1;
+  if(row<top)top=row;if(row>=top+visible)top=row-visible+1;if(col<left)left=col;if(col>=left+width-6)left=col-width+7;
   for(let i=0;i<visible;i++){
    const line=lines[top+i];
    process.stdout.write(line===undefined?"\\n":String(i+top+1).padStart(3)+" "+line.slice(left,left+width-6)+"\\n");
