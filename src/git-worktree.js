@@ -19,7 +19,8 @@ export async function listWorktrees(){
  return raw||"(no Git worktrees found)";
 }
 export async function createWorktree(name,branch){
- const id=safeName(name),branchName=String(branch||("agent/"+id));\n if(!/^[a-zA-Z0-9._/-]{1,80}$/.test(branchName)||branchName.includes("..")||branchName.startsWith("/")||branchName.endsWith("/"))throw new Error("Invalid Git branch name.");
+ const id=safeName(name),branchName=String(branch||("agent/"+id));
+ if(!/^[a-zA-Z0-9._/-]{1,80}$/.test(branchName)||branchName.includes("..")||branchName.startsWith("/")||branchName.endsWith("/"))throw new Error("Invalid Git branch name.");
  await fs.mkdir(base,{recursive:true});
  const target=path.join(base,id);
  try{await fs.access(target);throw new Error("Worktree path already exists: "+target);}catch(e){if(e.code!=="ENOENT")throw e;}
