@@ -73,6 +73,9 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/debug` | Investigate a bug or error |
 | `/map` | Display project structure |
 | `/files` | List project files |
+| `/open` | Read a selected project file |
+| `/edit` | Send a targeted file-edit request to the agent |
+| `/terminal` | Run a terminal command after approval |
 | `/pwd` | Show current project directory |
 | `/providers` | Switch provider and model |
 | `/models` | Browse models for current provider |
