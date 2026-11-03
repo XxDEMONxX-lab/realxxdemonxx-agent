@@ -281,6 +281,7 @@ export async function runAgent(config) {
     for (let step=0;step<maxSteps;step++) {
       let result;
       let streamed=false;
+      const requestedModel=config.model;
       try {
         result=await withSpinner(
           step===0?"Thinking...":`Working through tool results · step ${step+1}/${maxSteps}...`,
@@ -318,6 +319,7 @@ export async function runAgent(config) {
       }
 
       if(streamed)streamEnd();
+      if(config.model!==requestedModel){await persist();info("Primary model unavailable; switched to fallback "+config.model);}
       if (result?.usage) { usage.prompt+=Number(result.usage.prompt_tokens)||0; usage.completion+=Number(result.usage.completion_tokens)||0; usage.total+=Number(result.usage.total_tokens)||0; }
       const choice=result?.choices?.[0];
       const msg=choice?.message;
