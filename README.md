@@ -41,10 +41,12 @@ Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It us
 
 ## What the agent can do
 
-- List and search project files.
-- Read and write project files.
-- Run shell commands and tests after you explicitly approve them.
-- Keep conversation context during a session.
+- List, map, and search project files.
+- Read files and preview proposed edits before writing; existing files are backed up for `/undo`.
+- Run shell commands, inspect Git status/diffs, and execute configured test/check scripts with separate permissions.
+- Persist project-specific memory and task history across sessions.
+- Create named project checkpoints and restore a selected checkpoint after explicit confirmation.
+- Keep conversation context during a session and report provider usage when supplied.
 - Inspect tool results and continue working through multiple steps.
 - Show connection errors and suggestions rather than silently failing.
 
@@ -58,7 +60,7 @@ Example requests:
 
 The terminal interface provides a persistent workspace with keyboard navigation, command suggestions, activity output, and a project map. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to select, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
 
-Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. `/map` displays the project structure and `/usage` reports token usage when the provider supplies usage metadata. These are single-agent workflows; multi-agent orchestration and a full file editor are future implementation stages, not currently available features.
+Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/usage` reports provider token metadata when available. The current interface is still a terminal workspace rather than a full IDE with an embedded editor, split terminal, or visual diff pane.
 
 ## Commands
 
