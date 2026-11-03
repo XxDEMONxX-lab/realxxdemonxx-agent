@@ -116,30 +116,80 @@ export async function chooseCurrentModel(config,save) {
   return model;
 }
 
-export async function chatCompletion(config,messages,tools=[]) {
-  if (!config.baseURL || !config.apiKey || !config.model) {
-    throw new Error("Provider setup is incomplete. Run /providers.");
-  }
-  const headers={
-    "content-type":"application/json",
-    authorization:`Bearer ${config.apiKey}`
-  };
-  if (config.provider==="openrouter" || config.provider==="openrouter-auto") {
+async function requestCompletion(config,messages,tools,stream,onToken){
+  if (!config.baseURL || !config.apiKey || !config.model) throw new Error("Provider setup is incomplete. Run /providers.");
+  const headers={"content-type":"application/json",authorization:"Bearer "+config.apiKey};
+  if(config.provider==="openrouter"||config.provider==="openrouter-auto"){
     headers["HTTP-Referer"]="https://github.com/XxDEMONxX-lab/realxxdemonxx-agent";
     headers["X-Title"]="REALXXDEMONXX AGENT";
   }
-  const body={model:config.model,messages,temperature:0.2,stream:false,max_tokens:config.maxTokens||512};
-  if (tools.length) body.tools=tools;
-  const response=await fetch(config.baseURL.replace(/\/+$/,"")+"/chat/completions",{
+  const body={model:config.model,messages,temperature:0.2,stream,max_tokens:config.maxTokens||512};
+  if(tools.length)body.tools=tools;
+  const response=await fetch(config.baseURL.replace(/\\/+$/,"")+"/chat/completions",{
     method:"POST",headers,body:JSON.stringify(body),signal:AbortSignal.timeout(120000)
   });
-  const raw=await response.text();
-  let data;
-  try { data=JSON.parse(raw); }
-  catch { throw new Error(`Provider returned invalid JSON (HTTP ${response.status}): ${raw.slice(0,700)}`); }
-  if (!response.ok) {
-    const detail=data?.error?.message || data?.message || raw;
-    throw new Error(` ${config.providerName || config.provider} API error ${response.status}: ${String(detail).slice(0,900)}`);
+  if(!response.ok){
+    const raw=await response.text();
+    let data={};try{data=JSON.parse(raw);}catch{}
+    const detail=data?.error?.message||data?.message||raw;
+    const error=new Error((config.providerName||config.provider)+" API error "+response.status+": "+String(detail).slice(0,900));
+    error.status=response.status;
+    throw error;
   }
-  return data;
+  if(!stream){
+    const raw=await response.text();
+    try{return JSON.parse(raw);}catch{throw new Error("Provider returned invalid JSON: "+raw.slice(0,700));}
+  }
+  if(!response.body)throw new Error("Provider did not return a streaming response body.");
+  const reader=response.body.getReader(),decoder=new TextDecoder();
+  let buffer="",content="",finishReason=null,usage=null;
+  const calls=new Map();
+  const processLine=line=>{
+    if(!line.startsWith("data:"))return;
+    const data=line.slice(5).trim();
+    if(!data||data==="[DONE]")return;
+    let packet;try{packet=JSON.parse(data);}catch{return;}
+    if(packet.usage)usage=packet.usage;
+    const choice=packet.choices?.[0];if(!choice)return;
+    const delta=choice.delta||{};
+    if(typeof delta.content==="string"){content+=delta.content;if(onToken)onToken(delta.content);}
+    for(const part of delta.tool_calls||[]){
+      const index=part.index??0;
+      const old=calls.get(index)||{id:"",type:"function",function:{name:"",arguments:""}};
+      if(part.id)old.id=part.id;
+      if(part.type)old.type=part.type;
+      if(part.function?.name)old.function.name+=part.function.name;
+      if(part.function?.arguments)old.function.arguments+=part.function.arguments;
+      calls.set(index,old);
+    }
+    if(choice.finish_reason)finishReason=choice.finish_reason;
+  };
+  try{
+    while(true){
+      const {value,done}=await reader.read();if(done)break;
+      buffer+=decoder.decode(value,{stream:true});
+      const lines=buffer.split(/\\r?\\n/);buffer=lines.pop()||"";
+      for(const line of lines)processLine(line);
+    }
+    buffer+=decoder.decode();if(buffer)processLine(buffer);
+  }finally{reader.releaseLock();}
+  return {choices:[{message:{role:"assistant",content,tool_calls:[...calls.entries()].sort((a,b)=>a[0]-b[0]).map(x=>x[1])},finish_reason:finishReason}],usage};
+}
+
+export async function chatCompletion(config,messages,tools=[],options={}){
+  const useStream=typeof options.onToken==="function";
+  let lastError;
+  for(let attempt=0;attempt<3;attempt++){
+    try{return await requestCompletion(config,messages,tools,useStream,options.onToken);}
+    catch(error){
+      lastError=error;
+      const status=Number(error.status)||0;
+      const retryable=!status||status===408||status===409||status===425||status===429||status>=500;
+      if(!retryable||attempt===2)break;
+      const wait=700*(2**attempt);
+      if(options.onRetry)options.onRetry(attempt+1,wait,error);
+      await new Promise(resolve=>setTimeout(resolve,wait));
+    }
+  }
+  throw lastError;
 }
