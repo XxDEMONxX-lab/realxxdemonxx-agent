@@ -75,10 +75,16 @@ export async function restoreCheckpoint(id){
     if(dest===projectRoot||!dest.startsWith(projectRoot+path.sep))continue;
     const source=path.resolve(folder,item.path);
     if(!source.startsWith(folder+path.sep))continue;
+    let probe=path.dirname(dest);
+    while(probe!==projectRoot&&!probe.startsWith(projectRoot+path.sep))throw new Error("Restore path escapes the project.");
+    while(true){
+      try{const actual=await fs.realpath(probe);if(actual!==projectRoot&&!actual.startsWith(projectRoot+path.sep))throw new Error("Restore path resolves outside the project.");break;}
+      catch(e){if(e.code!=="ENOENT")throw e;const parent=path.dirname(probe);if(parent===probe)throw new Error("Could not validate restore path.");probe=parent;}
+    }
+    try{const existing=await fs.realpath(dest);if(existing!==projectRoot&&!existing.startsWith(projectRoot+path.sep))throw new Error("Restore target is a symlink outside the project.");}catch(e){if(e.code!=="ENOENT")throw e;}
     await fs.mkdir(path.dirname(dest),{recursive:true});
     const parent=await fs.realpath(path.dirname(dest));
     if(parent!==projectRoot&&!parent.startsWith(projectRoot+path.sep))throw new Error("Restore path resolves outside the project.");
-    try{const existing=await fs.realpath(dest);if(existing!==projectRoot&&!existing.startsWith(projectRoot+path.sep))throw new Error("Restore target is a symlink outside the project.");}catch(e){if(e.code!=="ENOENT")throw e;}
     await fs.copyFile(source,dest);restored.push(item.path);
   }
   return restored;
