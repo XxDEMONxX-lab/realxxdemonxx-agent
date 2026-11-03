@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ask } from "./ui.js";
+import { ask,editText } from "./ui.js";
 
 const root=await fs.realpath(process.cwd());
 const ignored=new Set([".git","node_modules",".venv","venv","dist","build",".next",".realxxdemonxx-backups"]);
@@ -66,6 +66,7 @@ export const toolSchemas=[
  {type:"function",function:{name:"read_file",description:"Read a UTF-8 project text file. Always read a file before modifying it.",parameters:{type:"object",properties:{path:{type:"string"}},required:["path"]}}},
  {type:"function",function:{name:"write_file",description:"Create or replace a UTF-8 project file. Preserve existing code unless the requested change requires otherwise.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
  {type:"function",function:{name:"preview_file_change",description:"Preview a proposed file edit as a compact line diff without changing the file. Use before write_file.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
+ {type:"function",function:{name:"edit_file",description:"Open a project file in the built-in keyboard editor. Saving requires write permission.",parameters:{type:"object",properties:{path:{type:"string"}},required:["path"]}}},
  {type:"function",function:{name:"delegate_subagent",description:"Delegate a focused read-only investigation to a specialist subagent. It cannot edit files or execute commands.",parameters:{type:"object",properties:{role:{type:"string",enum:["architect","debugger","security-reviewer","test-analyst"]},task:{type:"string"}},required:["role","task"]}}},
  {type:"function",function:{name:"git_status",description:"Inspect the current Git working tree status. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"git_diff",description:"Inspect unstaged and staged Git changes. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
@@ -145,6 +146,19 @@ export async function executeTool(name,args={},config={}) {
     if (!stat.isFile()) throw new Error("The requested path is not a regular file.");
     if (stat.size>400000) throw new Error("File is larger than 400 KB; inspect a smaller file or split it.");
     return await fs.readFile(file,"utf8");
+  }
+  if(name==="edit_file"){
+    if(config.permissions?.writeFiles!==true&&(await ask("  Open file editor? Type YES to approve editing: ")).trim()!=="YES")return "User denied file editing.";
+    const file=await safePath(args.path);
+    let original="";
+    try{const stat=await fs.stat(file);if(!stat.isFile())throw new Error("Editor target is not a regular file.");if(stat.size>500000)throw new Error("File exceeds the 500 KB editor limit.");original=await fs.readFile(file,"utf8");}catch(e){if(e.code!=="ENOENT")throw e;}
+    const result=await editText(original,path.relative(root,file));
+    if(!result.saved)return "Editor closed without saving.";
+    if(Buffer.byteLength(result.content,"utf8")>500000)throw new Error("Edited file exceeds the 500 KB limit.");
+    const backedUp=await backupExisting(file);
+    await fs.mkdir(path.dirname(file),{recursive:true});
+    await fs.writeFile(file,result.content,"utf8");
+    return "Saved "+path.relative(root,file)+(backedUp?" · previous version backed up":" · new file");
   }
   if (name==="preview_file_change") {
     if(config.permissions?.readFiles!==true && (await ask("  Read current file for diff preview? Type YES: ")).trim()!=="YES")return "User denied diff preview.";
