@@ -45,7 +45,7 @@ export async function undoLastChange() {
   let folders=[];
   try { folders=await fs.readdir(backupRoot,{withFileTypes:true}); }
   catch(e) { if(e.code==="ENOENT") return "No file backup exists yet."; throw e; }
-  const stamps=folders.filter(x=>x.isDirectory() && /^\\d+$/.test(x.name)).map(x=>x.name).sort((a,b)=>Number(b)-Number(a));
+  const stamps=folders.filter(x=>x.isDirectory() && /^\d+$/.test(x.name)).map(x=>x.name).sort((a,b)=>Number(b)-Number(a));
   for(const stamp of stamps) {
     const folder=path.join(backupRoot,stamp);
     try {
