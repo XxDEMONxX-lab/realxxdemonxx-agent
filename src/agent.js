@@ -1,4 +1,4 @@
-import { chatCompletion, configureProvider } from "./providers.js";
+import { chatCompletion, configureProvider, chooseCurrentModel } from "./providers.js";
 import { toolSchemas, executeTool } from "./tools.js";
 import { saveConfig } from "./config.js";
 import { ask, say, withSpinner, showTool, agentText, promptLabel, section, info, success, error } from "./ui.js";
@@ -13,7 +13,7 @@ const HELP = `AGENT COMMANDS
   /help          Show this command panel
   /providers     Open provider search and model selector
   /provider      Show active provider and model
-  /model         Change the active model ID
+  /models        Browse models from the active provider\n  /model         Enter a model ID manually
   /test          Test the current API connection
   /favorites     Show saved favorite providers
   /maxsteps      Change agent reasoning/tool step limit
@@ -59,7 +59,7 @@ export async function runAgent(config) {
       }
       continue;
     }
-    if (command === "/model") {
+    if (command === "/models") {\n      const model=await chooseCurrentModel(config,persist);\n      if (model) { messages.splice(1); success("Active model changed to "+model+". Conversation context reset."); }\n      continue;\n    }\n    if (command === "/model") {
       const model=(await ask("  Enter exact model ID: ")).trim();
       if (model) { config.model=model; await persist(); messages.splice(1); success("Model saved. Conversation context reset."); }
       continue;
