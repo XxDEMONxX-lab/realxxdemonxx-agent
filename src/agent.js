@@ -22,6 +22,7 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /pwd        Show current project directory
   /providers  Switch API provider
   /models     Browse models for current provider
+  /routing    Configure simple, complex, review and debug models
   /model      Enter model ID manually
   /provider   Show active API configuration
   /test       Test model connection
@@ -135,6 +136,18 @@ export async function runAgent(config) {
         if(name&&name!==ESC){config.mcpServers=(config.mcpServers||[]).filter(item=>item.name!==name);await persist();success("MCP server removed: "+name);}
       }
       continue;
+    }
+    if(command==="/routing") {
+      const routes=["simple","complex","review","debug"];
+      config.modelRoutes=config.modelRoutes||{};
+      section("TASK MODEL ROUTING");
+      routes.forEach(route=>info(route+": "+(config.modelRoutes[route]||"Use primary model")));
+      const route=(await ask("  Route to configure (simple/complex/review/debug): ")).trim().toLowerCase();
+      if(!routes.includes(route)){info("Routing unchanged.");continue;}
+      const model=(await ask("  Exact model ID for "+route+" (blank clears route): ")).trim();
+      if(model===ESC)continue;
+      if(model)config.modelRoutes[route]=model;else delete config.modelRoutes[route];
+      await persist();success("Model route updated: "+route);continue;
     }
     if (command==="/usage") {
       section("SESSION USAGE");
@@ -352,6 +365,11 @@ export async function runAgent(config) {
     }
 
     const userMessageIndex=messages.length;
+    const taskMode=nextMode;
+    const route=taskMode==="review"?"review":taskMode==="debug"?"debug":(/\\b(review|audit|security review)\\b/i.test(input)?"review":/\\b(debug|trace|crash|stack trace|error)\\b/i.test(input)?"debug":input.length>500||/\\b(implement|build|refactor|architecture|multi-file|multiple files|feature)\\b/i.test(input)?"complex":"simple");
+    const baseModel=config.model;
+    const routeModel=config.modelRoutes?.[route];
+    if(routeModel){config.model=routeModel;info("Model routing · "+route+" → "+routeModel);}
     currentTaskStarted=Date.now();
     setTaskLabel(input);
     const modeInstruction=nextMode?({plan:"\n\nMODE: PLANNING. First inspect relevant project files, then present a numbered plan and wait for approval before making edits.",review:"\n\nMODE: CODE REVIEW. Inspect relevant files and report findings ordered by severity with file and line references. Do not edit files.",debug:"\n\nMODE: DEBUGGING. Reproduce or trace the issue from available evidence, inspect relevant files, explain the likely root cause, then make a minimal fix only when sufficiently supported."}[nextMode]||""):"";
@@ -455,6 +473,7 @@ export async function runAgent(config) {
       try{await addTaskHistory({task:input.slice(0,1000),durationMs:Date.now()-currentTaskStarted,status:completed?"completed":"incomplete"});}
       catch(e){info("Task history could not be saved: "+e.message);}
     }
+    if(routeModel){if(config.model!==routeModel){config.modelRoutes[route]=config.model;info("Updated "+route+" route to fallback model "+config.model);}config.model=baseModel;await persist();}
     compactConversation(messages,Number(config.maxContextMessages)||30);
   }
   success("Session ended.");
