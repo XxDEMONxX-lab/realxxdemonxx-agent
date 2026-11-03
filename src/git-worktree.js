@@ -32,8 +32,8 @@ export async function createWorktree(name,branch){
 }
 export async function removeWorktree(name){
  const id=safeName(name),target=path.join(base,id);
- const actual=path.resolve(target);
- if(!actual.startsWith(base+path.sep))throw new Error("Invalid worktree path.");
- await git(["worktree","remove",target]);
+ const realBase=await fs.realpath(base),actual=await fs.realpath(target);
+ if(!actual.startsWith(realBase+path.sep))throw new Error("Worktree path resolves outside the managed directory.");
+ await git(["worktree","remove",actual]);
  return "Removed worktree "+id;
 }
