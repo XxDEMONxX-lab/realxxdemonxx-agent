@@ -107,7 +107,9 @@ export async function runAgent(config) {
       info(descriptions[nextMode]);
       continue;
     }
-    if(command==="/skills") {\n      try{section("AVAILABLE SKILLS");say(await executeTool("list_skills",{},config));}catch(e){error(e.message);}continue;\n    }\n    if (command==="/map") {
+    if(command==="/skills") {
+      try{section("AVAILABLE SKILLS");say(await executeTool("list_skills",{},config));}catch(e){error(e.message);}continue;
+    }\n    if (command==="/map") {
       try { section("PROJECT MAP"); say(await executeTool("project_map",{path:"."},config)); }
       catch(e) { error(e.message); }
       continue;
