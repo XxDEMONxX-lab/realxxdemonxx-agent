@@ -205,7 +205,8 @@ export async function runAgent(config) {
         ["terminal","Auto-approve ordinary terminal commands"],
         ["packageInstall","Auto-approve package installations"],
         ["destructive","Auto-approve destructive commands"],
-        ["gitOperations","Auto-approve read-only Git inspection"],\n        ["runTests","Auto-approve test/check scripts"]
+        ["gitOperations","Auto-approve read-only Git inspection"],
+        ["runTests","Auto-approve test/check scripts"]
       ];
       config.permissions=config.permissions||{};
       while (true) {
