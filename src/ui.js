@@ -12,7 +12,7 @@ function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.lengt
 function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
- const side=22,main=width-side-3,body=height-8;
+ const side=22,main=width-side-3,body=height-12;
  const clip=(s,n)=>{s=String(s).replace(/\x1b\[[0-9;]*m/g,"").replace(/\r/g,"");return s.length>n?s.slice(0,Math.max(0,n-1))+"…":s;};
  const line=(s="")=>process.stdout.write(s+"\x1b[K\n");
  process.stdout.write("\x1b[H\x1b[2J");
@@ -103,7 +103,7 @@ export async function quickMenu(){
   try{input.setRawMode(true);}catch{}draw();input.on("keypress",onKey);
  });
 }
-export async function withSpinner(label,task){if(!tty||dashboard){info(label);try{const result=await task();success(label);return result;}catch(e){error(label);throw e;}}const frames=["◐","◓","◑","◒"];let i=0;const timer=setInterval(()=>{readline.cursorTo(process.stdout,0);process.stdout.write(cyan(frames[i++%frames.length])+" "+label);},100);try{const result=await task();clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(green("✓")+" "+label);return result;}catch(e){clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(red("✕")+" "+label);throw e;}}
+export async function withSpinner(label,task){if(!tty||dashboard){session.status="WORKING";info(label);try{const result=await task();session.status="ONLINE";success(label);return result;}catch(e){session.status="ERROR";error(label);throw e;}}const frames=["◐","◓","◑","◒"];let i=0;const timer=setInterval(()=>{readline.cursorTo(process.stdout,0);process.stdout.write(cyan(frames[i++%frames.length])+" "+label);},100);try{const result=await task();clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(green("✓")+" "+label);return result;}catch(e){clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(red("✕")+" "+label);throw e;}}
 export function showTool(name,args={}){const detail=Object.entries(args).map(([k,v])=>k+": "+String(v).replace(/\s+/g," ").slice(0,75)).join(" · ");console.log("\n  "+violet("⚙")+" "+bold(name)+" "+dim(detail));}
 export function agentText(value){if(value)console.log("\n"+cyan("◆")+" "+bold("AGENT")+"\n"+value.trim()+"\n");}
 export function promptLabel(){return "\n"+green("YOU")+" "+violet("›")+" ";}
