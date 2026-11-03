@@ -125,7 +125,7 @@ async function requestCompletion(config,messages,tools,stream,onToken){
   }
   const body={model:config.model,messages,temperature:0.2,stream,max_tokens:config.maxTokens||512};
   if(tools.length)body.tools=tools;
-  const response=await fetch(config.baseURL.replace(/\\/+$/,"")+"/chat/completions",{
+  const response=await fetch(config.baseURL.replace(/\/+$/,"")+"/chat/completions",{
     method:"POST",headers,body:JSON.stringify(body),signal:AbortSignal.timeout(120000)
   });
   if(!response.ok){
