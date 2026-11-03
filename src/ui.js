@@ -1,4 +1,5 @@
 import readline from "node:readline";
+import {clipAnsi} from "./core.js";
 export const ESC="\u001b";
 const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/open","/edit","/editor","/terminal","/map","/pwd","/providers","/models","/fallback","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
@@ -6,14 +7,14 @@ const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
 let activePrompt=null, dashboard=false, logs=[], inputValue="", inputCursor=0, selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions",diff:[]};
 const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["EDITOR","/editor"],["TERMINAL","/terminal"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
-let originalLog=null,originalError=null,renderCache=null;
+let originalLog=null,originalError=null,renderCache=null,promptHistory=[];
 if(tty)readline.emitKeypressEvents(process.stdin);
 function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
 function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
  const side=22,contextWidth=width>=105?22:0,main=Math.max(18,width-side-contextWidth-6),body=height-12;
- const clip=(value,n)=>{const source=String(value).replace(/\r/g,"");let out="",visible=0;const tokens=source.match(/\x1b\[[0-?]*[ -/]*[@-~]|[^\x1b]/g)||[];for(const token of tokens){if(token.startsWith("\x1b[")){out+=token;continue;}if(visible>=n)break;out+=token;visible++;}if(visible<n)return out;return out+"…\x1b[0m";};
+ const clip=clipAnsi;
  const context=session.diff.length?["LATEST DIFF","──────────────",...session.diff.slice(0,14)]:["PROJECT CONTEXT","───────────────","Provider",session.provider||"Not set","","Model",session.model||"Not set","","Workspace",session.workspace.split("/").filter(Boolean).slice(-2).join("/")||session.workspace,"","Current task",session.task||"Waiting for instructions","","Status",session.status];
  const rows=[];
  rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  HYBRID CODING WORKSPACE")+" ".repeat(Math.max(1,width-52))+green("● "+session.status));
@@ -32,15 +33,17 @@ function drawDashboard(){
  rows.push(" "+dim("─".repeat(side))+"  "+dim("└"+"─".repeat(Math.max(8,main-2))+"┘")+(contextWidth?"  "+dim("└"+"─".repeat(contextWidth-2)+"┘"):""));
  rows.push(" "+dim("PROVIDER")+"  "+clip(session.provider||"Not set",side-12)+"  "+dim("MODEL")+"  "+clip(session.model||"Not set",Math.max(8,width-side-20)));
  rows.push(dim("─".repeat(width)));
- rows.push(" "+bold(green("YOU"))+" "+violet("›")+" "+inputValue);
- const matches=inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
+ const inputLines=inputValue.split("\n");
+ rows.push(" "+bold(green("YOU"))+" "+violet("›")+" "+(inputLines[0]||""));
+ if(inputLines.length>1)rows.push("   "+inputLines[inputLines.length-1]);
+ const matches=inputLines.length===1&&inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
  if(matches.length)rows.push(" "+dim("COMMANDS  ")+matches.join("   "));
  rows.push(dim(" ↑↓ Navigate when input is empty   Enter Select/Send   Tab Complete   Esc Back   Ctrl+P Palette"));
  while(rows.length<height)rows.push("");
  rows.length=height;
  if(!renderCache||renderCache.length!==height)renderCache=Array(height).fill(null);
  for(let i=0;i<height;i++){const next=clip(rows[i],width);if(renderCache[i]!==next){process.stdout.write("\x1b["+(i+1)+";1H"+next+"\x1b[K");renderCache[i]=next;}}
- const promptRow=Math.max(1,rows.findIndex(line=>line.includes("YOU"))+1);const cursorCol=Math.min(width,5+inputValue.length);process.stdout.write("\x1b["+promptRow+";"+cursorCol+"H\x1b[?25h");
+ const promptRow=Math.max(1,rows.findIndex(line=>line.includes("YOU"))+1);const before=inputValue.slice(0,inputCursor).split("\n");const cursorRow=Math.min(height,promptRow+Math.min(1,before.length-1));const cursorCol=Math.min(width,(before.length>1?4:5)+Array.from(before[before.length-1]||"").length);process.stdout.write("\x1b["+cursorRow+";"+cursorCol+"H\x1b[?25h");
 }
 function captureConsole(){
  if(!tty||originalLog)return;
@@ -72,18 +75,23 @@ export function chatReady(model,provider){session.model=model||session.model;ses
 export async function ask(prompt){
  if(!tty){const rl=readline.createInterface({input:process.stdin,output:process.stdout});return new Promise(resolve=>rl.question(prompt,value=>{rl.close();resolve(value);}));}
  return new Promise(resolve=>{
-  let value="",cursor=0,finished=false,matchIndex=0,historyIndex=-1;const input=process.stdin;
+  let value="",cursor=0,finished=false,matchIndex=0,historyIndex=-1,draft="";const input=process.stdin;
   const render=()=>{if(dashboard){inputValue=value;inputCursor=cursor;drawDashboard();}else{readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);process.stdout.write(prompt+value);readline.cursorTo(process.stdout,prompt.length+cursor);}};
-  const done=result=>{if(finished)return;finished=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}activePrompt=null;inputValue="";if(dashboard)drawDashboard();else process.stdout.write("\n");resolve(result);};
+  const done=result=>{if(finished)return;finished=true;if(result!==ESC&&String(result||"").trim()){promptHistory.push(String(result));if(promptHistory.length>100)promptHistory.shift();}input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}activePrompt=null;inputValue="";inputCursor=0;if(dashboard)drawDashboard();else process.stdout.write("\n");resolve(result);};
   const onKey=(str,key={})=>{
    if(finished)return;
    if(key.name==="escape"){done(ESC);return;}
    if(key.ctrl&&key.name==="p"){done("/menu");return;}
    if(key.name==="return"||key.name==="enter"){
+    if(key.shift){value=value.slice(0,cursor)+"\n"+value.slice(cursor);cursor++;render();return;}
     if(!value.trim()&&dashboard){done(NAV[selectedNav]?.[1]||"/chat");return;}
     done(value);return;
    }
    if(key.ctrl&&key.name==="c"){done(ESC);closeInput();process.exit(130);}
+   if(key.ctrl&&key.name==="a"){cursor=0;render();return;}
+   if(key.ctrl&&key.name==="e"){cursor=value.length;render();return;}
+   if(key.ctrl&&key.name==="u"){value=value.slice(cursor);cursor=0;render();return;}
+   if(key.ctrl&&key.name==="w"){const left=value.slice(0,cursor).replace(/\\s+$/,"").replace(/\\S+$/,"");value=left+value.slice(cursor);cursor=left.length;render();return;}
    if(key.name==="backspace"){if(cursor>0){value=value.slice(0,cursor-1)+value.slice(cursor);cursor--;}render();return;}
    if(key.name==="delete"){if(cursor<value.length)value=value.slice(0,cursor)+value.slice(cursor+1);render();return;}
    if(key.name==="left"){cursor=Math.max(0,cursor-1);render();return;}
@@ -92,12 +100,14 @@ export async function ask(prompt){
    if(key.name==="end"){cursor=value.length;render();return;}
    if(key.name==="up"||key.name==="down"){
     if(!value&&dashboard){selectedNav=(selectedNav+(key.name==="up"?NAV.length-1:1))%NAV.length;render();return;}
+    if(key.name==="up"&&promptHistory.length){if(historyIndex===-1)draft=value;historyIndex=Math.min(promptHistory.length-1,historyIndex+1);value=promptHistory[promptHistory.length-1-historyIndex];cursor=value.length;render();return;}
+    if(key.name==="down"&&historyIndex>=0){historyIndex--;value=historyIndex<0?draft:promptHistory[promptHistory.length-1-historyIndex];cursor=value.length;render();return;}
     return;
    }
    if(key.name==="tab"){
     const hits=COMMANDS.filter(x=>x.startsWith(value));if(hits.length){value=hits[matchIndex++%hits.length];cursor=value.length;render();}return;
    }
-   if(str&&!key.ctrl&&!key.meta&&str.length===1&&str>=" "){value=value.slice(0,cursor)+str+value.slice(cursor);cursor++;render();}
+   if(str&&!key.ctrl&&!key.meta){const clean=String(str).replace(/\\r\\n?/g,"\\n").replace(/[^\\P{Cc}\\n\\t]/gu,"");if(clean){value=value.slice(0,cursor)+clean+value.slice(cursor);cursor+=clean.length;render();}}
   };
   activePrompt=done;
   if(dashboard){inputValue="";inputCursor=0;drawDashboard();}else process.stdout.write(prompt);
