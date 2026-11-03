@@ -4,7 +4,7 @@ const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/op
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
 const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
-let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions"};
+let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions",diff:[]};
 const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["EDITOR","/editor"],["TERMINAL","/terminal"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
 let originalLog=null,originalError=null,renderCache=null;
 if(tty)readline.emitKeypressEvents(process.stdin);
@@ -14,12 +14,12 @@ function drawDashboard(){
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
  const side=22,contextWidth=width>=105?22:0,main=Math.max(18,width-side-contextWidth-6),body=height-12;
  const clip=(value,n)=>{const plain=String(value).replace(/\\x1b\\[[0-9;]*m/g,"").replace(/\\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":plain;};
- const context=["PROJECT CONTEXT","───────────────","Provider",session.provider||"Not set","","Model",session.model||"Not set","","Workspace",session.workspace.split("/").filter(Boolean).slice(-2).join("/")||session.workspace,"","Current task",session.task||"Waiting for instructions","","Status",session.status];
+ const context=session.diff.length?["LATEST DIFF","──────────────",...session.diff.slice(0,14)]:["PROJECT CONTEXT","───────────────","Provider",session.provider||"Not set","","Model",session.model||"Not set","","Workspace",session.workspace.split("/").filter(Boolean).slice(-2).join("/")||session.workspace,"","Current task",session.task||"Waiting for instructions","","Status",session.status];
  const rows=[];
  rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  HYBRID CODING WORKSPACE")+" ".repeat(Math.max(1,width-52))+green("● "+session.status));
  rows.push(dim(" "+session.workspace.slice(0,Math.max(20,width-4))));
  rows.push(dim("─".repeat(width)));
- rows.push(" "+bold("EXPLORER")+" ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("ACTIVITY")+(contextWidth?" ".repeat(Math.max(1,main-8))+dim("│")+" "+bold("CONTEXT"):""));
+ rows.push(" "+bold("EXPLORER")+" ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("ACTIVITY")+(contextWidth?" ".repeat(Math.max(1,main-8))+dim("│")+" "+bold("DIFF / CONTEXT"):""));
  rows.push(" "+dim("─".repeat(side))+"  "+dim("┌"+"─".repeat(Math.max(8,main-2))+"┐")+(contextWidth?"  "+dim("┌"+"─".repeat(contextWidth-2)+"┐"):""));
  const visibleLogs=logs.slice(-body);if(streamLine)visibleLogs.push(streamLine);
  for(let r=0;r<body;r++){
@@ -157,5 +157,6 @@ export function agentText(value){if(value)console.log("\n"+cyan("◆")+" "+bold(
 let streamLine="";
 export function streamToken(value){if(!value)return;if(dashboard){streamLine+=value;const parts=streamLine.split("\n");streamLine=parts.pop()||"";if(parts.length){logs.push(...parts);if(logs.length>400)logs=logs.slice(-400);}drawDashboard();}else process.stdout.write(value);}
 export function streamEnd(){if(dashboard){if(streamLine){logs.push(streamLine);streamLine="";if(logs.length>400)logs=logs.slice(-400);}drawDashboard();}else process.stdout.write("\n");}
+export function setDiffPanel(value){session.diff=String(value||"").split("\n").slice(0,30);if(dashboard)drawDashboard();}
 export function setTaskLabel(value){session.task=String(value||"Waiting for instructions").slice(0,160);if(dashboard)drawDashboard();}
 export function promptLabel(){return "\n"+green("YOU")+" "+violet("›")+" ";}
