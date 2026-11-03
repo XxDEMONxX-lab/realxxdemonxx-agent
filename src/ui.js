@@ -8,7 +8,7 @@ let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, s
 const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
 let originalLog=null,originalError=null;
 if(tty)readline.emitKeypressEvents(process.stdin);
-function pushLog(value){logs.push(...String(value).split(/\\r?\\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
+function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
 function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
@@ -31,6 +31,8 @@ function drawDashboard(){
  line(" "+dim("PROVIDER")+"  "+clip(session.provider||"Not set",side-12)+"  "+dim("MODEL")+"  "+clip(session.model||"Not set",Math.max(8,main-18)));
  line(dim("─".repeat(width)));
  line(" "+bold(green("YOU"))+" "+violet("›")+" "+inputValue+"\x1b[K");
+ const matches=inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
+ if(matches.length)line(" "+dim("COMMANDS  ")+matches.join("   "));
  line(dim(" ↑↓ Navigate when input is empty   Enter Select/Send   Tab Complete   Esc Back   Ctrl+P Palette"));
 }
 function captureConsole(){
@@ -42,6 +44,8 @@ function captureConsole(){
 export function startTUI(config={}){
  if(!tty)return;
  dashboard=true;session.provider=config.providerName||config.provider||"Not configured";session.model=config.model||"Not configured";session.workspace=process.cwd();session.status="ONLINE";
+ process.stdout.write("\x1b[?1049h\x1b[?25l");
+ process.stdout.on("resize",drawDashboard);
  captureConsole();drawDashboard();
 }
 export const say=value=>console.log(value);
