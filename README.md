@@ -133,7 +133,7 @@ AST inspection and semantic rename use the TypeScript compiler API when it is in
 
 Git worktrees are stored outside the project under `~/.realxxdemonxx-agent/worktrees/<project-id>`; removal requires a separate confirmation and Git refuses to remove worktrees with uncommitted changes unless forced.
 
-File tools are restricted to the current project directory. File edits create backups for `/undo`; checkpoint restores first create a safety snapshot. File reads/writes, shell commands, package installation, Git inspection, test execution, and destructive commands have separate approval settings. Shell commands require explicit approval unless you enable the corresponding auto-approval setting.
+File tools are restricted to the current project directory. File edits create backups for `/undo`; checkpoint restores first create a safety snapshot. Checkpoints are bounded snapshots: they skip dependency/build directories, files over 250 KB, and projects beyond the configured depth/file limits. Restore rewrites captured files but does not delete files created after the checkpoint or restore skipped files. File reads/writes, shell commands, package installation, Git inspection, test execution, and destructive commands have separate approval settings. Shell commands require explicit approval unless you enable the corresponding auto-approval setting.
 
 ## Compatibility
 
