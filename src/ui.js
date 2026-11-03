@@ -4,7 +4,7 @@ const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/op
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
 const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
-let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions",diff:[]};
+let activePrompt=null, dashboard=false, logs=[], inputValue="", inputCursor=0, selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions",diff:[]};
 const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["EDITOR","/editor"],["TERMINAL","/terminal"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
 let originalLog=null,originalError=null,renderCache=null;
 if(tty)readline.emitKeypressEvents(process.stdin);
@@ -72,8 +72,8 @@ export function chatReady(model,provider){session.model=model||session.model;ses
 export async function ask(prompt){
  if(!tty){const rl=readline.createInterface({input:process.stdin,output:process.stdout});return new Promise(resolve=>rl.question(prompt,value=>{rl.close();resolve(value);}));}
  return new Promise(resolve=>{
-  let value="",finished=false,matchIndex=0,historyIndex=-1;const input=process.stdin;
-  const render=()=>{if(dashboard){inputValue=value;drawDashboard();}else{readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);process.stdout.write(prompt+value);}};
+  let value="",cursor=0,finished=false,matchIndex=0,historyIndex=-1;const input=process.stdin;
+  const render=()=>{if(dashboard){inputValue=value;inputCursor=cursor;drawDashboard();}else{readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);process.stdout.write(prompt+value);readline.cursorTo(process.stdout,prompt.length+cursor);}};
   const done=result=>{if(finished)return;finished=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}activePrompt=null;inputValue="";if(dashboard)drawDashboard();else process.stdout.write("\n");resolve(result);};
   const onKey=(str,key={})=>{
    if(finished)return;
@@ -84,18 +84,18 @@ export async function ask(prompt){
     done(value);return;
    }
    if(key.ctrl&&key.name==="c"){done(ESC);closeInput();process.exit(130);}
-   if(key.name==="backspace"){value=value.slice(0,-1);render();return;}
+   if(key.name==="backspace"){if(cursor>0){value=value.slice(0,cursor-1)+value.slice(cursor);cursor--;}render();return;}\n   if(key.name==="delete"){if(cursor<value.length)value=value.slice(0,cursor)+value.slice(cursor+1);render();return;}\n   if(key.name==="left"){cursor=Math.max(0,cursor-1);render();return;}\n   if(key.name==="right"){cursor=Math.min(value.length,cursor+1);render();return;}\n   if(key.name==="home"){cursor=0;render();return;}\n   if(key.name==="end"){cursor=value.length;render();return;}
    if(key.name==="up"||key.name==="down"){
     if(!value&&dashboard){selectedNav=(selectedNav+(key.name==="up"?NAV.length-1:1))%NAV.length;render();return;}
     return;
    }
    if(key.name==="tab"){
-    const hits=COMMANDS.filter(x=>x.startsWith(value));if(hits.length){value=hits[matchIndex++%hits.length];render();}return;
+    const hits=COMMANDS.filter(x=>x.startsWith(value));if(hits.length){value=hits[matchIndex++%hits.length];cursor=value.length;render();}return;
    }
-   if(str&&!key.ctrl&&!key.meta&&str.length===1){value+=str;render();}
+   if(str&&!key.ctrl&&!key.meta&&str.length===1&&str>=" "){value=value.slice(0,cursor)+str+value.slice(cursor);cursor++;render();}
   };
   activePrompt=done;
-  if(dashboard){inputValue="";drawDashboard();}else process.stdout.write(prompt);
+  if(dashboard){inputValue="";inputCursor=0;drawDashboard();}else process.stdout.write(prompt);
   try{input.setRawMode(true);}catch{}input.resume();input.on("keypress",onKey);
  });
 }
