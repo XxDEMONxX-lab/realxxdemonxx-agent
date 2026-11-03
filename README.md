@@ -58,9 +58,9 @@ Example requests:
 
 ## Interactive workspace
 
-The terminal interface provides a persistent workspace with keyboard navigation, command suggestions, activity output, and a project map. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to select, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
+The terminal interface provides an adaptive multi-panel workspace with an explorer/navigation rail, activity stream, project context panel on wide terminals, keyboard navigation, command suggestions, and live model output. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to select, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
 
-Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/usage` reports provider token metadata when available. The current interface is still a terminal workspace rather than a full IDE with an embedded editor, split terminal, or visual diff pane.
+Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. The agent can delegate independent read-only investigations to architect, debugger, security-reviewer, and test-analyst subagents; multiple independent subagent calls can run concurrently. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/fallback` configures backup model IDs; `/usage` reports provider token metadata when available. Provider requests stream output when supported, retry transient failures, and can switch to configured fallback models. This remains a terminal workspace rather than a graphical IDE with Monaco, a full embedded terminal emulator, or a mouse-driven editor.
 
 ## Commands
 
@@ -76,6 +76,15 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/pwd` | Show current project directory |
 | `/providers` | Switch provider and model |
 | `/models` | Browse models for current provider |
+| `/fallback` | Configure up to five backup model IDs |
+| `/memory` | View or replace persistent project memory |
+| `/history` | Show recent task history |
+| `/git` | Inspect Git status |
+| `/diff` | Inspect Git changes |
+| `/run-tests` | Run a configured test/check script |
+| `/checkpoint` | Save a named project snapshot |
+| `/checkpoints` | List saved snapshots |
+| `/restore` | Restore a snapshot after confirmation |
 | `/model` | Enter a model ID manually |
 | `/provider` | Show active provider and model |
 | `/test` | Test API connectivity |
@@ -90,7 +99,7 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 
 Provider settings and API keys are stored in `~/.realxxdemonxx-agent/config.json` with owner-only file permissions. Do not share that file or your API key.
 
-File tools are restricted to the current project directory. Shell commands require you to type `YES` before execution; review commands before approving them.
+File tools are restricted to the current project directory. File edits create backups for `/undo`; checkpoint restores first create a safety snapshot. File reads/writes, shell commands, package installation, Git inspection, test execution, and destructive commands have separate approval settings. Shell commands require explicit approval unless you enable the corresponding auto-approval setting.
 
 ## Compatibility
 
