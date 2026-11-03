@@ -76,7 +76,7 @@ export async function ask(prompt){
     if(!value.trim()&&dashboard){done(NAV[selectedNav]?.[1]||"/chat");return;}
     done(value);return;
    }
-   if(key.ctrl&&key.name==="c"){done(ESC);return;}
+   if(key.ctrl&&key.name==="c"){done(ESC);closeInput();process.exit(130);}
    if(key.name==="backspace"){value=value.slice(0,-1);render();return;}
    if(key.name==="up"||key.name==="down"){
     if(!value&&dashboard){selectedNav=(selectedNav+(key.name==="up"?NAV.length-1:1))%NAV.length;render();return;}
