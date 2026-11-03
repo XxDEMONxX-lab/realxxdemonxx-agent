@@ -2,6 +2,7 @@ import { ask } from "./ui.js";
 
 export const PROVIDERS = [
   {id:"openrouter",name:"OpenRouter",baseURL:"https://openrouter.ai/api/v1"},
+  {id:"openrouter-auto",name:"OpenRouter Auto",baseURL:"https://openrouter.ai/api/v1",fixedModel:"openrouter/auto"},
   {id:"groq",name:"Groq",baseURL:"https://api.groq.com/openai/v1"},
   {id:"nvidia",name:"NVIDIA NIM",baseURL:"https://integrate.api.nvidia.com/v1"},
   {id:"deepseek",name:"DeepSeek",baseURL:"https://api.deepseek.com"},
