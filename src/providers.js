@@ -104,7 +104,10 @@ export async function configureProvider(config, save) {
 export async function chooseCurrentModel(config,save) {
   const provider=PROVIDERS.find(p=>p.id===config.provider);
   if (!provider) throw new Error("Unknown provider. Use /providers to select one.");
-  if (provider.fixedModel) return provider.fixedModel;
+  if (provider.fixedModel) {
+    console.log("  OpenRouter Auto selects a model automatically; there is no model list to browse.");
+    return null;
+  }
   const model=await chooseModel(provider,config.apiKey,config.model);
   if (!model) return null;
   config.model=model;
