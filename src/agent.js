@@ -11,8 +11,12 @@ Respect existing architecture and style. Avoid replacing unrelated code. Ask bef
 
 const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /chat       Return to the chat prompt
-  /menu       Show quick actions
+  /menu       Open command palette
+  /plan       Plan a task before editing
+  /review     Review project code
+  /debug      Investigate a bug or error
   /files      List project files
+  /map        Display project structure
   /pwd        Show current project directory
   /providers  Switch API provider
   /models     Browse models for current provider
@@ -22,16 +26,16 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /maxsteps   Set maximum tool cycles (1-30)
   /settings   Configure permissions and agent settings
   /limits     Set maximum response tokens
+  /usage      Show session token usage
   /undo       Restore the latest backed-up file
   /status     Show workspace status
   /clear      Clear chat context
   /exit       Exit agent
 
 TRY ASKING
-  Inspect this project and explain how it works.
-  Find and fix the login bug, then run the tests.
-  Add a Discord.js v14 ticket system matching this project's style.
-  Review the code for bugs and security issues.`;
+  Inspect this project and explain its architecture.
+  Find and fix a bug, then run the tests.
+  Review this project for security issues.`
 
 export async function runAgent(config) {
   const messages=[{role:"system",content:SYSTEM}];
