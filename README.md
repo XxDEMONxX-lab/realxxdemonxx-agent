@@ -60,7 +60,7 @@ Example requests:
 
 The terminal interface provides an adaptive multi-panel workspace with an explorer/navigation rail, activity stream, project context panel on wide terminals, keyboard navigation, command suggestions, and live model output. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to select, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
 
-Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. The agent can delegate independent read-only investigations to architect, debugger, security-reviewer, and test-analyst subagents; multiple independent subagent calls can run concurrently. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/fallback` configures backup model IDs; `/usage` reports provider token metadata when available. Provider requests stream output when supported, retry transient failures, and can switch to configured fallback models. This remains a terminal workspace rather than a graphical IDE with Monaco, a full embedded terminal emulator, or a mouse-driven editor.
+Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. The agent can delegate independent read-only investigations to architect, debugger, security-reviewer, and test-analyst subagents; multiple independent subagent calls can run concurrently. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/fallback` configures backup model IDs; `/usage` reports provider token metadata when available. Provider requests stream output when supported, retry transient failures, and can switch to configured fallback models. The workspace includes a built-in keyboard-driven file editor, but it remains a terminal application rather than a graphical IDE with Monaco or a full terminal emulator.
 
 ## Commands
 
@@ -75,6 +75,7 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/files` | List project files |
 | `/open` | Read a selected project file |
 | `/edit` | Send a targeted file-edit request to the agent |
+| `/editor` | Open the built-in keyboard file editor (Ctrl+S saves, Ctrl+Q cancels) |
 | `/terminal` | Run a terminal command after approval |
 | `/pwd` | Show current project directory |
 | `/providers` | Switch provider and model |
