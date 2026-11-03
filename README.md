@@ -44,7 +44,7 @@ Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It us
 - List, map, and search project files.
 - Read files and preview proposed edits before writing; existing files are backed up for `/undo`.
 - Run shell commands, inspect Git status/diffs, and execute configured test/check scripts with separate permissions.
-- Persist project-specific memory and task history across sessions.
+- Persist project-specific memory and task history across sessions, and resume the last saved conversation with `/resume`.
 - Create named project checkpoints and restore a selected checkpoint after explicit confirmation.
 - Keep recent conversation context with automatic bounded-history compaction and report provider usage when supplied.
 - Format Markdown headings, lists, inline code, and fenced code in the terminal chat.
@@ -112,7 +112,8 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/maxsteps` | Set maximum tool cycles (1–30) |
 | `/status` | Show session status |
 | `/usage` | Show session token usage |
-| `/clear` | Clear conversation context |
+| `/resume` | Restore the last saved conversation |
+| `/clear` | Clear conversation context and saved session |
 | `/help` | Show commands |
 | `/exit` | Exit |
 
