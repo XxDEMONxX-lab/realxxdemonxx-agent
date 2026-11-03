@@ -4,16 +4,16 @@ import path from "node:path";
 
 const DIR=path.join(os.homedir(),".realxxdemonxx-agent");
 const FILE=path.join(DIR,"config.json");
-const DEFAULTS={provider:"",providerName:"",baseURL:"",apiKey:"",model:"",maxSteps:8};
+const DEFAULTS={provider:"",providerName:"",baseURL:"",apiKey:"",model:"",maxSteps:8,maxTokens:512,permissions:{readFiles:true,searchFiles:true,writeFiles:false,terminal:false,packageInstall:false,destructive:false}};
 
 export async function loadConfig() {
   try {
     const parsed=JSON.parse(await fs.readFile(FILE,"utf8"));
     if (!parsed || typeof parsed!=="object" || Array.isArray(parsed)) throw new Error("Invalid config format");
-    return {...DEFAULTS,...parsed};
+    return {...DEFAULTS,...parsed,permissions:{...DEFAULTS.permissions,...(parsed.permissions||{})}};
   } catch (e) {
     if (e.code!=="ENOENT") console.error("Could not read saved settings:",e.message);
-    return {...DEFAULTS};
+    return {...DEFAULTS,permissions:{...DEFAULTS.permissions}};
   }
 }
 export async function saveConfig(config) {
