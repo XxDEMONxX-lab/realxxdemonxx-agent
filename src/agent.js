@@ -6,9 +6,9 @@ import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,
 
 const SYSTEM=`You are REALXXDEMONXX AGENT, a capable terminal software engineering agent.
 You work inside the user's current project directory. Behave like a practical coding partner, not a generic chatbot.
-For normal questions, answer directly and clearly. For coding tasks, inspect the project first, explain a short plan when useful, read relevant files, preview proposed edits with preview_file_change, make focused edits, run appropriate checks, fix failures where possible, and report exactly what changed and what was verified.
+For normal questions, answer directly and clearly. For coding tasks, inspect the project first, identify relevant instructions (including AGENTS.md), make a short task plan, read relevant files, preview edits, and make focused changes. After editing, run the most relevant available syntax checks or tests, inspect the final diff, and fix regressions where possible. If tests cannot run, explain why. Report changed files, verification commands and their actual results, remaining risks, and anything not tested. Never claim success from a tool call alone.
 Use tools to perform work rather than merely explaining how the user could do it. Delegate independent read-only investigations to specialist subagents when they can provide useful parallel findings. Do not invent files, command output, test results, or capabilities. Never claim a command passed unless its output confirms it.
-Respect existing architecture and style. Avoid replacing unrelated code. Ask before destructive actions, installing dependencies, publishing, or any action outside the project. Shell commands require explicit user approval. Stay inside the current project directory.`;
+Respect existing architecture and style. Avoid replacing unrelated code. Ask before destructive actions, installing dependencies, publishing, or any action outside the project. Shell commands require explicit user approval. Stay inside the current project directory. Use parallel tool calls only for independent read-only work. Do not run conflicting writes concurrently. Keep tool outputs concise and avoid repeatedly reading unchanged files.`;
 
 const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /chat       Return to the chat prompt
@@ -45,6 +45,27 @@ TRY ASKING
   Inspect this project and explain its architecture.
   Find and fix a bug, then run the tests.
   Review this project for security issues.`
+
+function compactConversation(messages,limit=30){
+  if(messages.length<=limit)return;
+  const userTurns=[];
+  for(let i=1;i<messages.length;i++)if(messages[i]?.role==="user")userTurns.push(i);
+  if(userTurns.length<3)return;
+  const keepFrom=userTurns[Math.max(0,userTurns.length-2)];
+  if(keepFrom<=1)return;
+  const older=messages.slice(1,keepFrom);
+  const summary=[];
+  let size=0;
+  for(const message of older){
+    let line="";
+    if(message.role==="user")line="User task: "+String(message.content||"").replace(/\s+/g," ").slice(0,260);
+    else if(message.role==="assistant"&&Array.isArray(message.tool_calls))line="Tools used: "+message.tool_calls.map(call=>call.function?.name||"tool").join(", ");
+    else if(message.role==="assistant"&&message.content)line="Agent result: "+String(message.content).replace(/\s+/g," ").slice(0,260);
+    else if(message.role==="tool")line="Tool result: "+String(message.content||"").replace(/\s+/g," ").slice(0,140);
+    if(line&&size+line.length<3500){summary.push(line);size+=line.length;}
+  }
+  messages.splice(1,keepFrom-1,{role:"system",content:"COMPACTED CONVERSATION HISTORY (older details may be incomplete; inspect files again before relying on them):\n"+summary.join("\n")});
+}
 
 export async function runAgent(config) {
   const projectMemory=await readProjectMemory();
@@ -400,6 +421,7 @@ export async function runAgent(config) {
       try{await addTaskHistory({task:input.slice(0,1000),durationMs:Date.now()-currentTaskStarted,status:completed?"completed":"incomplete"});}
       catch(e){info("Task history could not be saved: "+e.message);}
     }
+    compactConversation(messages,Number(config.maxContextMessages)||30);
   }
   success("Session ended.");
 }
