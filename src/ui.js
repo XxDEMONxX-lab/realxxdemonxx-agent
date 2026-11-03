@@ -103,7 +103,7 @@ export async function ask(prompt){
  });
 }
 export async function quickMenu(){
- const entries=[["/chat","Return to coding chat"],["/files","Browse project files"],["/providers","Switch API provider"],["/models","Choose a model"],["/test","Test API connection"],["/settings","Permissions and preferences"],["/limits","Response token limit"],["/undo","Restore previous file version"],["/status","Session status"],["/help","Command reference"],["/exit","Exit agent"]];
+ const entries=[["/chat","Return to coding chat"],["/plan","Plan a task before editing"],["/review","Review project code"],["/debug","Investigate an error"],["/files","Browse project files"],["/map","Display project structure"],["/providers","Switch API provider"],["/models","Choose a model"],["/test","Test API connection"],["/settings","Permissions and preferences"],["/limits","Response token limit"],["/usage","Session token usage"],["/undo","Restore previous file version"],["/status","Session status"],["/help","Command reference"],["/exit","Exit agent"]];
  if(!tty){section("COMMAND PALETTE");entries.forEach(([cmd,desc],i)=>console.log("  "+(i+1)+". "+cmd+"  "+desc));const choice=(await ask("  Select command number (Esc to cancel): ")).trim();return /^\d+$/.test(choice)?entries[Number(choice)-1]?.[0]||null:null;}
  let selected=0,done=false;const input=process.stdin;
  return await new Promise(resolve=>{
