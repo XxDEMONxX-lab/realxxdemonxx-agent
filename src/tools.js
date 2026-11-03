@@ -66,6 +66,7 @@ export const toolSchemas=[
  {type:"function",function:{name:"read_file",description:"Read a UTF-8 project text file. Always read a file before modifying it.",parameters:{type:"object",properties:{path:{type:"string"}},required:["path"]}}},
  {type:"function",function:{name:"write_file",description:"Create or replace a UTF-8 project file. Preserve existing code unless the requested change requires otherwise.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
  {type:"function",function:{name:"preview_file_change",description:"Preview a proposed file edit as a compact line diff without changing the file. Use before write_file.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
+ {type:"function",function:{name:"delegate_subagent",description:"Delegate a focused read-only investigation to a specialist subagent. It cannot edit files or execute commands.",parameters:{type:"object",properties:{role:{type:"string",enum:["architect","debugger","security-reviewer","test-analyst"]},task:{type:"string"}},required:["role","task"]}}},
  {type:"function",function:{name:"git_status",description:"Inspect the current Git working tree status. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"git_diff",description:"Inspect unstaged and staged Git changes. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"run_tests",description:"Run the project's configured test or syntax-check script after user approval.",parameters:{type:"object",properties:{script:{type:"string",description:"Optional package script name, such as test or check."}},required:[]}}},
@@ -172,6 +173,13 @@ export async function executeTool(name,args={},config={}) {
     await fs.mkdir(path.dirname(file),{recursive:true});
     await fs.writeFile(file,args.content,"utf8");
     return `Wrote ${path.relative(root,file)} (${Buffer.byteLength(args.content,"utf8")} bytes)${backedUp?" · previous version backed up":""}`;
+  }
+  if (name==="delegate_subagent") {
+    const task=String(args.task||"").trim();
+    if(!task)throw new Error("Subagent task cannot be empty.");
+    const role=["architect","debugger","security-reviewer","test-analyst"].includes(args.role)?args.role:"architect";
+    const {runSubagent}=await import("./subagents.js");
+    return await runSubagent(config,role,task);
   }
   if (name==="git_status" || name==="git_diff") {
     if(config.permissions?.gitOperations!==true && (await ask("  Approve read-only Git inspection? Type YES: ")).trim()!=="YES") return "User denied Git inspection.";
