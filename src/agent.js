@@ -19,7 +19,7 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /model      Enter model ID manually
   /provider   Show active API configuration
   /test       Test model connection
-  /maxsteps   Set maximum tool cycles (1-30)
+  /maxsteps   Set maximum tool cycles (1-30)\n  /settings   Configure permissions and agent settings\n  /limits     Set maximum response tokens
   /status     Show workspace status
   /clear      Clear chat context
   /exit       Exit agent
@@ -46,13 +46,13 @@ export async function runAgent(config) {
     if (!input) continue;
     const command=input.toLowerCase();
     if (command==="/exit"||command==="/quit") break;
-    if (command==="/help") {say(HELP);continue;}
+    if (command==="/help" || command==="/") {say(HELP);continue;}
     if (command==="/menu") {quickMenu();continue;}
     if (command==="/chat") {info("Chat is active. Type your request below.");continue;}
     if (command==="/pwd") {info(process.cwd());continue;}
     if (command==="/files") {
       try {
-        const output=await executeTool("list_files",{path:"."});
+        const output=await executeTool("list_files",{path:"."},config);
         section("PROJECT FILES");
         say(output);
       } catch(e) {error(e.message);}
@@ -105,6 +105,41 @@ export async function runAgent(config) {
         if (typeof text==="string"&&text.trim()) success("API connection works · "+text.trim().slice(0,120));
         else error("The API responded but returned no text. Check the model ID.");
       } catch(e) {error(e.message);}
+      continue;
+    }
+    if (command==="/settings") {
+      const labels=[
+        ["readFiles","Auto-approve file reads"],
+        ["searchFiles","Auto-approve file searches"],
+        ["writeFiles","Auto-approve file writes and edits"],
+        ["terminal","Auto-approve ordinary terminal commands"],
+        ["packageInstall","Auto-approve package installations"],
+        ["destructive","Auto-approve destructive commands"]
+      ];
+      config.permissions=config.permissions||{};
+      while (true) {
+        section("SETTINGS / PERMISSIONS");
+        labels.forEach(([key,label],i)=>info(`${i+1}. ${label}: ${config.permissions[key]===true?"ON":"OFF"}`));
+        info("0. Back");
+        const choice=(await ask("  Toggle setting number: ")).trim();
+        if (choice==="0" || choice.toLowerCase()==="back") break;
+        const item=labels[Number(choice)-1];
+        if (!item) {error("Choose a number from 0 to 6.");continue;}
+        config.permissions[item[0]]=config.permissions[item[0]]!==true;
+        await persist();
+        success(item[1]+" "+(config.permissions[item[0]]?"ON":"OFF"));
+      }
+      continue;
+    }
+    if (command==="/limits") {
+      const raw=(await ask(`  Maximum response tokens [${config.maxTokens||512}]: `)).trim();
+      if (!raw) continue;
+      const n=Number(raw);
+      if (Number.isInteger(n)&&n>=128&&n<=4096) {
+        config.maxTokens=n;
+        await persist();
+        success("Maximum response tokens set to "+n);
+      } else error("Enter a whole number from 128 to 4096.");
       continue;
     }
     if (command==="/maxsteps") {
@@ -201,7 +236,7 @@ export async function runAgent(config) {
           if (!call.id) throw new Error("Provider returned a tool call without an ID; choose a model with compatible tool calling.");
           const args=JSON.parse(call?.function?.arguments||"{}");
           showTool(name,args);
-          output=await executeTool(name,args);
+          output=await executeTool(name,args,config);
           success("Completed " + name);
         } catch(e) {
           output="Tool failed: " + e.message;
