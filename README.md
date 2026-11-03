@@ -51,6 +51,12 @@ Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It us
 - Edit chat prompts with cursor movement, Home/End, Delete, Backspace, Ctrl+A/E/U/W, multiline Shift+Enter, paste support, and prompt history.
 - Classify common package-install and destructive shell commands separately for permission checks.
 - Run built-in regression tests with `npm test`.
+- Inspect JavaScript/TypeScript syntax trees and perform TypeScript-language-service cross-file symbol renames when TypeScript is installed.
+- Search public web pages and fetch readable public URLs after network permission is granted.
+- Connect configured Model Context Protocol (MCP) stdio servers and expose their tools after explicit trust approval.
+- Create, list, and remove isolated Git worktrees under `.agent-worktrees`.
+- Route simple, complex, review, and debug tasks to separately configured model IDs.
+- Delegate independent investigations to architect, debugger, security, test, research, performance, dependency, and documentation specialists.
 - Inspect tool results and continue working through multiple steps.
 - Show connection errors and suggestions rather than silently failing.
 
@@ -64,7 +70,7 @@ Example requests:
 
 The terminal interface provides an adaptive multi-panel workspace with an explorer/navigation rail, activity stream, project context panel on wide terminals, keyboard navigation, command suggestions, and live model output. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to send, Shift+Enter to add a line, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The chat editor supports cursor movement, deletion, prompt history, and multi-character paste input. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
 
-Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. The agent can delegate independent read-only investigations to architect, debugger, security-reviewer, and test-analyst subagents; multiple independent subagent calls can run concurrently. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/fallback` configures backup model IDs; `/usage` reports provider token metadata when available. Provider requests stream output when supported, retry transient failures, and can switch to configured fallback models. The agent compacts older conversation turns to limit unbounded context growth and instructs itself to verify code changes with relevant checks and a final diff. The workspace includes a built-in keyboard-driven file editor, but it remains a terminal application rather than a graphical IDE with Monaco or a full terminal emulator.
+Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. The agent can delegate independent read-only investigations to architect, debugger, security-reviewer, and test-analyst subagents; multiple independent subagent calls can run concurrently. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/fallback` configures backup model IDs; `/usage` reports provider token metadata when available. Provider requests stream output when supported, retry transient failures, and can switch to configured fallback models. The agent compacts older conversation turns to limit unbounded context growth and instructs itself to verify code changes with relevant checks and a final diff. `/routing` configures task-specific model IDs; `/web` toggles public web access; `/mcp` configures MCP servers. The workspace includes a built-in keyboard-driven file editor, but it remains a terminal application rather than a graphical IDE with Monaco or a full terminal emulator.
 
 ## Commands
 
@@ -84,6 +90,9 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/pwd` | Show current project directory |
 | `/providers` | Switch provider and model |
 | `/models` | Browse models for current provider |
+| `/routing` | Configure simple, complex, review and debug models |
+| `/web` | Toggle public web research |
+| `/mcp` | Add or remove MCP stdio servers |
 | `/fallback` | Configure up to five backup model IDs |
 | `/memory` | View or replace persistent project memory |
 | `/history` | Show recent task history |
@@ -110,6 +119,12 @@ Run `npm test` for the built-in regression tests and `npm run check` for JavaScr
 ## Safety and configuration
 
 Provider settings and API keys are stored in `~/.realxxdemonxx-agent/config.json` with owner-only file permissions. Do not share that file or your API key.
+
+MCP servers execute external programs and can access whatever those programs can access. Only configure servers you trust; server commands and arguments are stored in the local config. Public web results and MCP output are treated as untrusted data. URL checks block common local/private address forms but are not a substitute for a network sandbox.
+
+AST inspection and semantic rename use the TypeScript compiler API when it is installed in the project. Install it only if needed with `npm install -D typescript` after reviewing the dependency.
+
+Git worktrees are created under `.agent-worktrees`; removal requires a separate confirmation and Git refuses to remove worktrees with uncommitted changes unless forced.
 
 File tools are restricted to the current project directory. File edits create backups for `/undo`; checkpoint restores first create a safety snapshot. File reads/writes, shell commands, package installation, Git inspection, test execution, and destructive commands have separate approval settings. Shell commands require explicit approval unless you enable the corresponding auto-approval setting.
 
