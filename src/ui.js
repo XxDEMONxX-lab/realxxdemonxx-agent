@@ -91,7 +91,7 @@ export async function ask(prompt){
    if(key.ctrl&&key.name==="a"){cursor=0;render();return;}
    if(key.ctrl&&key.name==="e"){cursor=value.length;render();return;}
    if(key.ctrl&&key.name==="u"){value=value.slice(cursor);cursor=0;render();return;}
-   if(key.ctrl&&key.name==="w"){const left=value.slice(0,cursor).replace(/\\s+$/,"").replace(/\\S+$/,"");value=left+value.slice(cursor);cursor=left.length;render();return;}
+   if(key.ctrl&&key.name==="w"){const left=value.slice(0,cursor).replace(/\s+$/,"").replace(/\S+$/,"");value=left+value.slice(cursor);cursor=left.length;render();return;}
    if(key.name==="backspace"){if(cursor>0){value=value.slice(0,cursor-1)+value.slice(cursor);cursor--;}render();return;}
    if(key.name==="delete"){if(cursor<value.length)value=value.slice(0,cursor)+value.slice(cursor+1);render();return;}
    if(key.name==="left"){cursor=Math.max(0,cursor-1);render();return;}
@@ -107,7 +107,7 @@ export async function ask(prompt){
    if(key.name==="tab"){
     const hits=COMMANDS.filter(x=>x.startsWith(value));if(hits.length){value=hits[matchIndex++%hits.length];cursor=value.length;render();}return;
    }
-   if(str&&!key.ctrl&&!key.meta){const clean=String(str).replace(/\\r\\n?/g,"\\n").replace(/[^\\P{Cc}\\n\\t]/gu,"");if(clean){value=value.slice(0,cursor)+clean+value.slice(cursor);cursor+=clean.length;render();}}
+   if(str&&!key.ctrl&&!key.meta){const clean=String(str).replace(/\r\n?/g,"\n").replace(/[^\P{Cc}\n\t]/gu,"");if(clean){value=value.slice(0,cursor)+clean+value.slice(cursor);cursor+=clean.length;render();}}
   };
   activePrompt=done;
   if(dashboard){inputValue="";inputCursor=0;drawDashboard();}else process.stdout.write(prompt);
