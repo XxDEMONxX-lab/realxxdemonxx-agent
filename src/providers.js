@@ -77,17 +77,18 @@ export async function configureProvider(config, save) {
     if (value==="0" || value.toLowerCase()==="back") return null;
     const provider=PROVIDERS[Number(value)-1];
     if (!provider) {
-      console.log("  Invalid choice. Enter a number from 1 to 8.");
+      console.log("  Invalid choice. Enter a number from 1 to 9.");
       continue;
     }
     console.log(`\n  Selected: ${provider.name}`);
-    let apiKey=config.provider===provider.id ? config.apiKey : "";
+    const sameOpenRouter=provider.id.startsWith("openrouter") && String(config.provider||"").startsWith("openrouter");
+    let apiKey=(config.provider===provider.id || sameOpenRouter) ? config.apiKey : "";
     if (!apiKey) apiKey=(await ask("  API key: ")).trim();
     if (!apiKey) {
       console.log("  API key cannot be empty.");
       continue;
     }
-    const model=await chooseModel(provider,apiKey,config.provider===provider.id?config.model:"");
+    const model=provider.fixedModel || await chooseModel(provider,apiKey,config.provider===provider.id?config.model:"");
     if (!model) continue;
     config.provider=provider.id;
     config.providerName=provider.name;
@@ -103,6 +104,7 @@ export async function configureProvider(config, save) {
 export async function chooseCurrentModel(config,save) {
   const provider=PROVIDERS.find(p=>p.id===config.provider);
   if (!provider) throw new Error("Unknown provider. Use /providers to select one.");
+  if (provider.fixedModel) return provider.fixedModel;
   const model=await chooseModel(provider,config.apiKey,config.model);
   if (!model) return null;
   config.model=model;
@@ -118,7 +120,7 @@ export async function chatCompletion(config,messages,tools=[]) {
     "content-type":"application/json",
     authorization:`Bearer ${config.apiKey}`
   };
-  if (config.provider==="openrouter") {
+  if (config.provider==="openrouter" || config.provider==="openrouter-auto") {
     headers["HTTP-Referer"]="https://github.com/XxDEMONxX-lab/realxxdemonxx-agent";
     headers["X-Title"]="REALXXDEMONXX AGENT";
   }
