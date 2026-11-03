@@ -23,6 +23,9 @@ test("classifyCommand detects destructive shell commands",()=>{
   assert.equal(classifyCommand("rm -rf ./build"),"destructive");
   assert.equal(classifyCommand("find . -type f -delete"),"destructive");
   assert.equal(classifyCommand("git reset --hard HEAD"),"destructive");
+  assert.equal(classifyCommand("sudo rm -rf ./cache"),"destructive");
+  assert.equal(classifyCommand("echo start && busybox rm -rf ./cache"),"destructive");
+  assert.equal(classifyCommand("env npm install lodash"),"packageInstall");
   assert.equal(classifyCommand("sudo dd if=/dev/zero of=/dev/sda"),"destructive");
 });
 
