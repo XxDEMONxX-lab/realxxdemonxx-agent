@@ -58,7 +58,7 @@ export async function listMcpTools(config){
    const result=await withServer(server,({request})=>request("tools/list"));
    for(const tool of result?.tools||[]){
     if(!tool?.name||typeof tool.name!=="string")continue;
-    output.push({type:"function",function:{name:"mcp_"+server.name+"_"+tool.name,description:("[MCP "+server.name+"] "+String(tool.description||"External MCP tool")).slice(0,900),parameters:tool.inputSchema&&typeof tool.inputSchema==="object"?tool.inputSchema:{type:"object",properties:{}}}});
+    output.push({type:"function",function:{name:"mcp_"+server.name+"__"+Buffer.from(tool.name).toString("hex"),description:("[MCP "+server.name+"] "+String(tool.description||"External MCP tool")).slice(0,900),parameters:tool.inputSchema&&typeof tool.inputSchema==="object"?tool.inputSchema:{type:"object",properties:{}}}});
    }
   }catch(error){}
  }
@@ -66,9 +66,10 @@ export async function listMcpTools(config){
 }
 
 export async function callMcpTool(config,qualifiedName,args){
- const match=String(qualifiedName).match(/^mcp_([a-zA-Z0-9_-]{1,40})_(.+)$/);
+ const match=String(qualifiedName).match(/^mcp_([a-zA-Z0-9_-]{1,40})__([a-fA-F0-9]+)$/);
  if(!match)throw new Error("Invalid MCP tool name.");
- const [,serverName,toolName]=match;
+ const [,serverName,encodedName]=match;
+ const toolName=Buffer.from(encodedName,"hex").toString("utf8");
  const server=(config.mcpServers||[]).find(item=>item.name===serverName);
  if(!server)throw new Error("MCP server is not configured: "+serverName);
  return await withServer(server,async({request})=>{
