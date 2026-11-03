@@ -1,6 +1,14 @@
 import readline from "node:readline";
 
-const rl=readline.createInterface({input:process.stdin,output:process.stdout});
+const COMMANDS=["/help","/menu","/chat","/files","/pwd","/providers","/models","/model","/provider","/test","/maxsteps","/settings","/limits","/status","/clear","/exit"];
+const rl=readline.createInterface({
+  input:process.stdin,
+  output:process.stdout,
+  completer:(line)=>{
+    const hits=COMMANDS.filter(command=>command.startsWith(line));
+    return [hits.length?hits:COMMANDS,line];
+  }
+});
 const tty=Boolean(process.stdout.isTTY);
 const color=(code,value)=>tty?`\x1b[${code}m${value}\x1b[0m`:value;
 const cyan=s=>color("38;5;81",s);
@@ -31,7 +39,7 @@ export function chatReady(model,provider) {
   section("CHAT READY");
   success("Connected to " + (provider || "provider"));
   info("Model  " + model);
-  info("Type a message and press Enter to chat.");
+  info("Type a message and press Enter to chat.");\n  info("Type / and press Tab for command suggestions.");
   info("Use /help for commands, /menu for quick actions, or /exit to quit.");
   console.log("");
 }
