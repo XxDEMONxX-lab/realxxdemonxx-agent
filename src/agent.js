@@ -1,47 +1,45 @@
 import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.js";
 import {toolSchemas,executeTool} from "./tools.js";
 import {saveConfig} from "./config.js";
-import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error} from "./ui.js";
+import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu} from "./ui.js";
 
-const SYSTEM=`You are REALXXDEMONXX AGENT, a terminal software engineering agent similar in workflow to a modern AI coding CLI.
-You are working in the user's current project directory. Your primary job is to understand, plan, implement, debug, and verify software changes—not merely give generic advice.
-For a greeting, respond normally. For a coding task:
-1. Inspect the project structure and relevant files before proposing changes.
-2. Give a concise plan when the task is substantial.
-3. Use file and search tools to understand existing conventions.
-4. Implement the requested changes directly using write_file.
-5. Run relevant syntax checks or tests using run_command.
-6. Summarize changed files and actual verification results.
-Use tools whenever they can perform the requested work. Do not invent file contents, command output, tests, or capabilities. Do not claim work is complete unless you made the changes.
-Preserve existing features and style. Make focused edits; do not rewrite unrelated files. Ask before destructive commands, dependency installation, publishing, or actions outside the project. Shell execution requires the user's explicit YES approval. Stay inside the current project directory.`;
+const SYSTEM=`You are REALXXDEMONXX AGENT, a capable terminal software engineering agent.
+You work inside the user's current project directory. Behave like a practical coding partner, not a generic chatbot.
+For normal questions, answer directly and clearly. For coding tasks, inspect the project first, explain a short plan when useful, read relevant files, make focused edits, run appropriate checks, fix failures where possible, and report exactly what changed and what was verified.
+Use tools to perform work rather than merely explaining how the user could do it. Do not invent files, command output, test results, or capabilities. Never claim a command passed unless its output confirms it.
+Respect existing architecture and style. Avoid replacing unrelated code. Ask before destructive actions, installing dependencies, publishing, or any action outside the project. Shell commands require explicit user approval. Stay inside the current project directory.`;
 
-const HELP=`REALXXDEMONXX AGENT
-  /help        Show commands
-  /providers   Switch API provider
-  /models      Browse models for current provider
-  /model       Enter model ID manually
-  /provider    Show active API configuration
-  /test        Test model connection
-  /maxsteps    Set maximum tool cycles (1-30)
-  /status      Show workspace status
-  /clear       Clear chat context
-  /exit        Exit agent
+const HELP=`REALXXDEMONXX AGENT — COMMANDS
+  /chat       Return to the chat prompt
+  /menu       Show quick actions
+  /files      List project files
+  /pwd        Show current project directory
+  /providers  Switch API provider
+  /models     Browse models for current provider
+  /model      Enter model ID manually
+  /provider   Show active API configuration
+  /test       Test model connection
+  /maxsteps   Set maximum tool cycles (1-30)
+  /status     Show workspace status
+  /clear      Clear chat context
+  /exit       Exit agent
 
-EXAMPLES
+TRY ASKING
   Inspect this project and explain how it works.
-  Find and fix the login bug, then run tests.
-  Add a Discord.js v14 ticket system to this project.`;
+  Find and fix the login bug, then run the tests.
+  Add a Discord.js v14 ticket system matching this project's style.
+  Review the code for bugs and security issues.`;
 
 export async function runAgent(config) {
   const messages=[{role:"system",content:SYSTEM}];
   const persist=()=>saveConfig(config);
-  section("CODING WORKSPACE");
-  info(`Model     ${config.model}`);
-  info(`Provider  ${config.providerName||config.provider}`);
-  info(`Project   ${process.cwd()}`);
+  section("WORKSPACE");
+  info("Project   " + process.cwd());
   info("Tools     search · read · write · terminal");
   info("Safety    terminal commands require approval");
-  say(HELP);
+  chatReady(config.model,config.providerName||config.provider);
+  say("  Tip: ask for a change in plain English. The agent can inspect and edit files.");
+  say("  Type /help to see all commands.");
 
   while (true) {
     const input=(await ask(promptLabel())).trim();
@@ -49,25 +47,41 @@ export async function runAgent(config) {
     const command=input.toLowerCase();
     if (command==="/exit"||command==="/quit") break;
     if (command==="/help") {say(HELP);continue;}
+    if (command==="/menu") {quickMenu();continue;}
+    if (command==="/chat") {info("Chat is active. Type your request below.");continue;}
+    if (command==="/pwd") {info(process.cwd());continue;}
+    if (command==="/files") {
+      try {
+        const output=await executeTool("list_files",{path:"."});
+        section("PROJECT FILES");
+        say(output);
+      } catch(e) {error(e.message);}
+      continue;
+    }
     if (command==="/clear") {messages.splice(1);success("Conversation context cleared.");continue;}
     if (command==="/provider") {
-      info(`Provider: ${config.providerName||config.provider}`);
-      info(`Endpoint: ${config.baseURL}`);
-      info(`Model: ${config.model}`);
+      info("Provider: " + (config.providerName||config.provider));
+      info("Endpoint: " + config.baseURL);
+      info("Model: " + config.model);
       continue;
     }
     if (command==="/providers"||command==="/switch") {
       const selected=await configureProvider(config,persist);
       if (selected) {
         messages.splice(1);
-        success(`Switched to ${config.providerName} · ${config.model}`);
+        chatReady(config.model,config.providerName);
+        success("Provider and model updated.");
       }
       continue;
     }
     if (command==="/models") {
       try {
         const model=await chooseCurrentModel(config,persist);
-        if (model) {messages.splice(1);success(`Model changed to ${model}`);}
+        if (model) {
+          messages.splice(1);
+          chatReady(config.model,config.providerName||config.provider);
+          success("Model changed to " + model);
+        }
       } catch(e) {error(e.message);}
       continue;
     }
@@ -77,6 +91,7 @@ export async function runAgent(config) {
         config.model=model;
         await persist();
         messages.splice(1);
+        chatReady(config.model,config.providerName||config.provider);
         success("Model saved.");
       }
       continue;
@@ -99,16 +114,17 @@ export async function runAgent(config) {
       if (Number.isInteger(n)&&n>=1&&n<=30) {
         config.maxSteps=n;
         await persist();
-        success(`Maximum tool cycles set to ${n}`);
+        success("Maximum tool cycles set to " + n);
       } else error("Enter a whole number from 1 to 30.");
       continue;
     }
     if (command==="/status") {
-      info(`Provider: ${config.providerName||config.provider}`);
-      info(`Model: ${config.model}`);
-      info(`Project: ${process.cwd()}`);
-      info(`Max tool cycles: ${config.maxSteps||8}`);
-      info(`Conversation messages: ${messages.length-1}`);
+      section("SESSION STATUS");
+      info("Provider: " + (config.providerName||config.provider));
+      info("Model: " + config.model);
+      info("Project: " + process.cwd());
+      info("Max tool cycles: " + (config.maxSteps||8));
+      info("Conversation messages: " + (messages.length-1));
       continue;
     }
 
@@ -122,13 +138,17 @@ export async function runAgent(config) {
       let result;
       try {
         result=await withSpinner(
-          step===0?"Thinking...":`Reviewing tool results · step ${step+1}/${maxSteps}...`,
+          step===0?"Thinking...":`Working through tool results · step ${step+1}/${maxSteps}...`,
           ()=>chatCompletion(config,messages,toolSchemas)
         );
       } catch(e) {
         error(e.message);
         if (/tool|function|unsupported parameter/i.test(e.message)) {
-          info("This model may not support tool calling. Choose a coding model with function/tool calling using /models.");
+          info("This model may not support tool calling. Try /models and choose a model with function/tool calling support.");
+        } else if (/401|403/i.test(e.message)) {
+          info("Check that your API key is valid for this provider.");
+        } else if (/429/i.test(e.message)) {
+          info("The provider may be rate-limiting this key or model. Wait or choose another model.");
         }
         messages.splice(userMessageIndex);
         completed=true;
@@ -151,7 +171,7 @@ export async function runAgent(config) {
       const calls=Array.isArray(msg.tool_calls)?msg.tool_calls:[];
       if (!calls.length) {
         if (!hadOutput) {
-          error(`Model returned no text${choice.finish_reason?` (finish: ${choice.finish_reason})`:""}. Try another model with chat-completion support.`);
+          error(`Model returned no text${choice.finish_reason?` (finish: ${choice.finish_reason})`:""}. Try /test, then select a model with chat-completion support.`);
         }
         completed=true;
         break;
@@ -161,23 +181,24 @@ export async function runAgent(config) {
         const name=call?.function?.name||"unknown";
         let output;
         try {
+          if (!call.id) throw new Error("Provider returned a tool call without an ID; choose a model with compatible tool calling.");
           const args=JSON.parse(call?.function?.arguments||"{}");
           showTool(name,args);
           output=await executeTool(name,args);
-          success(`Completed ${name}`);
+          success("Completed " + name);
         } catch(e) {
-          output=`Tool failed: ${e.message}`;
+          output="Tool failed: " + e.message;
           error(output);
         }
         messages.push({
           role:"tool",
-          tool_call_id:call.id,
+          tool_call_id:call.id||"missing-tool-call-id",
           content:String(output??"No output").slice(0,16000)
         });
       }
     }
     if (!completed) {
-      say("Tool-cycle limit reached. Ask the agent to continue if more work is needed.");
+      say("Tool-cycle limit reached. Review the changes so far, then ask the agent to continue.");
     } else if (!hadOutput && messages.length===userMessageIndex) {
       info("No response was added to the conversation.");
     }
