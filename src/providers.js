@@ -177,19 +177,33 @@ async function requestCompletion(config,messages,tools,stream,onToken){
 }
 
 export async function chatCompletion(config,messages,tools=[],options={}){
-  const useStream=typeof options.onToken==="function";
+  const models=[config.model,...(Array.isArray(config.fallbackModels)?config.fallbackModels:[])].filter((value,index,array)=>typeof value==="string"&&value.trim()&&array.indexOf(value)===index);
   let lastError;
-  for(let attempt=0;attempt<3;attempt++){
-    try{return await requestCompletion(config,messages,tools,useStream,options.onToken);}
-    catch(error){
-      lastError=error;
-      const status=Number(error.status)||0;
-      const retryable=!status||status===408||status===409||status===425||status===429||status>=500;
-      if(!retryable||attempt===2)break;
-      const wait=700*(2**attempt);
-      if(options.onRetry)options.onRetry(attempt+1,wait,error);
-      await new Promise(resolve=>setTimeout(resolve,wait));
+  for(let modelIndex=0;modelIndex<models.length;modelIndex++){
+    const model=models[modelIndex];
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        const result=await requestCompletion({...config,model},messages,tools,typeof options.onToken==="function",options.onToken);
+        if(modelIndex>0){
+          config.model=model;
+          if(options.onFallback)options.onFallback(model);
+        }
+        return result;
+      }catch(error){
+        lastError=error;
+        const status=Number(error.status)||0;
+        const retryable=!status||status===408||status===409||status===425||status===429||status>=500;
+        const canTryNextModel=modelIndex<models.length-1&&(status===402||status===404||status===429||status>=500||!status);
+        if(retryable&&attempt<2){
+          const wait=700*(2**attempt);
+          if(options.onRetry)options.onRetry(attempt+1,wait,error);
+          await new Promise(resolve=>setTimeout(resolve,wait));
+          continue;
+        }
+        if(canTryNextModel)break;
+        throw error;
+      }
     }
   }
-  throw lastError;
+  throw lastError||new Error("No available model configured.");
 }
