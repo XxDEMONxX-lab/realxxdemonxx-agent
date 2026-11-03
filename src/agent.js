@@ -91,7 +91,7 @@ export async function runAgent(config) {
     }
     if (command==="/model") {
       const model=(await ask("  Exact model ID: ")).trim();
-      if (model) {
+      if (model && model!==ESC) {
         config.model=model;
         await persist();
         messages.splice(1);
