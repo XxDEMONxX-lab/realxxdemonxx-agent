@@ -16,7 +16,7 @@ async function main() {
 
   if (!supported || !config.apiKey || !config.model) {
     if (config.provider && !supported) {
-      error("The saved provider is no longer supported. Select one of the eight supported providers.");
+      error("The saved provider is no longer supported. Select a supported provider or OpenRouter Auto.");
     }
     const selected = await configureProvider(config, saveConfig);
     if (!selected) {
