@@ -2,7 +2,7 @@ import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.j
 import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
 import {saveConfig} from "./config.js";
 import {readProjectMemory,writeProjectMemory,addTaskHistory,getTaskHistory,createCheckpoint,listCheckpoints,restoreCheckpoint} from "./workspace.js";
-import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,ESC} from "./ui.js";
+import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,streamToken,streamEnd,ESC} from "./ui.js";
 
 const SYSTEM=`You are REALXXDEMONXX AGENT, a capable terminal software engineering agent.
 You work inside the user's current project directory. Behave like a practical coding partner, not a generic chatbot.
@@ -266,10 +266,11 @@ export async function runAgent(config) {
 
     for (let step=0;step<maxSteps;step++) {
       let result;
+      let streamed=false;
       try {
         result=await withSpinner(
           step===0?"Thinking...":`Working through tool results · step ${step+1}/${maxSteps}...`,
-          ()=>chatCompletion(config,messages,toolSchemas)
+          ()=>chatCompletion(config,messages,toolSchemas,{onToken:token=>{streamed=true;streamToken(token);},onRetry:(attempt,wait)=>info("Provider retry "+attempt+" · waiting "+wait+" ms")})
         );
       } catch(e) {
         if (/tool|function|unsupported parameter/i.test(e.message)) {
@@ -302,6 +303,7 @@ export async function runAgent(config) {
         break;
       }
 
+      if(streamed)streamEnd();
       if (result?.usage) { usage.prompt+=Number(result.usage.prompt_tokens)||0; usage.completion+=Number(result.usage.completion_tokens)||0; usage.total+=Number(result.usage.total_tokens)||0; }
       const choice=result?.choices?.[0];
       const msg=choice?.message;
@@ -313,7 +315,7 @@ export async function runAgent(config) {
       }
       messages.push(msg);
       if (typeof msg.content==="string"&&msg.content.trim()) {
-        agentText(msg.content);
+        if(!streamed)agentText(msg.content);
         hadOutput=true;
       }
       const calls=Array.isArray(msg.tool_calls)?msg.tool_calls:[];
