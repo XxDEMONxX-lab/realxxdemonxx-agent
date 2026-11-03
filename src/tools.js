@@ -97,7 +97,11 @@ export async function executeTool(name,args={},config={}) {
     const command=String(args.command||"").trim();
     if (!command) throw new Error("Command cannot be empty.");
     console.log(`\n  $ ${command}\n`);
-    const approval=(await ask("  Run this command? Type YES to approve: ")).trim();
+    const packageInstall=/\b(npm|pnpm|yarn|bun|pip|pip3|pkg|apt)\s+(install|add|i)\b/i.test(command);
+    const destructive=/\b(rm|rmdir|unlink)\b|\bgit\s+(reset\s+--hard|clean\s+-[a-z]*f)/i.test(command);
+    const permissionKey=destructive?"destructive":packageInstall?"packageInstall":"terminal";
+    const permissionLabel=destructive?"destructive command":packageInstall?"package installation":"terminal command";
+    const approval=config.permissions?.[permissionKey]===true?"YES":(await ask(`  Approve ${permissionLabel}? Type YES: `)).trim();
     if (approval!=="YES") return "User denied command execution.";
     const {execFile}=await import("node:child_process");
     return await new Promise(resolve=>execFile("sh",["-lc",command],{
