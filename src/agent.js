@@ -28,6 +28,14 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /settings   Configure permissions and agent settings
   /limits     Set maximum response tokens
   /usage      Show session token usage
+  /memory     View or update persistent project memory
+  /history    Show recent task history
+  /git        Show Git working-tree status
+  /diff       Show current Git diff
+  /run-tests  Run the configured test/check script
+  /checkpoint Save a project snapshot
+  /checkpoints List saved snapshots
+  /restore    Restore a saved snapshot
   /undo       Restore the latest backed-up file
   /status     Show workspace status
   /clear      Clear chat context
@@ -40,7 +48,7 @@ TRY ASKING
 
 export async function runAgent(config) {
   const projectMemory=await readProjectMemory();
-  const messages=[{role:"system",content:SYSTEM+(projectMemory?"\\n\\nPROJECT MEMORY (user-maintained; treat as project context):\\n"+projectMemory:"")}];
+  const messages=[{role:"system",content:SYSTEM+(projectMemory?"\n\nPROJECT MEMORY (user-maintained; treat as project context):\n"+projectMemory:"")}];
   let nextMode="";
   const usage={prompt:0,completion:0,total:0};
   let currentTaskStarted=0;
