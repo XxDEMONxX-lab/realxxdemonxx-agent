@@ -35,17 +35,9 @@ If you do not see the prompt, check the error printed above it. You can also typ
 
 ## Supported API providers
 
-Exactly eight providers are supported:
-1. OpenRouter
-2. Groq
-3. NVIDIA NIM
-4. DeepSeek
-5. Mistral
-6. Together AI
-7. Fireworks AI
-8. Cerebras
+Eight API providers are supported: OpenRouter, Groq, NVIDIA NIM, DeepSeek, Mistral, Together AI, Fireworks AI, and Cerebras. OpenRouter also has an **OpenRouter Auto** routing option.
 
-Select a provider, enter its API key, then search its live `/models` endpoint. If the list is unavailable, enter the exact model ID manually. Actual model availability, rate limits, and tool-calling support depend on the provider and model.
+Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It uses your OpenRouter API key and automatically chooses a suitable model for each request; you do not need to select a model manually. The ordinary OpenRouter option remains available when you want to choose a specific model. Auto routing is provided by OpenRouter, not by this CLI, and actual model availability, rate limits, pricing, and tool-calling support depend on OpenRouter's routing and the models available to your account.
 
 ## What the agent can do
 
