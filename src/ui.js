@@ -12,22 +12,25 @@ function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.lengt
 function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
- const side=22,main=width-side-3,body=height-12;
- const clip=(value,n)=>{const plain=String(value).replace(/\x1b\[[0-9;]*m/g,"").replace(/\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":String(value);};
+ const side=22,contextWidth=width>=105?22:0,main=Math.max(18,width-side-contextWidth-6),body=height-12;
+ const clip=(value,n)=>{const plain=String(value).replace(/\\x1b\\[[0-9;]*m/g,"").replace(/\\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":plain;};
+ const context=["PROJECT CONTEXT","───────────────","Provider",session.provider||"Not set","","Model",session.model||"Not set","","Workspace",session.workspace.split("/").filter(Boolean).slice(-2).join("/")||session.workspace,"","Current task",session.task||"Waiting for instructions","","Status",session.status];
  const rows=[];
- rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  INTERACTIVE WORKSPACE")+" ".repeat(Math.max(1,width-48))+green("● "+session.status));
+ rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  HYBRID CODING WORKSPACE")+" ".repeat(Math.max(1,width-52))+green("● "+session.status));
  rows.push(dim(" "+session.workspace.slice(0,Math.max(20,width-4))));
  rows.push(dim("─".repeat(width)));
- rows.push(" "+bold("WORKSPACE")+" ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("SESSION / ACTIVITY"));
- rows.push(" "+dim("─".repeat(side))+"  "+dim("┌"+"─".repeat(Math.max(8,main-2))+"┐"));
+ rows.push(" "+bold("EXPLORER")+" ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("ACTIVITY")+(contextWidth?" ".repeat(Math.max(1,main-8))+dim("│")+" "+bold("CONTEXT"):""));
+ rows.push(" "+dim("─".repeat(side))+"  "+dim("┌"+"─".repeat(Math.max(8,main-2))+"┐")+(contextWidth?"  "+dim("┌"+"─".repeat(contextWidth-2)+"┐"):""));
  const visibleLogs=logs.slice(-body);
  for(let r=0;r<body;r++){
   const nav=NAV[r];
   const left=nav?(r===selectedNav?cyan(" ❯ "+nav[0].padEnd(side-4)):dim("   "+nav[0].padEnd(side-4))):" ".repeat(side);
-  rows.push(left+"  "+dim("│")+" "+clip(visibleLogs[r]??"",Math.max(8,main-3)));
+  const middle=clip(visibleLogs[r]??"",Math.max(8,main-3));
+  const right=contextWidth?"  "+dim("│")+" "+clip(context[r]??"",contextWidth-4):"";
+  rows.push(left+"  "+dim("│")+" "+middle+right);
  }
- rows.push(" "+dim("─".repeat(side))+"  "+dim("└"+"─".repeat(Math.max(8,main-2))+"┘"));
- rows.push(" "+dim("PROVIDER")+"  "+clip(session.provider||"Not set",side-12)+"  "+dim("MODEL")+"  "+clip(session.model||"Not set",Math.max(8,main-18)));
+ rows.push(" "+dim("─".repeat(side))+"  "+dim("└"+"─".repeat(Math.max(8,main-2))+"┘")+(contextWidth?"  "+dim("└"+"─".repeat(contextWidth-2)+"┘"):""));
+ rows.push(" "+dim("PROVIDER")+"  "+clip(session.provider||"Not set",side-12)+"  "+dim("MODEL")+"  "+clip(session.model||"Not set",Math.max(8,width-side-20)));
  rows.push(dim("─".repeat(width)));
  rows.push(" "+bold(green("YOU"))+" "+violet("›")+" "+inputValue);
  const matches=inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
@@ -35,15 +38,9 @@ function drawDashboard(){
  rows.push(dim(" ↑↓ Navigate when input is empty   Enter Select/Send   Tab Complete   Esc Back   Ctrl+P Palette"));
  while(rows.length<height)rows.push("");
  rows.length=height;
- if(!renderCache||renderCache.length!==height){renderCache=Array(height).fill(null);}
- for(let i=0;i<height;i++){
-  const next=clip(rows[i],width);
-  if(renderCache[i]!==next){
-   process.stdout.write("\x1b["+(i+1)+";1H"+next+"\x1b[K");
-   renderCache[i]=next;
-  }
- }
- process.stdout.write("\x1b[?25l");
+ if(!renderCache||renderCache.length!==height)renderCache=Array(height).fill(null);
+ for(let i=0;i<height;i++){const next=clip(rows[i],width);if(renderCache[i]!==next){process.stdout.write("\\x1b["+(i+1)+";1H"+next+"\\x1b[K");renderCache[i]=next;}}
+ process.stdout.write("\\x1b[?25l");
 }
 function captureConsole(){
  if(!tty||originalLog)return;
@@ -119,4 +116,5 @@ export function agentText(value){if(value)console.log("\n"+cyan("◆")+" "+bold(
 let streamLine="";
 export function streamToken(value){if(!value)return;if(dashboard){streamLine+=value;const parts=streamLine.split("\n");streamLine=parts.pop()||"";for(const part of parts)pushLog(part);if(streamLine)pushLog(streamLine);}else process.stdout.write(value);}
 export function streamEnd(){if(dashboard){if(streamLine){pushLog(streamLine);streamLine="";}}else process.stdout.write("\n");}
+export function setTaskLabel(value){session.task=String(value||"Waiting for instructions").slice(0,160);if(dashboard)drawDashboard();}
 export function promptLabel(){return "\n"+green("YOU")+" "+violet("›")+" ";}
