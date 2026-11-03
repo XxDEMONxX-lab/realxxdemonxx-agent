@@ -1,5 +1,4 @@
 import {spawn} from "node:child_process";
-import {once} from "node:events";
 
 const PROTOCOL="2024-11-05";
 const SAFE=/^[a-zA-Z0-9_-]{1,40}$/;
