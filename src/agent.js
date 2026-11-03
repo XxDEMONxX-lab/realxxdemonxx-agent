@@ -39,7 +39,9 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /checkpoints List saved snapshots
   /restore    Restore a saved snapshot
   /undo       Restore the latest backed-up file
-  /mcp       Configure external MCP tool servers\n  /web       Enable/disable public web research\n  /status     Show workspace status
+  /mcp       Configure external MCP tool servers
+  /web       Enable/disable public web research
+  /status     Show workspace status
   /clear      Clear chat context
   /exit       Exit agent
 
@@ -381,7 +383,10 @@ export async function runAgent(config) {
     let hadOutput=false;
     const maxSteps=config.maxSteps||8;
 
-    let activeTools=toolSchemas;\n    if(Array.isArray(config.mcpServers)&&config.mcpServers.length&&config.permissions?.mcpServers===true){\n      try{const external=await listMcpTools(config);activeTools=[...toolSchemas,...external.filter(tool=>tool.function?.name.startsWith("mcp_"))];}\n      catch(e){info("MCP tool discovery failed: "+e.message);}\n    }\n    for (let step=0;step<maxSteps;step++) {
+    let activeTools=toolSchemas;
+    if(Array.isArray(config.mcpServers)&&config.mcpServers.length&&config.permissions?.mcpServers===true){\n      try{const external=await listMcpTools(config);activeTools=[...toolSchemas,...external.filter(tool=>tool.function?.name.startsWith("mcp_"))];}
+      catch(e){info("MCP tool discovery failed: "+e.message);}
+    }\n    for (let step=0;step<maxSteps;step++) {
       let result;
       let streamed=false;
       const requestedModel=config.model;
