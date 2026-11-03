@@ -10,7 +10,14 @@ export async function loadConfig() {
   try {
     const parsed=JSON.parse(await fs.readFile(FILE,"utf8"));
     if (!parsed || typeof parsed!=="object" || Array.isArray(parsed)) throw new Error("Invalid config format");
-    return {...DEFAULTS,...parsed,permissions:{...DEFAULTS.permissions,...(parsed.permissions||{})}};
+    const config={...DEFAULTS,...parsed};
+    config.fallbackModels=Array.isArray(parsed.fallbackModels)?parsed.fallbackModels.filter(x=>typeof x==="string").slice(0,5):[];
+    config.mcpServers=Array.isArray(parsed.mcpServers)?parsed.mcpServers.filter(x=>x&&typeof x==="object"&&!Array.isArray(x)).slice(0,10):[];
+    config.modelRoutes=parsed.modelRoutes&&typeof parsed.modelRoutes==="object"&&!Array.isArray(parsed.modelRoutes)?parsed.modelRoutes:{};
+    config.permissions={...DEFAULTS.permissions,...(parsed.permissions&&typeof parsed.permissions==="object"&&!Array.isArray(parsed.permissions)?parsed.permissions:{})};
+    config.maxSteps=Number.isInteger(parsed.maxSteps)?Math.max(1,Math.min(30,parsed.maxSteps)):DEFAULTS.maxSteps;
+    config.maxTokens=Number.isInteger(parsed.maxTokens)?Math.max(128,Math.min(4096,parsed.maxTokens)):DEFAULTS.maxTokens;
+    return config;
   } catch (e) {
     if (e.code!=="ENOENT") console.error("Could not read saved settings:",e.message);
     return {...DEFAULTS,permissions:{...DEFAULTS.permissions}};
