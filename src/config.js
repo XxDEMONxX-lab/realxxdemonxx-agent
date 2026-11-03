@@ -4,7 +4,7 @@ import path from "node:path";
 
 const DIR=path.join(os.homedir(),".realxxdemonxx-agent");
 const FILE=path.join(DIR,"config.json");
-const DEFAULTS={provider:"",providerName:"",baseURL:"",apiKey:"",model:"",fallbackModels:[],maxSteps:8,maxTokens:512,permissions:{readFiles:true,searchFiles:true,writeFiles:false,terminal:false,packageInstall:false,destructive:false,gitOperations:false,runTests:false}};
+const DEFAULTS={provider:"",providerName:"",baseURL:"",apiKey:"",model:"",fallbackModels:[],mcpServers:[],maxSteps:8,maxTokens:512,permissions:{mcpServers:false,network:false,readFiles:true,searchFiles:true,writeFiles:false,terminal:false,packageInstall:false,destructive:false,gitOperations:false,runTests:false}};
 
 export async function loadConfig() {
   try {
