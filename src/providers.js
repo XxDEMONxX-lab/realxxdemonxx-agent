@@ -1,4 +1,4 @@
-import { ask } from "./ui.js";
+import { ask, ESC } from "./ui.js";
 
 export const PROVIDERS = [
   {id:"openrouter",name:"OpenRouter",baseURL:"https://openrouter.ai/api/v1"},
@@ -47,7 +47,7 @@ async function chooseModel(provider, apiKey, currentModel = "") {
   while (true) {
     const query=(await ask("\n  Search model / enter exact model ID (or 'back'): ")).trim();
     if (!query) continue;
-    if (query.toLowerCase()==="back") return null;
+    if (query===ESC || query.toLowerCase()==="back") return null;
     if (query.toLowerCase()==="current" && currentModel) return currentModel;
     if (!models.length) return query;
 
@@ -62,7 +62,7 @@ async function chooseModel(provider, apiKey, currentModel = "") {
     if (matches.length>25) console.log(`  Showing 25 of ${matches.length}. Refine your search.`);
     const choice=(await ask("  Model number (or search again): ")).trim();
     if (/^\d+$/.test(choice) && Number(choice)>=1 && Number(choice)<=Math.min(25,matches.length)) return matches[Number(choice)-1].id;
-    if (choice.toLowerCase()==="back") return null;
+    if (choice===ESC || choice.toLowerCase()==="back") return null;
     if (choice) {
       const exact=(await ask(`  Use "${choice}" as the exact model ID? (y/N): `)).trim().toLowerCase();
       if (exact==="y" || exact==="yes") return choice;
@@ -74,7 +74,7 @@ export async function configureProvider(config, save) {
   while (true) {
     listProviders(config);
     const value=(await ask("\n  Choose provider number: ")).trim();
-    if (value==="0" || value.toLowerCase()==="back") return null;
+    if (value===ESC || value==="0" || value.toLowerCase()==="back") return null;
     const provider=PROVIDERS[Number(value)-1];
     if (!provider) {
       console.log("  Invalid choice. Enter a number from 1 to 9.");
@@ -84,6 +84,7 @@ export async function configureProvider(config, save) {
     const sameOpenRouter=provider.id.startsWith("openrouter") && String(config.provider||"").startsWith("openrouter");
     let apiKey=(config.provider===provider.id || sameOpenRouter) ? config.apiKey : "";
     if (!apiKey) apiKey=(await ask("  API key: ")).trim();
+    if (apiKey===ESC) return null;
     if (!apiKey) {
       console.log("  API key cannot be empty.");
       continue;
