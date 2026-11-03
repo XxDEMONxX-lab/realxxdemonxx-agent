@@ -27,6 +27,29 @@ export function success(message) { console.log(`${green("✓")} ${message}`); }
 export function error(message) { console.log(`${red("✕")} ${message}`); }
 export function info(message) { console.log(`${dim("│")} ${message}`); }
 
+export function chatReady(model,provider) {
+  section("CHAT READY");
+  success("Connected to " + (provider || "provider"));
+  info("Model  " + model);
+  info("Type a message and press Enter to chat.");
+  info("Use /help for commands, /menu for quick actions, or /exit to quit.");
+  console.log("");
+}
+
+export function quickMenu() {
+  section("QUICK MENU");
+  console.log("  /chat       Return to the chat prompt");
+  console.log("  /files      Show project files");
+  console.log("  /pwd        Show current project directory");
+  console.log("  /models     Change model");
+  console.log("  /providers  Change provider");
+  console.log("  /test       Test model connection");
+  console.log("  /status     Show active configuration");
+  console.log("  /clear      Clear conversation context");
+  console.log("  /help       Show all commands");
+  console.log("  /exit       Exit agent");
+}
+
 export async function withSpinner(label,task) {
   if (!tty) { info(label); return task(); }
   const frames=["◐","◓","◑","◒"];
@@ -57,4 +80,4 @@ export function showTool(name,args={}) {
 export function agentText(value) {
   if (value) console.log(`\n${cyan("◆")} ${bold("AGENT")}\n${value.trim()}\n`);
 }
-export function promptLabel() { return `\n${violet("›")} `; }
+export function promptLabel() { return `\n${green("YOU")} ${violet("›")} `; }
