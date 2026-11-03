@@ -34,8 +34,16 @@ function drawDashboard(){
  rows.push(" "+dim("PROVIDER")+"  "+clip(session.provider||"Not set",side-12)+"  "+dim("MODEL")+"  "+clip(session.model||"Not set",Math.max(8,width-side-20)));
  rows.push(dim("─".repeat(width)));
  const inputLines=inputValue.split("\n");
- rows.push(" "+bold(green("YOU"))+" "+violet("›")+" "+(inputLines[0]||""));
- if(inputLines.length>1)rows.push("   "+inputLines[inputLines.length-1]);
+ const beforeLines=inputValue.slice(0,inputCursor).split("\n");
+ const cursorLine=beforeLines.length-1;
+ const firstVisibleLine=Math.max(0,Math.min(cursorLine,inputLines.length-2));
+ const firstPrefix=firstVisibleLine===0?" "+bold(green("YOU"))+" "+violet("›")+" ":"   ";
+ const secondPrefix="   ";
+ const firstChars=Array.from(inputLines[firstVisibleLine]||"");
+ const cursorChars=Array.from(beforeLines[beforeLines.length-1]||"");
+ const firstOffset=cursorLine===firstVisibleLine?Math.max(0,cursorChars.length-Math.max(8,width-firstPrefix.length-2)+1):0;
+ rows.push(firstPrefix+firstChars.slice(firstOffset,firstOffset+Math.max(8,width-firstPrefix.length-2)).join(""));
+ if(inputLines.length>1)rows.push(secondPrefix+Array.from(inputLines[firstVisibleLine+1]||"").slice(0,Math.max(8,width-secondPrefix.length-2)).join(""));
  const matches=inputLines.length===1&&inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
  if(matches.length)rows.push(" "+dim("COMMANDS  ")+matches.join("   "));
  rows.push(dim(" ↑↓ Navigate when input is empty   Enter Select/Send   Tab Complete   Esc Back   Ctrl+P Palette"));
@@ -43,7 +51,7 @@ function drawDashboard(){
  rows.length=height;
  if(!renderCache||renderCache.length!==height)renderCache=Array(height).fill(null);
  for(let i=0;i<height;i++){const next=clip(rows[i],width);if(renderCache[i]!==next){process.stdout.write("\x1b["+(i+1)+";1H"+next+"\x1b[K");renderCache[i]=next;}}
- const promptRow=Math.max(1,rows.findIndex(line=>line.includes("YOU"))+1);const before=inputValue.slice(0,inputCursor).split("\n");const cursorRow=Math.min(height,promptRow+Math.min(1,before.length-1));const cursorCol=Math.min(width,(before.length>1?4:5)+Array.from(before[before.length-1]||"").length);process.stdout.write("\x1b["+cursorRow+";"+cursorCol+"H\x1b[?25h");
+ const promptRow=Math.max(1,rows.findIndex(line=>line.includes("YOU"))+1);const cursorRow=Math.min(height,promptRow+cursorLine-firstVisibleLine);const cursorPrefix=cursorLine===0?5:3;const cursorCol=Math.min(width,cursorPrefix+cursorChars.length-firstOffset+1);process.stdout.write("\x1b["+cursorRow+";"+cursorCol+"H\x1b[?25h");
 }
 function captureConsole(){
  if(!tty||originalLog)return;
