@@ -62,6 +62,7 @@ export async function undoLastChange() {
 export const toolSchemas=[
  {type:"function",function:{name:"list_files",description:"List project files and folders. Hidden dependency and build directories are skipped.",parameters:{type:"object",properties:{path:{type:"string"}},required:["path"]}}},
  {type:"function",function:{name:"search_files",description:"Search project text files for a word or phrase. Returns matching file paths and line numbers.",parameters:{type:"object",properties:{query:{type:"string"},path:{type:"string"}},required:["query"]}}},
+ {type:"function",function:{name:"project_map",description:"Build a compact map of the project tree, skipping dependency and generated directories.",parameters:{type:"object",properties:{path:{type:"string"}},required:[]}}},
  {type:"function",function:{name:"read_file",description:"Read a UTF-8 project text file. Always read a file before modifying it.",parameters:{type:"object",properties:{path:{type:"string"}},required:["path"]}}},
  {type:"function",function:{name:"write_file",description:"Create or replace a UTF-8 project file. Preserve existing code unless the requested change requires otherwise.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
  {type:"function",function:{name:"run_command",description:"Run a shell command in the project directory. User approval is required.",parameters:{type:"object",properties:{command:{type:"string"}},required:["command"]}}}
@@ -110,6 +111,27 @@ export async function executeTool(name,args={},config={}) {
     }
     await walk(start);
     return hits.join("\n") || `No matches found. Scanned ${scanned} files.`;
+  }
+  if (name==="project_map") {
+    if (config.permissions?.readFiles!==true && (await ask("  Scan project structure? Type YES to approve: ")).trim()!=="YES") return "User denied project map.";
+    const start=await safePath(args.path||".");
+    const rows=[];
+    let count=0;
+    async function walk(dir,depth=0) {
+      if (count>=350 || depth>5) return;
+      let entries=[];
+      try { entries=await fs.readdir(dir,{withFileTypes:true}); } catch { return; }
+      entries.sort((a,b)=>Number(b.isDirectory())-Number(a.isDirectory())||a.name.localeCompare(b.name));
+      for (const entry of entries) {
+        if (count>=350) break;
+        if (ignored.has(entry.name) || entry.name.startsWith(".realxxdemonxx-backups")) continue;
+        rows.push("  ".repeat(depth)+(entry.isDirectory()?"[DIR] ":"[FILE] ")+entry.name);
+        count++;
+        if (entry.isDirectory()) await walk(path.join(dir,entry.name),depth+1);
+      }
+    }
+    await walk(start);
+    return rows.join("\n") || "(empty project)";
   }
   if (name==="read_file") {
     if (config.permissions?.readFiles!==true && (await ask("  Read file? Type YES to approve: ")).trim()!=="YES") return "User denied file read.";
