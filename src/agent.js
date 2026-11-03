@@ -315,7 +315,9 @@ export async function runAgent(config) {
         ["packageInstall","Auto-approve package installations"],
         ["destructive","Auto-approve destructive commands"],
         ["gitOperations","Auto-approve read-only Git inspection"],
-        ["runTests","Auto-approve test/check scripts"],\n        ["network","Allow public web research"],\n        ["mcpServers","Allow configured MCP servers"]
+        ["runTests","Auto-approve test/check scripts"],
+        ["network","Allow public web research"],
+        ["mcpServers","Allow configured MCP servers"]
       ];
       config.permissions=config.permissions||{};
       while (true) {
