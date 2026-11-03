@@ -45,12 +45,12 @@ export async function runAgent(config) {
   say("  Type /help to see all commands.");
 
   while (true) {
-    const input=(await ask(promptLabel())).trim();
+    let input=(await ask(promptLabel())).trim();
+    if (input==="/menu") input=(await quickMenu())||"";
     if (!input || input===ESC) continue;
     const command=input.toLowerCase();
     if (command==="/exit"||command==="/quit") break;
     if (command==="/help" || command==="/") {say(HELP);continue;}
-    if (command==="/menu") {quickMenu();continue;}
     if (command==="/chat") {info("Chat is active. Type your request below.");continue;}
     if (command==="/pwd") {info(process.cwd());continue;}
     if (command==="/files") {
