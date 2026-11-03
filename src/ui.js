@@ -13,7 +13,7 @@ function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
  const side=22,main=width-side-3,body=height-12;
- const clip=(value,n)=>{const plain=String(value).replace(/\\x1b\\[[0-9;]*m/g,"").replace(/\\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":String(value);};
+ const clip=(value,n)=>{const plain=String(value).replace(/\x1b\\[[0-9;]*m/g,"").replace(/\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":String(value);};
  const rows=[];
  rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  INTERACTIVE WORKSPACE")+" ".repeat(Math.max(1,width-48))+green("● "+session.status));
  rows.push(dim(" "+session.workspace.slice(0,Math.max(20,width-4))));
@@ -39,11 +39,11 @@ function drawDashboard(){
  for(let i=0;i<height;i++){
   const next=clip(rows[i],width);
   if(renderCache[i]!==next){
-   process.stdout.write("\\x1b["+(i+1)+";1H"+next+"\\x1b[K");
+   process.stdout.write("\x1b["+(i+1)+";1H"+next+"\x1b[K");
    renderCache[i]=next;
   }
  }
- process.stdout.write("\\x1b[?25l");
+ process.stdout.write("\x1b[?25l");
 }
 function captureConsole(){
  if(!tty||originalLog)return;
