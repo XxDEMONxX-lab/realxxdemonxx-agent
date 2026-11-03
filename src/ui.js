@@ -15,7 +15,7 @@ function drawDashboard(){
  const side=22,main=width-side-3,body=height-12;
  const clip=(s,n)=>{s=String(s).replace(/\x1b\[[0-9;]*m/g,"").replace(/\r/g,"");return s.length>n?s.slice(0,Math.max(0,n-1))+"…":s;};
  const line=(s="")=>process.stdout.write(s+"\x1b[K\n");
- process.stdout.write("\x1b[H\x1b[2J");
+ process.stdout.write("\x1b[H");
  line(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  INTERACTIVE WORKSPACE")+ " ".repeat(Math.max(1,width-48))+green("● "+session.status));
  line(dim(" "+session.workspace.slice(0,Math.max(20,width-4))));
  line(dim("─".repeat(width)));
