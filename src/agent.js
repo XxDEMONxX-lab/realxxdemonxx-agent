@@ -36,7 +36,8 @@ TRY ASKING
 export async function runAgent(config) {
   const messages=[{role:"system",content:SYSTEM}];
   const persist=()=>saveConfig(config);
-  startTUI(config);\n  section("WORKSPACE");
+  startTUI(config);
+  section("WORKSPACE");
   info("Project   " + process.cwd());
   info("Tools     search · read · write · terminal");
   info("Safety    terminal commands require approval");
