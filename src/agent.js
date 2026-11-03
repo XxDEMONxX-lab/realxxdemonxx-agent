@@ -255,7 +255,8 @@ export async function runAgent(config) {
       continue;
     }
 
-    const userMessageIndex=messages.length;\n    currentTaskStarted=Date.now();
+    const userMessageIndex=messages.length;
+    currentTaskStarted=Date.now();
     const modeInstruction=nextMode?({plan:"\n\nMODE: PLANNING. First inspect relevant project files, then present a numbered plan and wait for approval before making edits.",review:"\n\nMODE: CODE REVIEW. Inspect relevant files and report findings ordered by severity with file and line references. Do not edit files.",debug:"\n\nMODE: DEBUGGING. Reproduce or trace the issue from available evidence, inspect relevant files, explain the likely root cause, then make a minimal fix only when sufficiently supported."}[nextMode]||""):"";
     messages.push({role:"user",content:input+modeInstruction});
     nextMode="";
