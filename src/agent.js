@@ -35,6 +35,8 @@ TRY ASKING
 
 export async function runAgent(config) {
   const messages=[{role:"system",content:SYSTEM}];
+  let nextMode="";
+  const usage={prompt:0,completion:0,total:0};
   const persist=()=>saveConfig(config);
   startTUI(config);
   section("WORKSPACE");
@@ -52,7 +54,25 @@ export async function runAgent(config) {
     const command=input.toLowerCase();
     if (command==="/exit"||command==="/quit") break;
     if (command==="/help" || command==="/") {say(HELP);continue;}
-    if (command==="/chat") {info("Chat is active. Type your request below.");continue;}
+    if (command==="/chat") {info("Chat is active. Type your request below.");nextMode="";continue;}
+    if (["/plan","/review","/debug"].includes(command)) {
+      nextMode=command.slice(1);
+      const descriptions={plan:"Create a concise implementation plan first. Do not edit files until the plan is presented and the user approves it.",review:"Perform a careful code review. Prioritize concrete bugs, security risks, regressions and missing tests. Do not modify files unless asked.",debug:"Investigate the reported failure systematically. Inspect relevant code and logs, identify the root cause, then propose a minimal fix before editing."};
+      info(descriptions[nextMode]);
+      continue;
+    }
+    if (command==="/map") {
+      try { section("PROJECT MAP"); say(await executeTool("project_map",{path:"."},config)); }
+      catch(e) { error(e.message); }
+      continue;
+    }
+    if (command==="/usage") {
+      section("SESSION USAGE");
+      info("Prompt tokens: "+usage.prompt);
+      info("Completion tokens: "+usage.completion);
+      info("Total tokens: "+usage.total);
+      continue;
+    }
     if (command==="/pwd") {info(process.cwd());continue;}
     if (command==="/files") {
       try {
@@ -169,7 +189,9 @@ export async function runAgent(config) {
     }
 
     const userMessageIndex=messages.length;
-    messages.push({role:"user",content:input});
+    const modeInstruction=nextMode?({plan:"\n\nMODE: PLANNING. First inspect relevant project files, then present a numbered plan and wait for approval before making edits.",review:"\n\nMODE: CODE REVIEW. Inspect relevant files and report findings ordered by severity with file and line references. Do not edit files.",debug:"\n\nMODE: DEBUGGING. Reproduce or trace the issue from available evidence, inspect relevant files, explain the likely root cause, then make a minimal fix only when sufficiently supported."}[nextMode]||""):"";
+    messages.push({role:"user",content:input+modeInstruction});
+    nextMode="";
     let completed=false;
     let hadOutput=false;
     const maxSteps=config.maxSteps||8;
@@ -212,6 +234,7 @@ export async function runAgent(config) {
         break;
       }
 
+      if (result?.usage) { usage.prompt+=Number(result.usage.prompt_tokens)||0; usage.completion+=Number(result.usage.completion_tokens)||0; usage.total+=Number(result.usage.total_tokens)||0; }
       const choice=result?.choices?.[0];
       const msg=choice?.message;
       if (!msg||typeof msg!=="object") {
