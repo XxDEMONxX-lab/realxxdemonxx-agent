@@ -328,25 +328,25 @@ export async function runAgent(config) {
         break;
       }
 
-      for (const call of calls) {
+      const executeCall=async call=>{
         const name=call?.function?.name||"unknown";
-        let output;
-        try {
-          if (!call.id) throw new Error("Provider returned a tool call without an ID; choose a model with compatible tool calling.");
+        try{
+          if(!call.id)throw new Error("Provider returned a tool call without an ID; choose a model with compatible tool calling.");
           const args=JSON.parse(call?.function?.arguments||"{}");
           showTool(name,args);
-          output=await executeTool(name,args,config);
-          success("Completed " + name);
-        } catch(e) {
-          output="Tool failed: " + e.message;
+          const output=await executeTool(name,args,config);
+          success("Completed "+name);
+          return {role:"tool",tool_call_id:call.id,content:String(output??"No output").slice(0,16000)};
+        }catch(e){
+          const output="Tool failed: "+e.message;
           error(output);
+          return {role:"tool",tool_call_id:call?.id||"missing-tool-call-id",content:output};
         }
-        messages.push({
-          role:"tool",
-          tool_call_id:call.id||"missing-tool-call-id",
-          content:String(output??"No output").slice(0,16000)
-        });
-      }
+      };
+      const parallelDelegation=calls.length>1&&calls.every(call=>call?.function?.name==="delegate_subagent");
+      const toolMessages=parallelDelegation?await Promise.all(calls.map(executeCall)):[];
+      if(parallelDelegation)messages.push(...toolMessages);
+      else for(const call of calls)messages.push(await executeCall(call));
     }
     if (!completed) {
       say("Tool-cycle limit reached. Review the changes so far, then ask the agent to continue.");
