@@ -65,6 +65,7 @@ export const toolSchemas=[
  {type:"function",function:{name:"project_map",description:"Build a compact map of the project tree, skipping dependency and generated directories.",parameters:{type:"object",properties:{path:{type:"string"}},required:[]}}},
  {type:"function",function:{name:"read_file",description:"Read a UTF-8 project text file. Always read a file before modifying it.",parameters:{type:"object",properties:{path:{type:"string"}},required:["path"]}}},
  {type:"function",function:{name:"write_file",description:"Create or replace a UTF-8 project file. Preserve existing code unless the requested change requires otherwise.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
+ {type:"function",function:{name:"preview_file_change",description:"Preview a proposed file edit as a compact line diff without changing the file. Use before write_file.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
  {type:"function",function:{name:"git_status",description:"Inspect the current Git working tree status. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"git_diff",description:"Inspect unstaged and staged Git changes. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"run_tests",description:"Run the project's configured test or syntax-check script after user approval.",parameters:{type:"object",properties:{script:{type:"string",description:"Optional package script name, such as test or check."}},required:[]}}},
@@ -143,6 +144,24 @@ export async function executeTool(name,args={},config={}) {
     if (!stat.isFile()) throw new Error("The requested path is not a regular file.");
     if (stat.size>400000) throw new Error("File is larger than 400 KB; inspect a smaller file or split it.");
     return await fs.readFile(file,"utf8");
+  }
+  if (name==="preview_file_change") {
+    if(config.permissions?.readFiles!==true && (await ask("  Read current file for diff preview? Type YES: ")).trim()!=="YES")return "User denied diff preview.";
+    const file=await safePath(args.path);
+    const proposed=String(args.content??"");
+    if(Buffer.byteLength(proposed,"utf8")>500000)throw new Error("Proposed file exceeds 500 KB.");
+    let before="";
+    try{before=await fs.readFile(file,"utf8");}catch(e){if(e.code!=="ENOENT")throw e;}
+    const a=before.split("\n"),b=proposed.split("\n");
+    let first=0;while(first<a.length&&first<b.length&&a[first]===b[first])first++;
+    let lastA=a.length-1,lastB=b.length-1;while(lastA>=first&&lastB>=first&&a[lastA]===b[lastB]){lastA--;lastB--;}
+    const out=["--- "+path.relative(root,file), "+++ proposed"];
+    const from=Math.max(0,first-3),toA=Math.min(a.length,lastA+4),toB=Math.min(b.length,lastB+4);
+    for(let i=from;i<first;i++)out.push(" "+a[i]);
+    for(let i=first;i<=lastA;i++)out.push("-"+a[i]);
+    for(let i=first;i<=lastB;i++)out.push("+"+b[i]);
+    for(let i=lastA+1;i<toA;i++)out.push(" "+a[i]);
+    return (before===proposed?"No changes detected.":out.join("\n")).slice(0,14000);
   }
   if (name==="write_file") {
     if (config.permissions?.writeFiles!==true && (await ask("  Write/edit file? Type YES to approve: ")).trim()!=="YES") return "User denied file write.";
