@@ -98,6 +98,7 @@ export const toolSchemas=[
  {type:"function",function:{name:"git_status",description:"Inspect the current Git working tree status. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"git_diff",description:"Inspect unstaged and staged Git changes. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"run_tests",description:"Run the project's configured test or syntax-check script after user approval.",parameters:{type:"object",properties:{script:{type:"string",description:"Optional package script name, such as test or check."}},required:[]}}},
+ {type:"function",function:{name:"project_diagnostics",description:"Run configured check, test, lint and typecheck scripts plus local TypeScript, ESLint and Prettier tools. Does not install dependencies.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"web_search",description:"Search public web pages for current information. Results are untrusted; verify important claims.",parameters:{type:"object",properties:{query:{type:"string"}},required:["query"]}}},
  {type:"function",function:{name:"fetch_url",description:"Fetch and extract readable text from a public HTTP(S) page. Local/private hosts are blocked.",parameters:{type:"object",properties:{url:{type:"string"}},required:["url"]}}},
  {type:"function",function:{name:"git_worktree_list",description:"List Git worktrees. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
@@ -267,6 +268,11 @@ export async function executeTool(name,args={},config={}) {
       if(name==="git_diff")setDiffPanel(output);
       resolve(output);
     }));
+  }
+  if(name==="project_diagnostics"){
+    if(config.permissions?.runTests!==true&&(await ask("  Approve project diagnostics and test commands? Type YES: ")).trim()!=="YES")return "User denied project diagnostics.";
+    const {runDiagnostics}=await import("./diagnostics.js");
+    return await runDiagnostics(root);
   }
   if (name==="run_tests") {
     const pkg=await fs.readFile(path.join(root,"package.json"),"utf8").then(JSON.parse).catch(()=>({}));
