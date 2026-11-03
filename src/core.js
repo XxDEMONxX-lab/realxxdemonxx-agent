@@ -21,12 +21,12 @@ export function clipAnsi(value,maxWidth){
 export function classifyCommand(command){
   const value=String(command??"").trim();
   if(!value)return "empty";
-  const packageInstall=/(^|[;&|]\s*)(npm|pnpm|yarn|bun|pip|pip3|pkg|apt|apt-get)\s+(install|ci|add|i|update|uninstall|remove|upgrade|reinstall)\b/i.test(value);
+  const packageInstall=/\b(npm|pnpm|yarn|bun|pip|pip3|pkg|apt|apt-get)\s+(install|ci|add|i|update|uninstall|remove|upgrade|reinstall)\b/i.test(value);
   if(packageInstall)return "packageInstall";
-  const destructive=/(^|[;&|]\s*)(sudo\s+)?(rm|rmdir|unlink|shred|truncate|mkfs(?:\.[\w-]+)?|dd|wipefs|fdisk|parted)\b/i.test(value)
+  const destructive=/\b(rm|rmdir|unlink|shred|truncate|mkfs(?:\.[\w-]+)?|dd|wipefs|fdisk|parted)\b\s+/i.test(value)
     ||/\bfind\b[^;\n]*\s-delete\b/i.test(value)
     ||/\bsed\b[^;\n]*\s-i(?:\s|$)/i.test(value)
-    ||/\bgit\s+(reset\s+--hard|clean\s+-[\w]*f|restore\s+--source|checkout\s+--)\b/i.test(value)
+    ||/\bgit\s+(?:reset\s+--hard|clean\s+-[\w]*f|restore\s+--source|checkout\s+--)\b/i.test(value)
     ||/\b(>|>>|2>)\s*\/dev\/(sd[a-z]|nvme|mmcblk|zero|random)\b/i.test(value);
   return destructive?"destructive":"terminal";
 }
