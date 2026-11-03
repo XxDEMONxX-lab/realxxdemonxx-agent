@@ -39,7 +39,8 @@ export function chatReady(model,provider) {
   section("CHAT READY");
   success("Connected to " + (provider || "provider"));
   info("Model  " + model);
-  info("Type a message and press Enter to chat.");\n  info("Type / and press Tab for command suggestions.");
+  info("Type a message and press Enter to chat.");
+  info("Type / and press Tab for command suggestions.");
   info("Use /help for commands, /menu for quick actions, or /exit to quit.");
   console.log("");
 }
