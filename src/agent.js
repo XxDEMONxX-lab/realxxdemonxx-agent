@@ -175,6 +175,19 @@ export async function runAgent(config) {
       } catch(e) {error(e.message);}
       continue;
     }
+    if(command==="/fallback"){
+      section("FALLBACK MODELS");
+      const current=Array.isArray(config.fallbackModels)?config.fallbackModels:[];
+      info(current.length?current.join(" · "):"No fallback models configured.");
+      info("Enter comma-separated model IDs in priority order. Leave empty to clear.");
+      const raw=(await ask("  Fallback model IDs: ")).trim();
+      if(raw===ESC)continue;
+      const models=[...new Set(raw.split(",").map(x=>x.trim()).filter(Boolean))].filter(x=>x!==config.model).slice(0,5);
+      config.fallbackModels=models;
+      await persist();
+      success(models.length?"Saved "+models.length+" fallback model(s).":"Fallback models cleared.");
+      continue;
+    }
     if (command==="/model") {
       const model=(await ask("  Exact model ID: ")).trim();
       if (model && model!==ESC) {
