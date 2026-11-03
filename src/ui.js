@@ -13,7 +13,7 @@ function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
  const side=22,contextWidth=width>=105?22:0,main=Math.max(18,width-side-contextWidth-6),body=height-12;
- const clip=(value,n)=>{const plain=String(value).replace(/\x1b\[[0-9;]*m/g,"").replace(/\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":plain;};
+ const clip=(value,n)=>{const source=String(value).replace(/\r/g,"");let out="",visible=0;const tokens=source.match(/\x1b\[[0-?]*[ -/]*[@-~]|[^\x1b]/g)||[];for(const token of tokens){if(token.startsWith("\x1b[")){out+=token;continue;}if(visible>=n)break;out+=token;visible++;}if(visible<n)return out;return out+"…\x1b[0m";};]*m/g,"").replace(/\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":plain;};
  const context=session.diff.length?["LATEST DIFF","──────────────",...session.diff.slice(0,14)]:["PROJECT CONTEXT","───────────────","Provider",session.provider||"Not set","","Model",session.model||"Not set","","Workspace",session.workspace.split("/").filter(Boolean).slice(-2).join("/")||session.workspace,"","Current task",session.task||"Waiting for instructions","","Status",session.status];
  const rows=[];
  rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  HYBRID CODING WORKSPACE")+" ".repeat(Math.max(1,width-52))+green("● "+session.status));
