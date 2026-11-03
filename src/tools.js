@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import {classifyCommand} from "./core.js";
 import { ask,editText,setDiffPanel } from "./ui.js";
 
 const root=await fs.realpath(process.cwd());
@@ -244,10 +245,9 @@ export async function executeTool(name,args={},config={}) {
     const command=String(args.command||"").trim();
     if (!command) throw new Error("Command cannot be empty.");
     console.log(`\n  $ ${command}\n`);
-    const packageInstall=/\b(npm|pnpm|yarn|bun|pip|pip3|pkg|apt)\s+(install|ci|add|i|update|uninstall|remove)\b/i.test(command);
-    const destructive=/\b(rm|rmdir|unlink|shred|truncate|mkfs|dd)\b|\bfind\b[^;\n]*\s-delete\b|\bsed\b[^;\n]*\s-i(?:\s|$)|\b(git\s+(reset|clean|restore)|git\s+checkout\s+--)\b/i.test(command);
-    const permissionKey=destructive?"destructive":packageInstall?"packageInstall":"terminal";
-    const permissionLabel=destructive?"destructive command":packageInstall?"package installation":"terminal command";
+    const risk=classifyCommand(command);
+    const permissionKey=risk==="destructive"?"destructive":risk==="packageInstall"?"packageInstall":"terminal";
+    const permissionLabel=risk==="destructive"?"destructive command":risk==="packageInstall"?"package installation":"terminal command";
     const approval=config.permissions?.[permissionKey]===true?"YES":(await ask(`  Approve ${permissionLabel}? Type YES: `)).trim();
     if (approval!=="YES") return "User denied command execution.";
     const {execFile}=await import("node:child_process");
