@@ -6,34 +6,44 @@ const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
 let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions"};
 const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
-let originalLog=null,originalError=null;
+let originalLog=null,originalError=null,renderCache=null;
 if(tty)readline.emitKeypressEvents(process.stdin);
 function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
 function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
  const side=22,main=width-side-3,body=height-12;
- const clip=(s,n)=>{s=String(s).replace(/\x1b\[[0-9;]*m/g,"").replace(/\r/g,"");return s.length>n?s.slice(0,Math.max(0,n-1))+"…":s;};
- const line=(s="")=>process.stdout.write(s+"\x1b[K\n");
- process.stdout.write("\x1b[H");
- line(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  INTERACTIVE WORKSPACE")+ " ".repeat(Math.max(1,width-48))+green("● "+session.status));
- line(dim(" "+session.workspace.slice(0,Math.max(20,width-4))));
- line(dim("─".repeat(width)));
- line(" "+bold("WORKSPACE")+ " ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("SESSION / ACTIVITY"));
- line(" "+dim("─".repeat(side))+"  "+dim("┌"+"─".repeat(Math.max(8,main-2))+"┐"));
+ const clip=(value,n)=>{const plain=String(value).replace(/\\x1b\\[[0-9;]*m/g,"").replace(/\\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":String(value);};
+ const rows=[];
+ rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  INTERACTIVE WORKSPACE")+" ".repeat(Math.max(1,width-48))+green("● "+session.status));
+ rows.push(dim(" "+session.workspace.slice(0,Math.max(20,width-4))));
+ rows.push(dim("─".repeat(width)));
+ rows.push(" "+bold("WORKSPACE")+" ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("SESSION / ACTIVITY"));
+ rows.push(" "+dim("─".repeat(side))+"  "+dim("┌"+"─".repeat(Math.max(8,main-2))+"┐"));
+ const visibleLogs=logs.slice(-body);
  for(let r=0;r<body;r++){
   const nav=NAV[r];
-  let left=nav?(r===selectedNav?cyan(" ❯ "+nav[0].padEnd(side-4)):dim("   "+nav[0].padEnd(side-4))):" ".repeat(side);
-  const item=logs.slice(-body)[r]??"";
-  line(left+"  "+dim("│")+" "+clip(item,Math.max(8,main-3)));
+  const left=nav?(r===selectedNav?cyan(" ❯ "+nav[0].padEnd(side-4)):dim("   "+nav[0].padEnd(side-4))):" ".repeat(side);
+  rows.push(left+"  "+dim("│")+" "+clip(visibleLogs[r]??"",Math.max(8,main-3)));
  }
- line(" "+dim("─".repeat(side))+"  "+dim("└"+"─".repeat(Math.max(8,main-2))+"┘"));
- line(" "+dim("PROVIDER")+"  "+clip(session.provider||"Not set",side-12)+"  "+dim("MODEL")+"  "+clip(session.model||"Not set",Math.max(8,main-18)));
- line(dim("─".repeat(width)));
- line(" "+bold(green("YOU"))+" "+violet("›")+" "+inputValue+"\x1b[K");
+ rows.push(" "+dim("─".repeat(side))+"  "+dim("└"+"─".repeat(Math.max(8,main-2))+"┘"));
+ rows.push(" "+dim("PROVIDER")+"  "+clip(session.provider||"Not set",side-12)+"  "+dim("MODEL")+"  "+clip(session.model||"Not set",Math.max(8,main-18)));
+ rows.push(dim("─".repeat(width)));
+ rows.push(" "+bold(green("YOU"))+" "+violet("›")+" "+inputValue);
  const matches=inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
- if(matches.length)line(" "+dim("COMMANDS  ")+matches.join("   "));
- line(dim(" ↑↓ Navigate when input is empty   Enter Select/Send   Tab Complete   Esc Back   Ctrl+P Palette"));
+ if(matches.length)rows.push(" "+dim("COMMANDS  ")+matches.join("   "));
+ rows.push(dim(" ↑↓ Navigate when input is empty   Enter Select/Send   Tab Complete   Esc Back   Ctrl+P Palette"));
+ while(rows.length<height)rows.push("");
+ rows.length=height;
+ if(!renderCache||renderCache.length!==height){renderCache=Array(height).fill(null);}
+ for(let i=0;i<height;i++){
+  const next=clip(rows[i],width);
+  if(renderCache[i]!==next){
+   process.stdout.write("\\x1b["+(i+1)+";1H"+next+"\\x1b[K");
+   renderCache[i]=next;
+  }
+ }
+ process.stdout.write("\\x1b[?25l");
 }
 function captureConsole(){
  if(!tty||originalLog)return;
@@ -43,7 +53,7 @@ function captureConsole(){
 }
 export function startTUI(config={}){
  if(!tty)return;
- dashboard=true;session.provider=config.providerName||config.provider||"Not configured";session.model=config.model||"Not configured";session.workspace=process.cwd();session.status="ONLINE";
+ dashboard=true;renderCache=null;session.provider=config.providerName||config.provider||"Not configured";session.model=config.model||"Not configured";session.workspace=process.cwd();session.status="ONLINE";
  process.stdout.write("\x1b[?1049h\x1b[?25l");
  process.stdout.on("resize",drawDashboard);
  captureConsole();drawDashboard();
