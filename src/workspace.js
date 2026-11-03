@@ -66,13 +66,19 @@ export async function restoreCheckpoint(id){
   if(typeof id!=="string"||!/^[0-9TZa-z-]+$/.test(id))throw new Error("Invalid checkpoint ID.");
   const folder=path.join(checkpointDir,id);
   const meta=JSON.parse(await fs.readFile(path.join(folder,"checkpoint.json"),"utf8"));
+  if(!Array.isArray(meta.files))throw new Error("Checkpoint metadata is invalid.");
+  await createCheckpoint("before-restore-"+id);
   const restored=[];
   for(const item of meta.files){
+    if(!item||typeof item.path!=="string"||path.isAbsolute(item.path)||item.path.split(/[\\\\/]/).includes(".."))continue;
     const dest=path.resolve(projectRoot,item.path);
-    if(dest!==projectRoot&&!dest.startsWith(projectRoot+path.sep))continue;
+    if(dest===projectRoot||!dest.startsWith(projectRoot+path.sep))continue;
     const source=path.resolve(folder,item.path);
     if(!source.startsWith(folder+path.sep))continue;
     await fs.mkdir(path.dirname(dest),{recursive:true});
+    const parent=await fs.realpath(path.dirname(dest));
+    if(parent!==projectRoot&&!parent.startsWith(projectRoot+path.sep))throw new Error("Restore path resolves outside the project.");
+    try{const existing=await fs.realpath(dest);if(existing!==projectRoot&&!existing.startsWith(projectRoot+path.sep))throw new Error("Restore target is a symlink outside the project.");}catch(e){if(e.code!=="ENOENT")throw e;}
     await fs.copyFile(source,dest);restored.push(item.path);
   }
   return restored;
