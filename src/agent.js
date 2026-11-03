@@ -384,7 +384,8 @@ export async function runAgent(config) {
     const maxSteps=config.maxSteps||8;
 
     let activeTools=toolSchemas;
-    if(Array.isArray(config.mcpServers)&&config.mcpServers.length&&config.permissions?.mcpServers===true){\n      try{const external=await listMcpTools(config);activeTools=[...toolSchemas,...external.filter(tool=>tool.function?.name.startsWith("mcp_"))];}
+    if(Array.isArray(config.mcpServers)&&config.mcpServers.length&&config.permissions?.mcpServers===true){
+      try{const external=await listMcpTools(config);activeTools=[...toolSchemas,...external.filter(tool=>tool.function?.name.startsWith("mcp_"))];}
       catch(e){info("MCP tool discovery failed: "+e.message);}
     }\n    for (let step=0;step<maxSteps;step++) {
       let result;
