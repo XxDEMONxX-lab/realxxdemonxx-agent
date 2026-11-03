@@ -6,25 +6,35 @@ import { banner, say, closeInput, error } from "./src/ui.js";
 
 async function main() {
   banner();
-  const config=await loadConfig();
-  const provider=PROVIDERS.find(p=>p.id===config.provider);
-  const supported=Boolean(provider);\n  if (provider) {\n    config.providerName=provider.name;\n    config.baseURL=provider.baseURL;\n  }
+  const config = await loadConfig();
+  const provider = PROVIDERS.find(p => p.id === config.provider);
+  const supported = Boolean(provider);
+  if (provider) {
+    config.providerName = provider.name;
+    config.baseURL = provider.baseURL;
+  }
+
   if (!supported || !config.apiKey || !config.model) {
     if (config.provider && !supported) {
-      error("The saved provider is no longer supported in this simplified build. Please select one of the 8 supported providers.");
+      error("The saved provider is no longer supported. Select one of the eight supported providers.");
     }
-    const selected=await configureProvider(config,saveConfig);
+    const selected = await configureProvider(config, saveConfig);
     if (!selected) {
       say("Setup cancelled. Run npm start to configure a provider.");
       return;
     }
   }
+
   say(`\n  CONNECTED  ${config.providerName || config.provider}  ·  ${config.model}`);
   say("  Type /help for commands.\n");
-  try { await runAgent(config); }
-  finally { closeInput(); }
+  try {
+    await runAgent(config);
+  } finally {
+    closeInput();
+  }
 }
-main().catch(e=>{
-  console.error("\n[FATAL]",e.stack || e.message);
-  process.exitCode=1;
+
+main().catch(error => {
+  console.error("\n[FATAL]", error.stack || error.message);
+  process.exitCode = 1;
 });
