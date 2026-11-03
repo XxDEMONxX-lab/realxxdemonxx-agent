@@ -1,83 +1,88 @@
 # REALXXDEMONXX AGENT
 
-A Termux-first AI software engineering agent built with Node.js. It provides a terminal workspace, searchable provider directory, model browser, saved favorites, conversational coding assistance, project file tools, and approval-gated shell execution.
+A Termux-compatible AI coding agent with an interactive terminal workflow: inspect a project, plan changes, edit files, run commands with approval, and verify results.
 
-## Install in Termux
+## Install on Termux
 
 ```sh
 pkg update && pkg upgrade
 pkg install nodejs-lts git
 git clone https://github.com/XxDEMONxX-lab/realxxdemonxx-agent.git
 cd realxxdemonxx-agent
+npm run check
 npm start
 ```
 
-No native modules or heavy dependencies are required.
+To update an existing installation:
 
-## Provider Control Center
+```sh
+cd ~/realxxdemonxx-agent
+git pull
+npm run check
+npm start
+```
 
-On first launch, the agent opens a searchable provider manager.
+## Supported API providers
 
-- Search provider names and IDs.
-- Browse provider categories.
-- Move through paginated results.
-- Mark providers as favorites with `f <number>`.
-- Refresh the live directory with `r`.
-- See the active provider and endpoint.
-- Select a model from the provider's `/models` endpoint when available.
-- Fall back to the models.dev catalog or manually enter a model ID.
-- Save provider, endpoint, model, API key, and favorites locally.
+This build intentionally supports exactly eight providers:
 
-The provider directory is discovered from models.dev, with built-in profiles for common providers and local endpoints. Its size changes as the directory changes; it is not a promise that every provider uses the same protocol.
+1. OpenRouter
+2. Groq
+3. NVIDIA NIM
+4. DeepSeek
+5. Mistral
+6. Together AI
+7. Fireworks AI
+8. Cerebras
 
-## Agent commands
+All eight are configured through OpenAI-compatible chat-completions endpoints. Select a provider, enter its API key, then search its live `/models` endpoint. If the model list is unavailable, type the exact model ID manually. Choose a model that supports tool/function calling for file editing and terminal-agent features.
 
-| Command | Action |
-| --- | --- |
-| `/providers` | Open provider search, categories and model selection |
-| `/models` | Browse models from the active provider |
-| `/model` | Enter a model ID manually |
-| `/provider` | Show active provider, endpoint and model |
-| `/favorites` | Show saved favorite providers |
-| `/test` | Test the current API connection |
-| `/maxsteps` | Change agent tool/reasoning step limit (1–30) |
-| `/status` | Show workspace and runtime settings |
-| `/clear` | Clear conversation context |
-| `/help` | Show commands and examples |
-| `/exit` | Close the agent |
+## Agent workflow
 
-Provider and model changes are saved automatically in `~/.realxxdemonxx-agent/config.json`. Keep this file private because it contains your API key.
-
-## Coding features
-
-- Project file listing, reading and writing.
-- Shell execution after explicit approval.
-- Multi-step tool workflows and conversation context.
-- Visible model activity, tool execution and provider errors.
-- Configurable agent step limit.
-
-Start the agent from the root of the project you want it to work on:
+Start the agent from the project directory you want it to work on:
 
 ```sh
 cd ~/your-project
 node ~/realxxdemonxx-agent/index.js
 ```
 
-## API compatibility
+The agent can:
+- Inspect project folders and files.
+- Search source code for text.
+- Read and write project files.
+- Run tests, scripts and shell commands after you approve them.
+- Keep conversation context across a coding task.
+- Report tool results and API errors instead of silently failing.
 
-This release sends OpenAI-compatible `/chat/completions` requests. The directory is for discovery, not a guarantee that every provider implements this API. Providers using Anthropic, Gemini, or another protocol need dedicated adapters. Tool calling also depends on provider/model support.
+Example requests:
+- `Inspect this project and explain its architecture.`
+- `Find the bug in the login flow, fix it, and run the tests.`
+- `Build a Discord.js v14 ticket system that matches the existing project style.`
 
-## Troubleshooting
+## Commands
 
-- Run `/test` to check the configured endpoint and model.
-- Run `/providers` to switch providers or re-enter credentials.
-- Run `/models` to browse the current provider's available models.
-- Use `/model` to enter an exact model ID manually.
-- If the directory is unavailable, built-in provider profiles remain available.
+| Command | Function |
+| --- | --- |
+| `/providers` | Switch provider and model |
+| `/models` | Browse models for the current provider |
+| `/model` | Enter a model ID manually |
+| `/provider` | Show active provider and model |
+| `/test` | Test API connectivity |
+| `/maxsteps` | Set maximum tool cycles (1–30) |
+| `/status` | Show workspace status |
+| `/clear` | Clear conversation context |
+| `/help` | Show commands |
+| `/exit` | Exit |
 
-## Safety and limitations
+## Settings and safety
 
-File tools are restricted to the current working directory using lexical path checks. Shell commands require you to type `YES`. Review proposed changes and commands before approving them. This is an evolving CLI coding agent, not a full IDE or a guarantee of autonomous production-grade reliability.
+Provider settings and API keys are stored in `~/.realxxdemonxx-agent/config.json` with owner-only file permissions. Do not share that file or your API key.
+
+File tools are restricted to the current project directory and reject symlinks that resolve outside it. Shell commands require you to type `YES` before execution. Review commands before approving them.
+
+## Compatibility notes
+
+This is an evolving coding-agent CLI, not a full IDE. API providers may differ in model availability, rate limits and tool-calling support. If a model cannot use tools, select a coding model that supports function/tool calling. No claim is made that every model offered by a provider works with this agent.
 
 ## License
 
