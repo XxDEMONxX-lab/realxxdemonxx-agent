@@ -123,6 +123,12 @@ export async function runAgent(config) {
       catch(e){error("Restore failed: "+e.message);}
       continue;
     }
+    if(command==="/git"||command==="/diff"||command==="/run-tests"){
+      const tool=command==="/git"?"git_status":command==="/diff"?"git_diff":"run_tests";
+      try{section(command.slice(1).toUpperCase());say(await executeTool(tool,{},config));}
+      catch(e){error(e.message);}
+      continue;
+    }
     if (command==="/pwd") {info(process.cwd());continue;}
     if (command==="/files") {
       try {
@@ -189,7 +195,7 @@ export async function runAgent(config) {
         ["writeFiles","Auto-approve file writes and edits"],
         ["terminal","Auto-approve ordinary terminal commands"],
         ["packageInstall","Auto-approve package installations"],
-        ["destructive","Auto-approve destructive commands"]
+        ["destructive","Auto-approve destructive commands"],\n        ["gitOperations","Auto-approve read-only Git inspection"],\n        ["runTests","Auto-approve test/check scripts"]
       ];
       config.permissions=config.permissions||{};
       while (true) {
@@ -199,7 +205,7 @@ export async function runAgent(config) {
         const choice=(await ask("  Toggle setting number: ")).trim();
         if (choice===ESC || choice==="0" || choice.toLowerCase()==="back") { info("Returned to chat."); break; }
         const item=labels[Number(choice)-1];
-        if (!item) {error("Choose a number from 0 to 6.");continue;}
+        if (!item) {error("Choose a number from 0 to 8.");continue;}
         config.permissions[item[0]]=config.permissions[item[0]]!==true;
         await persist();
         success(item[1]+" "+(config.permissions[item[0]]?"ON":"OFF"));
