@@ -46,7 +46,8 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /mcp       Configure external MCP tool servers
   /web       Enable/disable public web research
   /status     Show workspace status
-  /resume     Resume the last saved conversation\n  /clear      Clear chat context and saved session
+  /resume     Resume the last saved conversation
+  /clear      Clear chat context and saved session
   /exit       Exit agent
 
 TRY ASKING
@@ -259,7 +260,11 @@ export async function runAgent(config) {
       } catch(e) {error(e.message);}
       continue;
     }
-    if(command==="/resume") {\n      try{const saved=await readConversation();if(!saved.length){info("No saved conversation is available.");continue;}messages.splice(1,messages.length-1,...saved);success("Resumed "+saved.length+" saved messages.");}\n      catch(e){error("Could not resume session: "+e.message);}continue;\n    }\n    if (command==="/clear") {messages.splice(1);await clearConversation();success("Conversation context and saved session cleared.");continue;}
+    if(command==="/resume") {
+      try{const saved=await readConversation();if(!saved.length){info("No saved conversation is available.");continue;}messages.splice(1,messages.length-1,...saved);success("Resumed "+saved.length+" saved messages.");}
+      catch(e){error("Could not resume session: "+e.message);}continue;
+    }
+    if (command==="/clear") {messages.splice(1);await clearConversation();success("Conversation context and saved session cleared.");continue;}
     if (command==="/undo") { try { success(await undoLastChange()); } catch(e) { error(e.message); } continue; }
     if (command==="/provider") {
       info("Provider: " + (config.providerName||config.provider));
