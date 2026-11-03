@@ -84,7 +84,12 @@ export async function ask(prompt){
     done(value);return;
    }
    if(key.ctrl&&key.name==="c"){done(ESC);closeInput();process.exit(130);}
-   if(key.name==="backspace"){if(cursor>0){value=value.slice(0,cursor-1)+value.slice(cursor);cursor--;}render();return;}\n   if(key.name==="delete"){if(cursor<value.length)value=value.slice(0,cursor)+value.slice(cursor+1);render();return;}\n   if(key.name==="left"){cursor=Math.max(0,cursor-1);render();return;}\n   if(key.name==="right"){cursor=Math.min(value.length,cursor+1);render();return;}\n   if(key.name==="home"){cursor=0;render();return;}\n   if(key.name==="end"){cursor=value.length;render();return;}
+   if(key.name==="backspace"){if(cursor>0){value=value.slice(0,cursor-1)+value.slice(cursor);cursor--;}render();return;}
+   if(key.name==="delete"){if(cursor<value.length)value=value.slice(0,cursor)+value.slice(cursor+1);render();return;}
+   if(key.name==="left"){cursor=Math.max(0,cursor-1);render();return;}
+   if(key.name==="right"){cursor=Math.min(value.length,cursor+1);render();return;}
+   if(key.name==="home"){cursor=0;render();return;}
+   if(key.name==="end"){cursor=value.length;render();return;}
    if(key.name==="up"||key.name==="down"){
     if(!value&&dashboard){selectedNav=(selectedNav+(key.name==="up"?NAV.length-1:1))%NAV.length;render();return;}
     return;
