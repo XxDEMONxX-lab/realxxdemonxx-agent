@@ -103,7 +103,40 @@ export async function runAgent(config) {
       catch(e) { error(e.message); }
       continue;
     }
-    if(command==="/web") {\n      config.permissions=config.permissions||{};\n      config.permissions.network=config.permissions.network!==true;\n      await persist();\n      success("Public web access "+(config.permissions.network?"enabled":"disabled")+".");\n      continue;\n    }\n    if(command==="/mcp") {\n      const servers=Array.isArray(config.mcpServers)?config.mcpServers:[];\n      section("MCP SERVERS");\n      if(!servers.length)info("No servers configured. Add a server using JSON: {\\"name\\":\\"filesystem\\",\\"command\\":\\"npx\\",\\"args\\":[\\"-y\\",\\"@modelcontextprotocol/server-filesystem\\",\\".\\"]}");\n      servers.forEach(server=>info(server.name+" · "+server.command+" "+(server.args||[]).join(" ")));\n      info("Enter ADD, REMOVE, or Esc to return.");\n      const action=(await ask("  MCP action: ")).trim().toLowerCase();\n      if(action==="add") {\n        const raw=(await ask("  Server JSON (name, command, args, optional env): ")).trim();\n        if(!raw||raw===ESC)continue;\n        try{const server=JSON.parse(raw);if(!/^[a-zA-Z0-9_-]{1,40}$/.test(server.name||"")||typeof server.command!=="string"||!server.command.trim()||!Array.isArray(server.args)||server.args.some(x=>typeof x!=="string")||server.args.length>40)throw new Error("Invalid server definition.");\n          config.mcpServers=config.mcpServers||[];config.mcpServers=config.mcpServers.filter(item=>item.name!==server.name);config.mcpServers.push(server);config.permissions.mcpServers=true;await persist();success("MCP server saved. Its external tools will be available in future tasks.");\n        }catch(e){error("Could not save MCP server: "+e.message);}\n      }else if(action==="remove"){const name=(await ask("  Server name to remove: ")).trim();if(name&&name!==ESC){config.mcpServers=(config.mcpServers||[]).filter(item=>item.name!==name);await persist();success("MCP server removed: "+name);}}\n      continue;\n    }\n    if (command==="/usage") {
+    if(command==="/web") {
+      config.permissions=config.permissions||{};
+      config.permissions.network=config.permissions.network!==true;
+      await persist();
+      success("Public web access "+(config.permissions.network?"enabled":"disabled")+".");
+      continue;
+    }
+    if(command==="/mcp") {
+      const servers=Array.isArray(config.mcpServers)?config.mcpServers:[];
+      section("MCP SERVERS");
+      if(!servers.length)info('No servers configured. Add JSON like {"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","."]}.');
+      servers.forEach(server=>info(server.name+" · "+server.command+" "+(server.args||[]).join(" ")));
+      info("Enter ADD, REMOVE, or Esc to return.");
+      const action=(await ask("  MCP action: ")).trim().toLowerCase();
+      if(action==="add") {
+        const raw=(await ask("  Server JSON (name, command, args, optional env): ")).trim();
+        if(!raw||raw===ESC)continue;
+        try {
+          const server=JSON.parse(raw);
+          if(!/^[a-zA-Z0-9_-]{1,40}$/.test(server.name||"")||typeof server.command!=="string"||!server.command.trim()||!Array.isArray(server.args)||server.args.some(x=>typeof x!=="string")||server.args.length>40)throw new Error("Invalid server definition.");
+          config.mcpServers=config.mcpServers||[];
+          config.mcpServers=config.mcpServers.filter(item=>item.name!==server.name);
+          config.mcpServers.push(server);
+          config.permissions.mcpServers=true;
+          await persist();
+          success("MCP server saved. Its external tools will be available in future tasks.");
+        } catch(e) {error("Could not save MCP server: "+e.message);}
+      } else if(action==="remove") {
+        const name=(await ask("  Server name to remove: ")).trim();
+        if(name&&name!==ESC){config.mcpServers=(config.mcpServers||[]).filter(item=>item.name!==name);await persist();success("MCP server removed: "+name);}
+      }
+      continue;
+    }
+    if (command==="/usage") {
       section("SESSION USAGE");
       info("Prompt tokens: "+usage.prompt);
       info("Completion tokens: "+usage.completion);
