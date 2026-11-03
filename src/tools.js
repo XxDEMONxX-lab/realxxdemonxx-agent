@@ -26,20 +26,37 @@ async function safePath(input=".") {
 
 const backupRoot=path.join(root,".realxxdemonxx-backups");
 async function backupExisting(file) {
+  const relative=path.relative(root,file);
+  let created=false;
   try {
     const stat=await fs.stat(file);
     if (!stat.isFile()) throw new Error("Refusing to replace a non-file path.");
-    const relative=path.relative(root,file);
-    const folder=path.join(backupRoot,String(Date.now()));
+    const stampBase=Date.now();
+    let stamp=stampBase,folder;
+    await fs.mkdir(backupRoot,{recursive:true});
+    while(true){
+      folder=path.join(backupRoot,String(stamp));
+      try{await fs.mkdir(folder);break;}
+      catch(e){if(e.code!=="EEXIST")throw e;stamp++;}
+    }
     const destination=path.join(folder,relative);
     await fs.mkdir(path.dirname(destination),{recursive:true});
     await fs.copyFile(file,destination);
-    await fs.writeFile(path.join(folder,"backup.json"),JSON.stringify({relative},null,2));
-    return true;
   } catch(e) {
-    if(e.code==="ENOENT") return false;
-    throw e;
+    if(e.code==="ENOENT") {
+      created=true;
+      const stampBase=Date.now();
+      let stamp=stampBase,folder;
+      await fs.mkdir(backupRoot,{recursive:true});
+      while(true){
+        folder=path.join(backupRoot,String(stamp));
+        try{await fs.mkdir(folder);break;}
+        catch(err){if(err.code!=="EEXIST")throw err;stamp++;}
+      }
+    } else throw e;
   }
+  await fs.writeFile(path.join(folder,"backup.json"),JSON.stringify({relative,created},null,2),{mode:0o600});
+  return {created};
 }
 export async function undoLastChange() {
   let folders=[];
@@ -50,8 +67,12 @@ export async function undoLastChange() {
     const folder=path.join(backupRoot,stamp);
     try {
       const meta=JSON.parse(await fs.readFile(path.join(folder,"backup.json"),"utf8"));
+      if(typeof meta.relative!=="string"||!meta.relative||path.isAbsolute(meta.relative)||meta.relative.split(/[\\/]/).includes(".."))continue;
       const destination=await safePath(meta.relative);
-      await fs.mkdir(path.dirname(destination),{recursive:true});
+      if(meta.created===true){
+        await fs.rm(destination,{force:true});
+        return "Removed newly created file "+meta.relative+".";
+      }
       await fs.copyFile(path.join(folder,meta.relative),destination);
       return "Restored previous version of "+meta.relative+".";
     } catch {}
@@ -158,7 +179,7 @@ export async function executeTool(name,args={},config={}) {
     const backedUp=await backupExisting(file);
     await fs.mkdir(path.dirname(file),{recursive:true});
     await fs.writeFile(file,result.content,"utf8");
-    return "Saved "+path.relative(root,file)+(backedUp?" · previous version backed up":" · new file");
+    return "Saved "+path.relative(root,file)+(backedUp.created?" · new file can be undone":" · previous version backed up");
   }
   if (name==="preview_file_change") {
     if(config.permissions?.readFiles!==true && (await ask("  Read current file for diff preview? Type YES: ")).trim()!=="YES")return "User denied diff preview.";
@@ -188,7 +209,7 @@ export async function executeTool(name,args={},config={}) {
     const backedUp=await backupExisting(file);
     await fs.mkdir(path.dirname(file),{recursive:true});
     await fs.writeFile(file,args.content,"utf8");
-    return `Wrote ${path.relative(root,file)} (${Buffer.byteLength(args.content,"utf8")} bytes)${backedUp?" · previous version backed up":""}`;
+    return `Wrote ${path.relative(root,file)} (${Buffer.byteLength(args.content,"utf8")} bytes)${backedUp.created?" · new file can be undone":" · previous version backed up"}`;
   }
   if (name==="delegate_subagent") {
     const task=String(args.task||"").trim();
