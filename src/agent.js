@@ -1,5 +1,6 @@
 import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.js";
 import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
+import {listMcpTools} from "./mcp.js";
 import {saveConfig} from "./config.js";
 import {readProjectMemory,writeProjectMemory,addTaskHistory,getTaskHistory,createCheckpoint,listCheckpoints,restoreCheckpoint} from "./workspace.js";
 import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,streamToken,streamEnd,setTaskLabel,ESC} from "./ui.js";
@@ -37,7 +38,7 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /checkpoints List saved snapshots
   /restore    Restore a saved snapshot
   /undo       Restore the latest backed-up file
-  /status     Show workspace status
+  /mcp       Configure external MCP tool servers\n  /web       Enable/disable public web research\n  /status     Show workspace status
   /clear      Clear chat context
   /exit       Exit agent
 
@@ -102,7 +103,7 @@ export async function runAgent(config) {
       catch(e) { error(e.message); }
       continue;
     }
-    if (command==="/usage") {
+    if(command==="/web") {\n      config.permissions=config.permissions||{};\n      config.permissions.network=config.permissions.network!==true;\n      await persist();\n      success("Public web access "+(config.permissions.network?"enabled":"disabled")+".");\n      continue;\n    }\n    if(command==="/mcp") {\n      const servers=Array.isArray(config.mcpServers)?config.mcpServers:[];\n      section("MCP SERVERS");\n      if(!servers.length)info("No servers configured. Add a server using JSON: {\\"name\\":\\"filesystem\\",\\"command\\":\\"npx\\",\\"args\\":[\\"-y\\",\\"@modelcontextprotocol/server-filesystem\\",\\".\\"]}");\n      servers.forEach(server=>info(server.name+" · "+server.command+" "+(server.args||[]).join(" ")));\n      info("Enter ADD, REMOVE, or Esc to return.");\n      const action=(await ask("  MCP action: ")).trim().toLowerCase();\n      if(action==="add") {\n        const raw=(await ask("  Server JSON (name, command, args, optional env): ")).trim();\n        if(!raw||raw===ESC)continue;\n        try{const server=JSON.parse(raw);if(!/^[a-zA-Z0-9_-]{1,40}$/.test(server.name||"")||typeof server.command!=="string"||!server.command.trim()||!Array.isArray(server.args)||server.args.some(x=>typeof x!=="string")||server.args.length>40)throw new Error("Invalid server definition.");\n          config.mcpServers=config.mcpServers||[];config.mcpServers=config.mcpServers.filter(item=>item.name!==server.name);config.mcpServers.push(server);config.permissions.mcpServers=true;await persist();success("MCP server saved. Its external tools will be available in future tasks.");\n        }catch(e){error("Could not save MCP server: "+e.message);}\n      }else if(action==="remove"){const name=(await ask("  Server name to remove: ")).trim();if(name&&name!==ESC){config.mcpServers=(config.mcpServers||[]).filter(item=>item.name!==name);await persist();success("MCP server removed: "+name);}}\n      continue;\n    }\n    if (command==="/usage") {
       section("SESSION USAGE");
       info("Prompt tokens: "+usage.prompt);
       info("Completion tokens: "+usage.completion);
@@ -268,7 +269,7 @@ export async function runAgent(config) {
         ["packageInstall","Auto-approve package installations"],
         ["destructive","Auto-approve destructive commands"],
         ["gitOperations","Auto-approve read-only Git inspection"],
-        ["runTests","Auto-approve test/check scripts"]
+        ["runTests","Auto-approve test/check scripts"],\n        ["network","Allow public web research"],\n        ["mcpServers","Allow configured MCP servers"]
       ];
       config.permissions=config.permissions||{};
       while (true) {
@@ -327,14 +328,14 @@ export async function runAgent(config) {
     let hadOutput=false;
     const maxSteps=config.maxSteps||8;
 
-    for (let step=0;step<maxSteps;step++) {
+    let activeTools=toolSchemas;\n    if(Array.isArray(config.mcpServers)&&config.mcpServers.length&&config.permissions?.mcpServers===true){\n      try{const external=await listMcpTools(config);activeTools=[...toolSchemas,...external.filter(tool=>tool.function?.name.startsWith("mcp_"))];}\n      catch(e){info("MCP tool discovery failed: "+e.message);}\n    }\n    for (let step=0;step<maxSteps;step++) {
       let result;
       let streamed=false;
       const requestedModel=config.model;
       try {
         result=await withSpinner(
           step===0?"Thinking...":`Working through tool results · step ${step+1}/${maxSteps}...`,
-          ()=>chatCompletion(config,messages,toolSchemas,{onToken:token=>{streamed=true;streamToken(token);},onRetry:(attempt,wait)=>info("Provider retry "+attempt+" · waiting "+wait+" ms")})
+          ()=>chatCompletion(config,messages,activeTools,{onToken:token=>{streamed=true;streamToken(token);},onRetry:(attempt,wait)=>info("Provider retry "+attempt+" · waiting "+wait+" ms")})
         );
       } catch(e) {
         if (/tool|function|unsupported parameter/i.test(e.message)) {
