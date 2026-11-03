@@ -32,14 +32,14 @@ export const toolSchemas=[
  {type:"function",function:{name:"run_command",description:"Run a shell command in the project directory. User approval is required.",parameters:{type:"object",properties:{command:{type:"string"}},required:["command"]}}}
 ];
 
-export async function executeTool(name,args={}) {
-  if (name==="list_files") {
+export async function executeTool(name,args={},config={}) {
+  if (name==="list_files") {\n    if (config.permissions?.readFiles!==true && (await ask("  List files? Type YES to approve: ")).trim()!=="YES") return "User denied file listing.";
     const dir=await safePath(args.path||".");
     const entries=await fs.readdir(dir,{withFileTypes:true});
     const visible=entries.filter(e=>!ignored.has(e.name)).slice(0,200);
     return visible.map(e=>(e.isDirectory()?"[DIR] ":"[FILE] ")+e.name).join("\n") || "(empty directory)";
   }
-  if (name==="search_files") {
+  if (name==="search_files") {\n    if (config.permissions?.searchFiles!==true && (await ask("  Search files? Type YES to approve: ")).trim()!=="YES") return "User denied file search.";
     const query=String(args.query||"").trim();
     if (!query) throw new Error("Search query cannot be empty.");
     const start=await safePath(args.path||".");
@@ -74,14 +74,14 @@ export async function executeTool(name,args={}) {
     await walk(start);
     return hits.join("\n") || `No matches found. Scanned ${scanned} files.`;
   }
-  if (name==="read_file") {
+  if (name==="read_file") {\n    if (config.permissions?.readFiles!==true && (await ask("  Read file? Type YES to approve: ")).trim()!=="YES") return "User denied file read.";
     const file=await safePath(args.path);
     const stat=await fs.stat(file);
     if (!stat.isFile()) throw new Error("The requested path is not a regular file.");
     if (stat.size>400000) throw new Error("File is larger than 400 KB; inspect a smaller file or split it.");
     return await fs.readFile(file,"utf8");
   }
-  if (name==="write_file") {
+  if (name==="write_file") {\n    if (config.permissions?.writeFiles!==true && (await ask("  Write/edit file? Type YES to approve: ")).trim()!=="YES") return "User denied file write.";
     const file=await safePath(args.path);
     if (typeof args.content!=="string") throw new Error("File content must be text.");
     if (Buffer.byteLength(args.content,"utf8")>500000) throw new Error("Refusing to write a file larger than 500 KB in one operation.");
