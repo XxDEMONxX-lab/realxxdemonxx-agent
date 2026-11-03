@@ -1,6 +1,6 @@
 import readline from "node:readline";
 
-const COMMANDS=["/help","/menu","/chat","/files","/pwd","/providers","/models","/model","/provider","/test","/maxsteps","/settings","/limits","/status","/clear","/exit"];
+const COMMANDS=["/help","/menu","/chat","/files","/pwd","/providers","/models","/model","/provider","/test","/maxsteps","/settings","/limits","/undo","/status","/clear","/exit"];
 const rl=readline.createInterface({
   input:process.stdin,
   output:process.stdout,
