@@ -1,11 +1,11 @@
 import readline from "node:readline";
 export const ESC="\u001b";
-const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/open","/edit","/terminal","/map","/pwd","/providers","/models","/fallback","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
+const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/open","/edit","/editor","/terminal","/map","/pwd","/providers","/models","/fallback","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
 const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
 let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions"};
-const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["TERMINAL","/terminal"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
+const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["EDITOR","/editor"],["TERMINAL","/terminal"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
 let originalLog=null,originalError=null,renderCache=null;
 if(tty)readline.emitKeypressEvents(process.stdin);
 function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
@@ -100,7 +100,7 @@ export async function ask(prompt){
  });
 }
 export async function quickMenu(){
- const entries=[["/chat","Return to coding chat"],["/plan","Plan a task before editing"],["/review","Review project code"],["/debug","Investigate an error"],["/files","Browse project files"],["/open","Read a project file"],["/edit","Edit a file with the agent"],["/terminal","Run an approved command"],["/map","Display project structure"],["/providers","Switch API provider"],["/models","Choose a model"],["/test","Test API connection"],["/settings","Permissions and preferences"],["/limits","Response token limit"],["/usage","Session token usage"],["/fallback","Configure backup models"],["/memory","Project memory"],["/history","Recent tasks"],["/git","Git status"],["/diff","Git diff"],["/run-tests","Run project checks"],["/checkpoint","Save checkpoint"],["/checkpoints","List checkpoints"],["/restore","Restore checkpoint"],["/undo","Restore previous file version"],["/status","Session status"],["/help","Command reference"],["/exit","Exit agent"]];
+ const entries=[["/chat","Return to coding chat"],["/plan","Plan a task before editing"],["/review","Review project code"],["/debug","Investigate an error"],["/files","Browse project files"],["/open","Read a project file"],["/edit","Edit a file with the agent"],["/editor","Open built-in file editor"],["/terminal","Run an approved command"],["/map","Display project structure"],["/providers","Switch API provider"],["/models","Choose a model"],["/test","Test API connection"],["/settings","Permissions and preferences"],["/limits","Response token limit"],["/usage","Session token usage"],["/fallback","Configure backup models"],["/memory","Project memory"],["/history","Recent tasks"],["/git","Git status"],["/diff","Git diff"],["/run-tests","Run project checks"],["/checkpoint","Save checkpoint"],["/checkpoints","List checkpoints"],["/restore","Restore checkpoint"],["/undo","Restore previous file version"],["/status","Session status"],["/help","Command reference"],["/exit","Exit agent"]];
  if(!tty){section("COMMAND PALETTE");entries.forEach(([cmd,desc],i)=>console.log("  "+(i+1)+". "+cmd+"  "+desc));const choice=(await ask("  Select command number (Esc to cancel): ")).trim();return /^\d+$/.test(choice)?entries[Number(choice)-1]?.[0]||null:null;}
  let selected=0,done=false;const input=process.stdin;
  return await new Promise(resolve=>{
