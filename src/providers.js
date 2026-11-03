@@ -127,7 +127,7 @@ export async function chatCompletion(config,messages,tools=[]) {
     headers["HTTP-Referer"]="https://github.com/XxDEMONxX-lab/realxxdemonxx-agent";
     headers["X-Title"]="REALXXDEMONXX AGENT";
   }
-  const body={model:config.model,messages,temperature:0.2,stream:false};
+  const body={model:config.model,messages,temperature:0.2,stream:false,max_tokens:config.maxTokens||512};
   if (tools.length) body.tools=tools;
   const response=await fetch(config.baseURL.replace(/\/+$/,"")+"/chat/completions",{
     method:"POST",headers,body:JSON.stringify(body),signal:AbortSignal.timeout(120000)
