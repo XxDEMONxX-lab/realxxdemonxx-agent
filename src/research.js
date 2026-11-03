@@ -1,8 +1,10 @@
 import net from "node:net";
+import {lookup} from "node:dns/promises";
 
 export function validatePublicUrl(value){
  let url;try{url=new URL(value);}catch{throw new Error("Enter a valid http(s) URL.");}
  if(!["http:","https:"].includes(url.protocol))throw new Error("Only http and https URLs are allowed.");
+ if(url.username||url.password)throw new Error("URLs containing embedded credentials are blocked.");
  const host=url.hostname.toLowerCase().replace(/^\[|\]$/g,"");
  if(!host||host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local")||host.endsWith(".internal"))throw new Error("Local and private network hosts are blocked.");
  if(net.isIP(host)===4){
@@ -13,9 +15,29 @@ export function validatePublicUrl(value){
  return url;
 }
 
+function isPrivateAddress(address){
+ const version=net.isIP(address);
+ if(version===4){
+  const p=address.split(".").map(Number);
+  return p[0]===0||p[0]===10||p[0]===127||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&(p[1]===0||p[1]===168))||(p[0]===169&&p[1]===254)||(p[0]===100&&p[1]>=64&&p[1]<=127)||(p[0]===198&&(p[1]===18||p[1]===19))||p[0]>=224;
+ }
+ if(version===6){
+  const host=address.toLowerCase();
+  if(host.startsWith("::ffff:"))return isPrivateAddress(host.slice(7));
+  return host==="::"||host==="::1"||host.startsWith("fc")||host.startsWith("fd")||/^fe[89ab]/.test(host)||host.startsWith("ff");
+ }
+ return true;
+}
+async function assertPublicHost(url){
+ if(net.isIP(url.hostname))return;
+ const addresses=await lookup(url.hostname,{all:true,verbatim:true});
+ if(!addresses.length||addresses.some(item=>isPrivateAddress(item.address)))throw new Error("The destination resolves to a private or reserved IP address.");
+}
+
 async function fetchPage(value){
  let url=validatePublicUrl(value);
  for(let redirects=0;redirects<=4;redirects++){
+  await assertPublicHost(url);
   const response=await fetch(url,{redirect:"manual",headers:{"user-agent":"REALXXDEMONXX-Agent/0.2","accept":"text/html,text/plain,application/json,application/xml;q=0.8"},signal:AbortSignal.timeout(15000)});
   if([301,302,303,307,308].includes(response.status)){
    const location=response.headers.get("location");if(!location)throw new Error("Redirect destination missing.");
