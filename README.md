@@ -54,7 +54,7 @@ Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It us
 - Inspect JavaScript/TypeScript syntax trees and perform TypeScript-language-service cross-file symbol renames when TypeScript is installed.
 - Search public web pages and fetch readable public URLs after network permission is granted.
 - Connect configured Model Context Protocol (MCP) stdio servers and expose their tools after explicit trust approval.
-- Create, list, and remove isolated Git worktrees under `.agent-worktrees`.
+- Create, list, and remove isolated Git worktrees under `~/.realxxdemonxx-agent/worktrees/<project-id>`.
 - Route simple, complex, review, and debug tasks to separately configured model IDs.
 - Load repository-specific instructions from `AGENTS.md` and reusable `SKILL.md` files from project or user skill folders.
 - Delegate independent investigations to architect, debugger, security, test, research, performance, dependency, and documentation specialists.
@@ -128,7 +128,7 @@ Place repository guidance in `AGENTS.md`. Reusable skills use `.agent/skills/<sk
 
 AST inspection and semantic rename use the TypeScript compiler API when it is installed in the project. Install it only if needed with `npm install -D typescript` after reviewing the dependency.
 
-Git worktrees are created under `.agent-worktrees`; removal requires a separate confirmation and Git refuses to remove worktrees with uncommitted changes unless forced.
+Git worktrees are stored outside the project under `~/.realxxdemonxx-agent/worktrees/<project-id>`; removal requires a separate confirmation and Git refuses to remove worktrees with uncommitted changes unless forced.
 
 File tools are restricted to the current project directory. File edits create backups for `/undo`; checkpoint restores first create a safety snapshot. File reads/writes, shell commands, package installation, Git inspection, test execution, and destructive commands have separate approval settings. Shell commands require explicit approval unless you enable the corresponding auto-approval setting.
 
