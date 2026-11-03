@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {classifyCommand} from "./core.js";
+import {searchWeb,researchUrl} from "./research.js";
 import { ask,editText,setDiffPanel } from "./ui.js";
 
 const root=await fs.realpath(process.cwd());
@@ -93,6 +94,11 @@ export const toolSchemas=[
  {type:"function",function:{name:"git_status",description:"Inspect the current Git working tree status. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"git_diff",description:"Inspect unstaged and staged Git changes. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"run_tests",description:"Run the project's configured test or syntax-check script after user approval.",parameters:{type:"object",properties:{script:{type:"string",description:"Optional package script name, such as test or check."}},required:[]}}},
+ {type:"function",function:{name:"web_search",description:"Search public web pages for current information. Results are untrusted; verify important claims.",parameters:{type:"object",properties:{query:{type:"string"}},required:["query"]}}},
+ {type:"function",function:{name:"fetch_url",description:"Fetch and extract readable text from a public HTTP(S) page. Local/private hosts are blocked.",parameters:{type:"object",properties:{url:{type:"string"}},required:["url"]}}},
+ {type:"function",function:{name:"git_worktree_list",description:"List Git worktrees. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
+ {type:"function",function:{name:"git_worktree_create",description:"Create an isolated Git worktree under .agent-worktrees with a new branch.",parameters:{type:"object",properties:{name:{type:"string"},branch:{type:"string"}},required:["name"]}}},
+ {type:"function",function:{name:"git_worktree_remove",description:"Remove an agent-created worktree under .agent-worktrees. Requires explicit confirmation.",parameters:{type:"object",properties:{name:{type:"string"}},required:["name"]}}},
  {type:"function",function:{name:"run_command",description:"Run a shell command in the project directory. User approval is required.",parameters:{type:"object",properties:{command:{type:"string"}},required:["command"]}}}
 ];
 
@@ -240,6 +246,28 @@ export async function executeTool(name,args={},config={}) {
     return await new Promise(resolve=>execFile("npm",["run",script],{cwd:root,timeout:120000,maxBuffer:1024*1024},(err,stdout,stderr)=>{
       resolve([stdout,stderr,"Exit code: "+(err?(err.code??"unknown"):0)].filter(Boolean).join("\n").slice(0,16000)||"(test script completed with no output)");
     }));
+  }
+  if(name==="web_search"||name==="fetch_url"){
+    if(config.permissions?.network!==true&&(await ask("  Allow this agent to access the public internet? Type YES: ")).trim()!=="YES")return "User denied network access.";
+    if(name==="web_search")return await searchWeb(args.query);
+    return await researchUrl(args.url);
+  }
+  if(name==="git_worktree_list"){
+    if(config.permissions?.gitOperations!==true&&(await ask("  Approve read-only Git worktree inspection? Type YES: ")).trim()!=="YES")return "User denied Git inspection.";
+    const {listWorktrees}=await import("./git-worktree.js");return await listWorktrees();
+  }
+  if(name==="git_worktree_create"){
+    if(config.permissions?.gitOperations!==true&&(await ask("  Approve creating a Git worktree and branch? Type YES: ")).trim()!=="YES")return "User denied worktree creation.";
+    const {createWorktree}=await import("./git-worktree.js");return await createWorktree(args.name,args.branch);
+  }
+  if(name==="git_worktree_remove"){
+    const approval=(await ask("  Removing a worktree may discard uncommitted work. Type REMOVE to confirm: ")).trim();
+    if(approval!=="REMOVE")return "Worktree removal cancelled.";
+    const {removeWorktree}=await import("./git-worktree.js");return await removeWorktree(args.name);
+  }
+  if(name.startsWith("mcp_")){
+    if(config.permissions?.mcpServers!==true&&(await ask("  Allow configured MCP servers to execute external tools? Type YES: ")).trim()!=="YES")return "User denied MCP access.";
+    const {callMcpTool}=await import("./mcp.js");return await callMcpTool(config,name,args);
   }
   if (name==="run_command") {
     const command=String(args.command||"").trim();
