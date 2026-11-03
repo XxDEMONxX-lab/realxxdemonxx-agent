@@ -2,6 +2,7 @@ import {spawn} from "node:child_process";
 
 const PROTOCOL="2024-11-05";
 const SAFE=/^[a-zA-Z0-9_-]{1,40}$/;
+const toolMap=new Map();
 
 function validateServer(server){
  if(!server||typeof server!=="object"||typeof server.command!=="string"||!server.command.trim())throw new Error("MCP server needs a command.");
@@ -15,6 +16,8 @@ async function withServer(server,work){
  const child=spawn(server.command,server.args,{stdio:["pipe","pipe","pipe"],shell:false,env:{...process.env,...Object.fromEntries(Object.entries(server.env||{}).filter(([k,v])=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)&&typeof v==="string"))}});
  let buffer="",nextId=0,stderr="";
  const pending=new Map();
+ child.on("error",error=>{for(const entry of pending.values())entry.reject(new Error("Could not start MCP server: "+error.message));pending.clear();});
+ child.on("exit",code=>{for(const entry of pending.values())entry.reject(new Error("MCP server exited ("+code+"): "+stderr.slice(-500)));pending.clear();});
  child.stderr.on("data",chunk=>{stderr=(stderr+chunk.toString()).slice(-3000);});
  child.stdout.on("data",chunk=>{
   buffer+=chunk.toString("utf8");
@@ -51,14 +54,16 @@ async function withServer(server,work){
 
 export async function listMcpTools(config){
  const servers=config.mcpServers||[];
- const output=[];
+ const output=[];toolMap.clear();
  for(const server of servers){
   if(!SAFE.test(server.name||""))continue;
   try{
    const result=await withServer(server,({request})=>request("tools/list"));
+   let index=0;
    for(const tool of result?.tools||[]){
     if(!tool?.name||typeof tool.name!=="string")continue;
-    output.push({type:"function",function:{name:"mcp_"+server.name+"__"+Buffer.from(tool.name).toString("hex"),description:("[MCP "+server.name+"] "+String(tool.description||"External MCP tool")).slice(0,900),parameters:tool.inputSchema&&typeof tool.inputSchema==="object"?tool.inputSchema:{type:"object",properties:{}}}});
+    const id="mcp_"+server.name+"_"+(index++);toolMap.set(id,{serverName:server.name,toolName:tool.name});
+    output.push({type:"function",function:{name:id,description:("[MCP "+server.name+"] "+String(tool.description||"External MCP tool")).slice(0,900),parameters:tool.inputSchema&&typeof tool.inputSchema==="object"?tool.inputSchema:{type:"object",properties:{}}}});
    }
   }catch(error){}
  }
@@ -66,14 +71,13 @@ export async function listMcpTools(config){
 }
 
 export async function callMcpTool(config,qualifiedName,args){
- const match=String(qualifiedName).match(/^mcp_([a-zA-Z0-9_-]{1,40})__([a-fA-F0-9]+)$/);
- if(!match)throw new Error("Invalid MCP tool name.");
- const [,serverName,encodedName]=match;
- const toolName=Buffer.from(encodedName,"hex").toString("utf8");
- const server=(config.mcpServers||[]).find(item=>item.name===serverName);
- if(!server)throw new Error("MCP server is not configured: "+serverName);
+ const mapped=toolMap.get(String(qualifiedName));
+ if(!mapped)throw new Error("MCP tool is no longer available. Retry the task to refresh tool discovery.");
+ const server=(config.mcpServers||[]).find(item=>item.name===mapped.serverName);
+ if(!server)throw new Error("MCP server is not configured: "+mapped.serverName);
  return await withServer(server,async({request})=>{
-  const result=await request("tools/call",{name:toolName,arguments:args||{}});
+  const result=await request("tools/call",{name:mapped.toolName,arguments:args||{}});
+  if(result?.isError)throw new Error((result.content||[]).map(item=>item.text||"").join("\n").slice(0,2000)||"MCP tool reported an error.");
   const parts=(result?.content||[]).map(item=>item.type==="text"?item.text:item.type==="image"?"[Image content returned]":JSON.stringify(item));
   return parts.join("\n").slice(0,16000)||JSON.stringify(result).slice(0,16000);
  });
