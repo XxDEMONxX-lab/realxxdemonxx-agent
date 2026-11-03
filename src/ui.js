@@ -40,6 +40,7 @@ function drawDashboard(){
  const firstPrefixWidth=firstVisibleLine===0?5:3;
  const firstPrefix=firstVisibleLine===0?" "+bold(green("YOU"))+" "+violet("›")+" ":"   ";
  const secondPrefix="   ";
+ const promptRowIndex=rows.length;
  const firstChars=Array.from(inputLines[firstVisibleLine]||"");
  const cursorChars=Array.from(beforeLines[beforeLines.length-1]||"");
  const firstOffset=cursorLine===firstVisibleLine?Math.max(0,cursorChars.length-Math.max(8,width-firstPrefixWidth-2)+1):0;
@@ -52,7 +53,7 @@ function drawDashboard(){
  rows.length=height;
  if(!renderCache||renderCache.length!==height)renderCache=Array(height).fill(null);
  for(let i=0;i<height;i++){const next=clip(rows[i],width);if(renderCache[i]!==next){process.stdout.write("\x1b["+(i+1)+";1H"+next+"\x1b[K");renderCache[i]=next;}}
- const promptRow=Math.max(1,rows.findIndex(line=>line.includes("YOU"))+1);const cursorRow=Math.min(height,promptRow+cursorLine-firstVisibleLine);const cursorPrefix=cursorLine===0?5:3;const cursorCol=Math.min(width,cursorPrefix+cursorChars.length-firstOffset+1);process.stdout.write("\x1b["+cursorRow+";"+cursorCol+"H\x1b[?25h");
+ const promptRow=promptRowIndex+1;const cursorRow=Math.min(height,promptRow+cursorLine-firstVisibleLine);const cursorPrefix=cursorLine===0?5:3;const cursorCol=Math.min(width,cursorPrefix+cursorChars.length-firstOffset+1);process.stdout.write("\x1b["+cursorRow+";"+cursorCol+"H\x1b[?25h");
 }
 function captureConsole(){
  if(!tty||originalLog)return;
