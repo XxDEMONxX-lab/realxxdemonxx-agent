@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ask,editText } from "./ui.js";
+import { ask,editText,setDiffPanel } from "./ui.js";
 
 const root=await fs.realpath(process.cwd());
 const ignored=new Set([".git","node_modules",".venv","venv","dist","build",".next",".realxxdemonxx-backups"]);
@@ -176,7 +176,9 @@ export async function executeTool(name,args={},config={}) {
     for(let i=first;i<=lastA;i++)out.push("-"+a[i]);
     for(let i=first;i<=lastB;i++)out.push("+"+b[i]);
     for(let i=lastA+1;i<toA;i++)out.push(" "+a[i]);
-    return (before===proposed?"No changes detected.":out.join("\n")).slice(0,14000);
+    const preview=(before===proposed?"No changes detected.":out.join("\n")).slice(0,14000);
+    setDiffPanel(preview);
+    return preview;
   }
   if (name==="write_file") {
     if (config.permissions?.writeFiles!==true && (await ask("  Write/edit file? Type YES to approve: ")).trim()!=="YES") return "User denied file write.";
