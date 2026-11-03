@@ -1,6 +1,6 @@
 import readline from "node:readline";
 export const ESC="\u001b";
-const COMMANDS=["/help","/menu","/chat","/files","/pwd","/providers","/models","/model","/provider","/test","/maxsteps","/settings","/limits","/undo","/status","/clear","/exit"];
+const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/map","/pwd","/providers","/models","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/undo","/status","/clear","/exit"];
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
 const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
@@ -13,7 +13,7 @@ function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
  const side=22,main=width-side-3,body=height-12;
- const clip=(value,n)=>{const plain=String(value).replace(/\x1b\\[[0-9;]*m/g,"").replace(/\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":String(value);};
+ const clip=(value,n)=>{const plain=String(value).replace(/\x1b\[[0-9;]*m/g,"").replace(/\r/g,"");return plain.length>n?plain.slice(0,Math.max(0,n-1))+"…":String(value);};
  const rows=[];
  rows.push(" "+bold(violet("REALXXDEMONXX"))+" "+bold(cyan("AGENT"))+dim("  /  INTERACTIVE WORKSPACE")+" ".repeat(Math.max(1,width-48))+green("● "+session.status));
  rows.push(dim(" "+session.workspace.slice(0,Math.max(20,width-4))));
