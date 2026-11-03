@@ -79,6 +79,50 @@ export async function runAgent(config) {
       info("Total tokens: "+usage.total);
       continue;
     }
+    if (command==="/memory") {
+      const current=await readProjectMemory();
+      section("PROJECT MEMORY");
+      say(current||"(No project memory saved.)");
+      const edit=(await ask("  Replace memory? Enter YES to edit, anything else to return: ")).trim();
+      if(edit==="YES"){
+        const value=await ask("  Enter memory text on one line: ");
+        if(value!==ESC){await writeProjectMemory(value);success("Project memory updated.");}
+      }
+      continue;
+    }
+    if (command==="/history") {
+      const rows=await getTaskHistory(20);
+      section("RECENT TASK HISTORY");
+      if(!rows.length)info("No saved tasks yet.");
+      for(const row of rows)info(new Date(row.at).toLocaleString()+" · "+row.status+" · "+String(row.task||"").slice(0,180));
+      continue;
+    }
+    if (command==="/checkpoint") {
+      const label=(await ask("  Snapshot label: ")).trim()||"manual";
+      try{const cp=await createCheckpoint(label);success("Checkpoint "+cp.id+" saved · "+cp.count+" files.");}
+      catch(e){error("Checkpoint failed: "+e.message);}
+      continue;
+    }
+    if (command==="/checkpoints") {
+      const rows=await listCheckpoints();section("CHECKPOINTS");
+      if(!rows.length)info("No checkpoints saved.");
+      rows.forEach(x=>info(x.id+" · "+x.label+" · "+x.files.length+" files"));
+      continue;
+    }
+    if (command==="/restore") {
+      const rows=await listCheckpoints();section("RESTORE CHECKPOINT");
+      if(!rows.length){info("No checkpoints available.");continue;}
+      rows.forEach((x,i)=>info((i+1)+". "+x.id+" · "+x.label+" · "+x.files.length+" files"));
+      const choice=(await ask("  Checkpoint number (or Esc): ")).trim();
+      if(choice===ESC)continue;
+      const cp=rows[Number(choice)-1];
+      if(!cp){error("Invalid checkpoint number.");continue;}
+      const confirm=(await ask("  This overwrites matching project files. Type RESTORE to continue: ")).trim();
+      if(confirm!=="RESTORE"){info("Restore cancelled.");continue;}
+      try{const restored=await restoreCheckpoint(cp.id);success("Restored "+restored.length+" files from "+cp.id);}
+      catch(e){error("Restore failed: "+e.message);}
+      continue;
+    }
     if (command==="/pwd") {info(process.cwd());continue;}
     if (command==="/files") {
       try {
