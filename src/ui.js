@@ -37,12 +37,13 @@ function drawDashboard(){
  const beforeLines=inputValue.slice(0,inputCursor).split("\n");
  const cursorLine=beforeLines.length-1;
  const firstVisibleLine=Math.max(0,Math.min(cursorLine,inputLines.length-2));
+ const firstPrefixWidth=firstVisibleLine===0?5:3;
  const firstPrefix=firstVisibleLine===0?" "+bold(green("YOU"))+" "+violet("›")+" ":"   ";
  const secondPrefix="   ";
  const firstChars=Array.from(inputLines[firstVisibleLine]||"");
  const cursorChars=Array.from(beforeLines[beforeLines.length-1]||"");
- const firstOffset=cursorLine===firstVisibleLine?Math.max(0,cursorChars.length-Math.max(8,width-firstPrefix.length-2)+1):0;
- rows.push(firstPrefix+firstChars.slice(firstOffset,firstOffset+Math.max(8,width-firstPrefix.length-2)).join(""));
+ const firstOffset=cursorLine===firstVisibleLine?Math.max(0,cursorChars.length-Math.max(8,width-firstPrefixWidth-2)+1):0;
+ rows.push(firstPrefix+firstChars.slice(firstOffset,firstOffset+Math.max(8,width-firstPrefixWidth-2)).join(""));
  if(inputLines.length>1)rows.push(secondPrefix+Array.from(inputLines[firstVisibleLine+1]||"").slice(0,Math.max(8,width-secondPrefix.length-2)).join(""));
  const matches=inputLines.length===1&&inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
  if(matches.length)rows.push(" "+dim("COMMANDS  ")+matches.join("   "));
