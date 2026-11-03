@@ -4,7 +4,7 @@ import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.j
 import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
 import {listMcpTools} from "./mcp.js";
 import {saveConfig} from "./config.js";
-import {readProjectMemory,writeProjectMemory,addTaskHistory,getTaskHistory,createCheckpoint,listCheckpoints,restoreCheckpoint} from "./workspace.js";
+import {readProjectMemory,writeProjectMemory,addTaskHistory,getTaskHistory,createCheckpoint,listCheckpoints,restoreCheckpoint,saveConversation,readConversation,clearConversation} from "./workspace.js";
 import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,streamToken,streamEnd,setTaskLabel,ESC} from "./ui.js";
 
 const SYSTEM=`You are REALXXDEMONXX AGENT, a capable terminal software engineering agent.
@@ -46,7 +46,7 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /mcp       Configure external MCP tool servers
   /web       Enable/disable public web research
   /status     Show workspace status
-  /clear      Clear chat context
+  /resume     Resume the last saved conversation\n  /clear      Clear chat context and saved session
   /exit       Exit agent
 
 TRY ASKING
@@ -259,7 +259,7 @@ export async function runAgent(config) {
       } catch(e) {error(e.message);}
       continue;
     }
-    if (command==="/clear") {messages.splice(1);success("Conversation context cleared.");continue;}
+    if(command==="/resume") {\n      try{const saved=await readConversation();if(!saved.length){info("No saved conversation is available.");continue;}messages.splice(1,messages.length-1,...saved);success("Resumed "+saved.length+" saved messages.");}\n      catch(e){error("Could not resume session: "+e.message);}continue;\n    }\n    if (command==="/clear") {messages.splice(1);await clearConversation();success("Conversation context and saved session cleared.");continue;}
     if (command==="/undo") { try { success(await undoLastChange()); } catch(e) { error(e.message); } continue; }
     if (command==="/provider") {
       info("Provider: " + (config.providerName||config.provider));
@@ -497,7 +497,7 @@ export async function runAgent(config) {
       catch(e){info("Task history could not be saved: "+e.message);}
     }
     if(routeModel){if(config.model!==routeModel){config.modelRoutes[route]=config.model;info("Updated "+route+" route to fallback model "+config.model);}config.model=baseModel;await persist();}
-    compactConversation(messages,Number(config.maxContextMessages)||30);
+    compactConversation(messages,Number(config.maxContextMessages)||30);\n    try{await saveConversation(messages.slice(1));}catch(e){info("Session could not be saved: "+e.message);}
   }
   success("Session ended.");
 }
