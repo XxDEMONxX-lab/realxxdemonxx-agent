@@ -1,8 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
 import {execFile} from "node:child_process";
 const root=path.resolve(process.cwd());
-const base=path.join(root,".agent-worktrees");
+const projectKey=crypto.createHash("sha256").update(root).digest("hex").slice(0,20);
+const base=path.join(os.homedir(),".realxxdemonxx-agent","worktrees",projectKey);
 function git(args){
  return new Promise((resolve,reject)=>execFile("git",args,{cwd:root,timeout:30000,maxBuffer:1024*1024},(error,stdout,stderr)=>{
   if(error){reject(new Error((stderr||stdout||error.message).trim().slice(0,1800)));return;}
