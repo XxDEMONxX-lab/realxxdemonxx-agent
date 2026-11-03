@@ -8,6 +8,7 @@ const key=crypto.createHash("sha256").update(projectRoot).digest("hex").slice(0,
 const stateDir=path.join(os.homedir(),".realxxdemonxx-agent","workspaces",key);
 const historyFile=path.join(stateDir,"history.json");
 const memoryFile=path.join(stateDir,"memory.md");
+const sessionFile=path.join(stateDir,"session.json");
 const checkpointDir=path.join(stateDir,"checkpoints");
 
 async function ensureState(){await fs.mkdir(checkpointDir,{recursive:true,mode:0o700});}
@@ -88,4 +89,21 @@ export async function restoreCheckpoint(id){
     await fs.copyFile(source,dest);restored.push(item.path);
   }
   return restored;
+}
+
+export async function saveConversation(messages){
+  const safe=(Array.isArray(messages)?messages:[]).filter(item=>item&&["user","assistant","tool"].includes(item.role)).slice(-80);
+  let serialized=JSON.stringify(safe);
+  while(serialized.length>1200000&&safe.length>4){safe.shift();serialized=JSON.stringify(safe);}
+  await atomicWrite(sessionFile,serialized);
+  return safe.length;
+}
+export async function readConversation(){
+  const rows=await readJson(sessionFile,[]);
+  if(!Array.isArray(rows))return [];
+  return rows.filter(item=>item&&["user","assistant","tool"].includes(item.role)).slice(-80);
+}
+export async function clearConversation(){
+  try{await fs.unlink(sessionFile);}catch(e){if(e.code!=="ENOENT")throw e;}
+  return "Saved conversation cleared.";
 }
