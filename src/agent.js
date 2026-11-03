@@ -1,7 +1,7 @@
 import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.js";
 import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
 import {saveConfig} from "./config.js";
-import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,ESC} from "./ui.js";
+import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,ESC} from "./ui.js";
 
 const SYSTEM=`You are REALXXDEMONXX AGENT, a capable terminal software engineering agent.
 You work inside the user's current project directory. Behave like a practical coding partner, not a generic chatbot.
@@ -36,7 +36,7 @@ TRY ASKING
 export async function runAgent(config) {
   const messages=[{role:"system",content:SYSTEM}];
   const persist=()=>saveConfig(config);
-  section("WORKSPACE");
+  startTUI(config);\n  section("WORKSPACE");
   info("Project   " + process.cwd());
   info("Tools     search · read · write · terminal");
   info("Safety    terminal commands require approval");
