@@ -145,6 +145,13 @@ export async function runAgent(config) {
       catch(e){error(e.message);}
       continue;
     }
+    if(command==="/editor"){
+      const file=(await ask("  File path to edit: ")).trim();
+      if(!file||file===ESC)continue;
+      try{section("EDITOR / "+file);say(await executeTool("edit_file",{path:file},config));}
+      catch(e){error(e.message);}
+      continue;
+    }
     if(command==="/terminal"){
       const shellCommand=(await ask("  Terminal command: ")).trim();
       if(!shellCommand||shellCommand===ESC)continue;
