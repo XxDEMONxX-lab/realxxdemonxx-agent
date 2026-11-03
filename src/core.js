@@ -30,3 +30,33 @@ export function classifyCommand(command){
     ||/\b(>|>>|2>)\s*\/dev\/(sd[a-z]|nvme|mmcblk|zero|random)\b/i.test(value);
   return destructive?"destructive":"terminal";
 }
+
+export function previousCursorIndex(value,index){
+  const text=String(value??"");
+  if(index<=0)return 0;
+  let next=index-1;
+  const code=text.charCodeAt(next);
+  if(code>=0xdc00&&code<=0xdfff&&next>0){
+    const previous=text.charCodeAt(next-1);
+    if(previous>=0xd800&&previous<=0xdbff)next--;
+  }
+  return next;
+}
+
+export function nextCursorIndex(value,index){
+  const text=String(value??"");
+  if(index>=text.length)return text.length;
+  const code=text.charCodeAt(index);
+  return code>=0xd800&&code<=0xdbff&&index+1<text.length?index+2:index+1;
+}
+
+export function lineStartIndex(value,index){
+  const text=String(value??"");
+  return text.lastIndexOf("\n",Math.max(0,index-1))+1;
+}
+
+export function lineEndIndex(value,index){
+  const text=String(value??"");
+  const next=text.indexOf("\n",index);
+  return next<0?text.length:next;
+}
