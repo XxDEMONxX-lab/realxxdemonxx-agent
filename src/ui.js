@@ -168,10 +168,37 @@ export async function editText(initial="",filename="untitled"){
 }
 export async function withSpinner(label,task){if(!tty||dashboard){session.status="WORKING";info(label);try{const result=await task();session.status="ONLINE";success(label);return result;}catch(e){session.status="ERROR";error(label);throw e;}}const frames=["◐","◓","◑","◒"];let i=0;const timer=setInterval(()=>{readline.cursorTo(process.stdout,0);process.stdout.write(cyan(frames[i++%frames.length])+" "+label);},100);try{const result=await task();clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(green("✓")+" "+label);return result;}catch(e){clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(red("✕")+" "+label);throw e;}}
 export function showTool(name,args={}){const detail=Object.entries(args).map(([k,v])=>k+": "+String(v).replace(/\s+/g," ").slice(0,75)).join(" · ");console.log("\n  "+violet("⚙")+" "+bold(name)+" "+dim(detail));}
-export function agentText(value){if(value)console.log("\n"+cyan("◆")+" "+bold("AGENT")+"\n"+value.trim()+"\n");}
-let streamLine="";
-export function streamToken(value){if(!value)return;if(dashboard){streamLine+=value;const parts=streamLine.split("\n");streamLine=parts.pop()||"";if(parts.length){logs.push(...parts);if(logs.length>400)logs=logs.slice(-400);}drawDashboard();}else process.stdout.write(value);}
-export function streamEnd(){if(dashboard){if(streamLine){logs.push(streamLine);streamLine="";if(logs.length>400)logs=logs.slice(-400);}drawDashboard();}else process.stdout.write("\n");}
+export function agentText(value){if(value)console.log("\n"+cyan("◆")+" "+bold("AGENT")+"\n"+formatMarkdown(value.trim())+"\n");}
+let streamLine="",streamInCode=false;
+function formatMarkdownLine(line,state){
+ if(/^\s*```/.test(line)){state.code=!state.code;return cyan(line);}
+ if(state.code)return color("38;5;114",line);
+ const heading=line.match(/^(#{1,3})\s+(.+)$/);
+ if(heading)return violet(bold(heading[2]));
+ const bullet=line.match(/^(\s*(?:[-*]|\d+\.)\s+)(.*)$/);
+ if(bullet)return cyan(bullet[1])+formatInline(bullet[2]);
+ return formatInline(line);
+}
+function formatInline(line){
+ return String(line).replace(/\*\*(.+?)\*\*/g,(_,v)=>bold(v)).replace(/`([^`]+)`/g,(_,v)=>color("38;5;221",v));
+}
+export function formatMarkdown(value){
+ const state={code:false};
+ return String(value??"").split("\n").map(line=>formatMarkdownLine(line,state)).join("\n");
+}
+export function streamToken(value){
+ if(!value)return;
+ if(dashboard){
+  streamLine+=value;
+  const parts=streamLine.split("\n");streamLine=parts.pop()||"";
+  if(parts.length){logs.push(...parts.map(line=>formatMarkdownLine(line,{get code(){return streamInCode;},set code(v){streamInCode=v;}})));if(logs.length>400)logs=logs.slice(-400);}
+  drawDashboard();
+ }else process.stdout.write(color("38;5;252",value));
+}
+export function streamEnd(){
+ if(dashboard){if(streamLine){logs.push(formatMarkdownLine(streamLine,{get code(){return streamInCode;},set code(v){streamInCode=v;}}));streamLine="";if(logs.length>400)logs=logs.slice(-400);}streamInCode=false;drawDashboard();}
+ else process.stdout.write("\n");
+}
 export function setDiffPanel(value){session.diff=String(value||"").split("\n").slice(0,30);if(dashboard)drawDashboard();}
 export function setTaskLabel(value){session.task=String(value||"Waiting for instructions").slice(0,160);if(dashboard)drawDashboard();}
 export function promptLabel(){return "\n"+green("YOU")+" "+violet("›")+" ";}
