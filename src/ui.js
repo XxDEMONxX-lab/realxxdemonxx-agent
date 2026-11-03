@@ -87,7 +87,7 @@ export async function ask(prompt){
  return new Promise(resolve=>{
   let value="",cursor=0,finished=false,matchIndex=0,historyIndex=-1,draft="";const input=process.stdin;
   const render=()=>{if(dashboard){inputValue=value;inputCursor=cursor;drawDashboard();}else{readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);process.stdout.write(prompt+value);readline.cursorTo(process.stdout,prompt.length+cursor);}};
-  const done=result=>{if(finished)return;finished=true;if(result!==ESC&&String(result||"").trim()){promptHistory.push(String(result));if(promptHistory.length>100)promptHistory.shift();}input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}activePrompt=null;inputValue="";inputCursor=0;if(dashboard)drawDashboard();else process.stdout.write("\n");resolve(result);};
+  const done=result=>{if(finished)return;finished=true;if(result!==ESC&&String(result||"").trim()){promptHistory.push(String(result));if(promptHistory.length>100)promptHistory.shift();}input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}activePrompt=null;inputValue="";inputCursor=0;scrollOffset=0;if(dashboard)drawDashboard();else process.stdout.write("\n");resolve(result);};
   const onKey=(str,key={})=>{
    if(finished)return;
    if(key.name==="escape"){done(ESC);return;}
