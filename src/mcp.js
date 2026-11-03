@@ -60,7 +60,7 @@ export async function listMcpTools(config){
     if(!tool?.name||typeof tool.name!=="string")continue;
     output.push({type:"function",function:{name:"mcp_"+server.name+"_"+tool.name,description:("[MCP "+server.name+"] "+String(tool.description||"External MCP tool")).slice(0,900),parameters:tool.inputSchema&&typeof tool.inputSchema==="object"?tool.inputSchema:{type:"object",properties:{}}}});
    }
-  }catch(error){output.push({type:"function",function:{name:"mcp_status_"+server.name,description:"MCP server unavailable: "+error.message.slice(0,180),parameters:{type:"object",properties:{},required:[]}}});}
+  }catch(error){}
  }
  return output;
 }
