@@ -138,6 +138,27 @@ export async function runAgent(config) {
       catch(e){error(e.message);}
       continue;
     }
+    if(command==="/open"){
+      const file=(await ask("  File path to open: ")).trim();
+      if(!file||file===ESC)continue;
+      try{section("FILE / "+file);say(await executeTool("read_file",{path:file},config));}
+      catch(e){error(e.message);}
+      continue;
+    }
+    if(command==="/terminal"){
+      const shellCommand=(await ask("  Terminal command: ")).trim();
+      if(!shellCommand||shellCommand===ESC)continue;
+      try{section("TERMINAL");say(await executeTool("run_command",{command:shellCommand},config));}
+      catch(e){error(e.message);}
+      continue;
+    }
+    if(command==="/edit"){
+      const file=(await ask("  File path: ")).trim();
+      if(!file||file===ESC)continue;
+      const task=(await ask("  What should change in this file? ")).trim();
+      if(!task||task===ESC)continue;
+      input="Edit "+file+". Requested change: "+task+". Inspect the file, preview the diff, then apply the edit only after approval.";
+    }
     if (command==="/pwd") {info(process.cwd());continue;}
     if (command==="/files") {
       try {
