@@ -51,6 +51,7 @@ Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It us
 - Edit chat prompts with cursor movement, Home/End, Delete, Backspace, Ctrl+A/E/U/W, multiline Shift+Enter, paste support, and prompt history.
 - Classify common package-install and destructive shell commands separately for permission checks.
 - Run built-in regression tests with `npm test`.
+- Run configured checks, tests, lint and type checks with `/diagnostics` without installing tools automatically.
 - Inspect JavaScript/TypeScript syntax trees and perform TypeScript-language-service cross-file symbol renames when TypeScript is installed.
 - Search public web pages and fetch readable public URLs after network permission is granted.
 - Connect configured Model Context Protocol (MCP) stdio servers and expose their tools after explicit trust approval.
@@ -101,6 +102,7 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/git` | Inspect Git status |
 | `/diff` | Inspect Git changes |
 | `/run-tests` | Run a configured test/check script |
+| `/diagnostics` | Run available tests, lint and type diagnostics |
 | `/checkpoint` | Save a named project snapshot |
 | `/checkpoints` | List saved snapshots |
 | `/restore` | Restore a snapshot after confirmation |
