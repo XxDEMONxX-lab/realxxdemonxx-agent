@@ -142,13 +142,30 @@ export async function runAgent(config) {
           ()=>chatCompletion(config,messages,toolSchemas)
         );
       } catch(e) {
-        error(e.message);
         if (/tool|function|unsupported parameter/i.test(e.message)) {
-          info("This model may not support tool calling. Try /models and choose a model with function/tool calling support.");
-        } else if (/401|403/i.test(e.message)) {
-          info("Check that your API key is valid for this provider.");
-        } else if (/429/i.test(e.message)) {
-          info("The provider may be rate-limiting this key or model. Wait or choose another model.");
+          info("Tool calling was rejected. Retrying once in chat-only mode...");
+          try {
+            result=await withSpinner("Retrying without tools...",()=>chatCompletion(config,messages,[]));
+            const fallback=result?.choices?.[0]?.message;
+            if (fallback && typeof fallback.content==="string" && fallback.content.trim()) {
+              messages.push(fallback);
+              agentText(fallback.content);
+              hadOutput=true;
+              info("Chat-only reply: this model did not accept tools, so it could not edit files or run commands for this request.");
+              completed=true;
+              break;
+            }
+            throw new Error("The model returned no text when retried without tools.");
+          } catch(retryError) {
+            error(retryError.message);
+          }
+        } else {
+          error(e.message);
+          if (/401|403/i.test(e.message)) {
+            info("Check that your API key is valid for this provider.");
+          } else if (/429/i.test(e.message)) {
+            info("The provider may be rate-limiting this key or model. Wait or choose another model.");
+          }
         }
         messages.splice(userMessageIndex);
         completed=true;
