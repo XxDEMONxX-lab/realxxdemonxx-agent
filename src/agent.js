@@ -13,7 +13,8 @@ const HELP = `AGENT COMMANDS
   /help          Show this command panel
   /providers     Open provider search and model selector
   /provider      Show active provider and model
-  /models        Browse models from the active provider\n  /model         Enter a model ID manually
+  /models        Browse models from the active provider
+  /model         Enter a model ID manually
   /test          Test the current API connection
   /favorites     Show saved favorite providers
   /maxsteps      Change agent reasoning/tool step limit
@@ -41,7 +42,7 @@ export async function runAgent(config) {
   while (true) {
     const input = (await ask(promptLabel())).trim();
     if (!input) continue;
-    const command=input.toLowerCase();
+    const command = input.toLowerCase();
     if (command === "/exit" || command === "/quit") break;
     if (command === "/help") { say(HELP); continue; }
     if (command === "/clear") { messages.splice(1); success("Conversation context cleared."); continue; }
@@ -52,57 +53,74 @@ export async function runAgent(config) {
       continue;
     }
     if (command === "/providers" || command === "/switch") {
-      const selected=await configureProvider(config,persist);
+      const selected = await configureProvider(config, persist);
       if (selected) {
         messages.splice(1);
         success(`Active model changed to ${config.model}. Conversation context reset.`);
       }
       continue;
     }
-    if (command === "/models") {\n      const model=await chooseCurrentModel(config,persist);\n      if (model) { messages.splice(1); success("Active model changed to "+model+". Conversation context reset."); }\n      continue;\n    }\n    if (command === "/model") {
-      const model=(await ask("  Enter exact model ID: ")).trim();
-      if (model) { config.model=model; await persist(); messages.splice(1); success("Model saved. Conversation context reset."); }
+    if (command === "/models") {
+      const model = await chooseCurrentModel(config, persist);
+      if (model) {
+        messages.splice(1);
+        success(`Active model changed to ${model}. Conversation context reset.`);
+      }
+      continue;
+    }
+    if (command === "/model") {
+      const model = (await ask("  Enter exact model ID: ")).trim();
+      if (model) {
+        config.model = model;
+        await persist();
+        messages.splice(1);
+        success("Model saved. Conversation context reset.");
+      }
       continue;
     }
     if (command === "/favorites") {
-      const fav=config.favorites||[];
+      const fav = config.favorites || [];
       if (!fav.length) info("No favorites saved. Open /providers and use f + number to save one.");
-      else fav.forEach((id,i)=>info(`${i+1}. ${id}`));
+      else fav.forEach((id,i) => info(`${i+1}. ${id}`));
       continue;
     }
     if (command === "/maxsteps") {
-      const n=Number((await ask(`  Agent steps [current ${config.maxSteps||8}]: `)).trim());
-      if (Number.isInteger(n)&&n>=1&&n<=30) { config.maxSteps=n; await persist(); success(`Step limit set to ${n}.`); }
-      else error("Enter a whole number from 1 to 30.");
+      const n = Number((await ask(`  Agent steps [current ${config.maxSteps || 8}]: `)).trim());
+      if (Number.isInteger(n) && n >= 1 && n <= 30) {
+        config.maxSteps = n;
+        await persist();
+        success(`Step limit set to ${n}.`);
+      } else error("Enter a whole number from 1 to 30.");
       continue;
     }
     if (command === "/test") {
       try {
-        const result=await withSpinner("Testing provider connection...",()=>chatCompletion(config,[
+        const result = await withSpinner("Testing provider connection...", () => chatCompletion(config, [
           {role:"user",content:"Reply with exactly: CONNECTION OK"}
-        ],[]));
-        const answer=result?.choices?.[0]?.message?.content;
-        if (answer) success("Connection works. Model response: "+String(answer).trim().slice(0,180));
+        ], []));
+        const answer = result?.choices?.[0]?.message?.content;
+        if (answer) success("Connection works. Model response: " + String(answer).trim().slice(0,180));
         else error("Provider responded, but returned no text.");
-      } catch(e) { error(e.message); }
+      } catch (e) { error(e.message); }
       continue;
     }
     if (command === "/status") {
       info(`Max agent steps: ${config.maxSteps || 8}`);
       info(`Working directory: ${process.cwd()}`);
-      info(`Tool access: enabled (approval-gated shell)`);
-      info(`Favorite providers: ${(config.favorites||[]).length}`);
+      info("Tool access: enabled (approval-gated shell)");
+      info(`Favorite providers: ${(config.favorites || []).length}`);
       continue;
     }
 
-    messages.push({ role: "user", content: input });
+    messages.push({role:"user",content:input});
     let completed = false;
     let hadOutput = false;
     for (let step = 0; step < (config.maxSteps || 8); step++) {
       let result;
       try {
-        result = await withSpinner(step ? "Thinking through tool results..." : "Analyzing request and consulting model...", () =>
-          chatCompletion(config, messages, toolSchemas)
+        result = await withSpinner(
+          step ? "Thinking through tool results..." : "Analyzing request and consulting model...",
+          () => chatCompletion(config, messages, toolSchemas)
         );
       } catch (e) {
         error(e.message);
@@ -142,7 +160,11 @@ export async function runAgent(config) {
           output = `Tool error: ${e.message}`;
           error(output);
         }
-        messages.push({ role: "tool", tool_call_id: call.id, content: String(output ?? "Tool returned no output").slice(0, 14000) });
+        messages.push({
+          role:"tool",
+          tool_call_id:call.id,
+          content:String(output ?? "Tool returned no output").slice(0,14000)
+        });
       }
     }
     if (!completed) say("Agent step limit reached. Give it a follow-up to continue.");
