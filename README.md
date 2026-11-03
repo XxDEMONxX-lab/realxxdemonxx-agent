@@ -46,7 +46,11 @@ Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It us
 - Run shell commands, inspect Git status/diffs, and execute configured test/check scripts with separate permissions.
 - Persist project-specific memory and task history across sessions.
 - Create named project checkpoints and restore a selected checkpoint after explicit confirmation.
-- Keep conversation context during a session and report provider usage when supplied.
+- Keep recent conversation context with automatic bounded-history compaction and report provider usage when supplied.
+- Format Markdown headings, lists, inline code, and fenced code in the terminal chat.
+- Edit chat prompts with cursor movement, Home/End, Delete, Backspace, Ctrl+A/E/U/W, multiline Shift+Enter, paste support, and prompt history.
+- Classify common package-install and destructive shell commands separately for permission checks.
+- Run built-in regression tests with `npm test`.
 - Inspect tool results and continue working through multiple steps.
 - Show connection errors and suggestions rather than silently failing.
 
@@ -58,9 +62,9 @@ Example requests:
 
 ## Interactive workspace
 
-The terminal interface provides an adaptive multi-panel workspace with an explorer/navigation rail, activity stream, project context panel on wide terminals, keyboard navigation, command suggestions, and live model output. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to select, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
+The terminal interface provides an adaptive multi-panel workspace with an explorer/navigation rail, activity stream, project context panel on wide terminals, keyboard navigation, command suggestions, and live model output. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to send, Shift+Enter to add a line, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The chat editor supports cursor movement, deletion, prompt history, and multi-character paste input. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
 
-Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. The agent can delegate independent read-only investigations to architect, debugger, security-reviewer, and test-analyst subagents; multiple independent subagent calls can run concurrently. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/fallback` configures backup model IDs; `/usage` reports provider token metadata when available. Provider requests stream output when supported, retry transient failures, and can switch to configured fallback models. The workspace includes a built-in keyboard-driven file editor, but it remains a terminal application rather than a graphical IDE with Monaco or a full terminal emulator.
+Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. The agent can delegate independent read-only investigations to architect, debugger, security-reviewer, and test-analyst subagents; multiple independent subagent calls can run concurrently. `/map` displays the project structure; `/git` and `/diff` inspect Git state; `/run-tests` runs the project's `test` or `check` script; `/memory` manages persistent project context; `/history` shows recent tasks; `/checkpoint`, `/checkpoints`, and `/restore` manage snapshots; `/fallback` configures backup model IDs; `/usage` reports provider token metadata when available. Provider requests stream output when supported, retry transient failures, and can switch to configured fallback models. The agent compacts older conversation turns to limit unbounded context growth and instructs itself to verify code changes with relevant checks and a final diff. The workspace includes a built-in keyboard-driven file editor, but it remains a terminal application rather than a graphical IDE with Monaco or a full terminal emulator.
 
 ## Commands
 
@@ -98,6 +102,10 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/clear` | Clear conversation context |
 | `/help` | Show commands |
 | `/exit` | Exit |
+
+## Tests and verification
+
+Run `npm test` for the built-in regression tests and `npm run check` for JavaScript syntax checks. GitHub Actions runs both checks and imports the core modules. These checks do not replace interactive testing on Termux or live provider API tests.
 
 ## Safety and configuration
 
