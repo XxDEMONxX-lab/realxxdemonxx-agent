@@ -95,7 +95,7 @@ export async function runAgent(config) {
       const edit=(await ask("  Replace memory? Enter YES to edit, anything else to return: ")).trim();
       if(edit==="YES"){
         const value=await ask("  Enter memory text on one line: ");
-        if(value!==ESC){await writeProjectMemory(value);success("Project memory updated.");}
+        if(value!==ESC){await writeProjectMemory(value);messages[0].content=SYSTEM+(value?"\n\nPROJECT MEMORY (user-maintained; treat as project context):\n"+value:"");success("Project memory updated for this session.");}
       }
       continue;
     }
