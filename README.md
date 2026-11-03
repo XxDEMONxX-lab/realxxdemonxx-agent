@@ -54,12 +54,22 @@ Example requests:
 - `Build a Discord.js v14 ticket system that matches this project's style.`
 - `Review this project for bugs and security issues.`
 
+## Interactive workspace
+
+The terminal interface provides a persistent workspace with keyboard navigation, command suggestions, activity output, and a project map. Use `/` to view command suggestions, arrow keys to navigate when the input is empty, Enter to select, Tab to complete a command, Esc to back out, and Ctrl+P to open the command palette. The interface is designed for Termux terminals; layout depends on terminal dimensions and capabilities.
+
+Planning, review, and debugging modes are available through `/plan`, `/review`, and `/debug`. `/map` displays the project structure and `/usage` reports token usage when the provider supplies usage metadata. These are single-agent workflows; multi-agent orchestration and a full file editor are future implementation stages, not currently available features.
+
 ## Commands
 
 | Command | Function |
 | --- | --- |
 | `/chat` | Return to the chat prompt |
 | `/menu` | Show quick actions |
+| `/plan` | Plan a task before editing |
+| `/review` | Review code for issues |
+| `/debug` | Investigate a bug or error |
+| `/map` | Display project structure |
 | `/files` | List project files |
 | `/pwd` | Show current project directory |
 | `/providers` | Switch provider and model |
@@ -69,6 +79,7 @@ Example requests:
 | `/test` | Test API connectivity |
 | `/maxsteps` | Set maximum tool cycles (1–30) |
 | `/status` | Show session status |
+| `/usage` | Show session token usage |
 | `/clear` | Clear conversation context |
 | `/help` | Show commands |
 | `/exit` | Exit |
