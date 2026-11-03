@@ -21,7 +21,7 @@ function drawDashboard(){
  rows.push(dim("─".repeat(width)));
  rows.push(" "+bold("EXPLORER")+" ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("ACTIVITY")+(contextWidth?" ".repeat(Math.max(1,main-8))+dim("│")+" "+bold("CONTEXT"):""));
  rows.push(" "+dim("─".repeat(side))+"  "+dim("┌"+"─".repeat(Math.max(8,main-2))+"┐")+(contextWidth?"  "+dim("┌"+"─".repeat(contextWidth-2)+"┐"):""));
- const visibleLogs=logs.slice(-body);
+ const visibleLogs=logs.slice(-body);if(streamLine)visibleLogs.push(streamLine);
  for(let r=0;r<body;r++){
   const nav=NAV[r];
   const left=nav?(r===selectedNav?cyan(" ❯ "+nav[0].padEnd(side-4)):dim("   "+nav[0].padEnd(side-4))):" ".repeat(side);
@@ -114,7 +114,7 @@ export async function withSpinner(label,task){if(!tty||dashboard){session.status
 export function showTool(name,args={}){const detail=Object.entries(args).map(([k,v])=>k+": "+String(v).replace(/\s+/g," ").slice(0,75)).join(" · ");console.log("\n  "+violet("⚙")+" "+bold(name)+" "+dim(detail));}
 export function agentText(value){if(value)console.log("\n"+cyan("◆")+" "+bold("AGENT")+"\n"+value.trim()+"\n");}
 let streamLine="";
-export function streamToken(value){if(!value)return;if(dashboard){streamLine+=value;const parts=streamLine.split("\n");streamLine=parts.pop()||"";for(const part of parts)pushLog(part);if(streamLine)pushLog(streamLine);}else process.stdout.write(value);}
-export function streamEnd(){if(dashboard){if(streamLine){pushLog(streamLine);streamLine="";}}else process.stdout.write("\n");}
+export function streamToken(value){if(!value)return;if(dashboard){streamLine+=value;const parts=streamLine.split("\n");streamLine=parts.pop()||"";if(parts.length){logs.push(...parts);if(logs.length>400)logs=logs.slice(-400);}drawDashboard();}else process.stdout.write(value);}
+export function streamEnd(){if(dashboard){if(streamLine){logs.push(streamLine);streamLine="";if(logs.length>400)logs=logs.slice(-400);}drawDashboard();}else process.stdout.write("\n");}
 export function setTaskLabel(value){session.task=String(value||"Waiting for instructions").slice(0,160);if(dashboard)drawDashboard();}
 export function promptLabel(){return "\n"+green("YOU")+" "+violet("›")+" ";}
