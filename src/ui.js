@@ -110,6 +110,47 @@ export async function quickMenu(){
   try{input.setRawMode(true);}catch{}draw();input.on("keypress",onKey);
  });
 }
+export async function editText(initial="",filename="untitled"){
+ if(!tty)return {saved:false,content:initial};
+ const input=process.stdin,wasDashboard=dashboard;
+ const lines=String(initial).split("\n");
+ let row=0,col=0,top=0,left=0,dirty=false,done=false;
+ const width=Math.max(30,process.stdout.columns||80),height=Math.max(10,process.stdout.rows||24),visible=height-3;
+ const render=()=>{
+  process.stdout.write("\\x1b[2J\\x1b[H");
+  process.stdout.write(bold(violet("EDITOR"))+"  "+filename+(dirty?yellowMark():"")+"\\n");
+  if(row<top)top=row;if(row>=top+visible)top=row-visible+1;
+  for(let i=0;i<visible;i++){
+   const line=lines[top+i];
+   process.stdout.write(line===undefined?"\\n":String(i+top+1).padStart(3)+" "+line.slice(left,left+width-6)+"\\n");
+  }
+  process.stdout.write(dim(" Ctrl+S Save   Ctrl+Q Cancel   Enter New line   Tab Indent"));
+  readline.cursorTo(process.stdout,Math.min(width-1,4+col-left),Math.min(visible,row-top)+1);
+ };
+ const yellowMark=()=>color("33"," *");
+ return await new Promise(resolve=>{
+  const finish=result=>{if(done)return;done=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}dashboard=wasDashboard;if(dashboard)drawDashboard();else process.stdout.write("\\x1b[?25h");resolve(result);};
+  const onKey=(str,key={})=>{
+   if(key.ctrl&&key.name==="s"){finish({saved:true,content:lines.join("\n")});return;}
+   if(key.ctrl&&key.name==="q"){finish({saved:false,content:lines.join("\n")});return;}
+   if(key.name==="left"){if(col>0)col--;else if(row>0){row--;col=lines[row].length;}}
+   else if(key.name==="right"){if(col<lines[row].length)col++;else if(row<lines.length-1){row++;col=0;}}
+   else if(key.name==="up"){if(row>0)row--;col=Math.min(col,lines[row].length);}
+   else if(key.name==="down"){if(row<lines.length-1)row++;col=Math.min(col,lines[row].length);}
+   else if(key.name==="home")col=0;
+   else if(key.name==="end")col=lines[row].length;
+   else if(key.name==="backspace"){if(col>0){lines[row]=lines[row].slice(0,col-1)+lines[row].slice(col);col--;dirty=true;}else if(row>0){const previous=lines[row-1].length;lines[row-1]+=lines[row];lines.splice(row,1);row--;col=previous;dirty=true;}}
+   else if(key.name==="delete"){if(col<lines[row].length){lines[row]=lines[row].slice(0,col)+lines[row].slice(col+1);dirty=true;}else if(row<lines.length-1){lines[row]+=lines[row+1];lines.splice(row+1,1);dirty=true;}}
+   else if(key.name==="return"||key.name==="enter"){const rest=lines[row].slice(col);lines[row]=lines[row].slice(0,col);lines.splice(row+1,0,rest);row++;col=0;dirty=true;}
+   else if(key.name==="tab"){lines[row]=lines[row].slice(0,col)+"  "+lines[row].slice(col);col+=2;dirty=true;}
+   else if(str&&!key.ctrl&&!key.meta&&str.length===1&&str>=" "){lines[row]=lines[row].slice(0,col)+str+lines[row].slice(col);col++;dirty=true;}
+   render();
+  };
+  dashboard=false;
+  try{input.setRawMode(true);}catch{}
+  input.resume();input.on("keypress",onKey);render();
+ });
+}
 export async function withSpinner(label,task){if(!tty||dashboard){session.status="WORKING";info(label);try{const result=await task();session.status="ONLINE";success(label);return result;}catch(e){session.status="ERROR";error(label);throw e;}}const frames=["◐","◓","◑","◒"];let i=0;const timer=setInterval(()=>{readline.cursorTo(process.stdout,0);process.stdout.write(cyan(frames[i++%frames.length])+" "+label);},100);try{const result=await task();clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(green("✓")+" "+label);return result;}catch(e){clearInterval(timer);readline.clearLine(process.stdout,0);readline.cursorTo(process.stdout,0);console.log(red("✕")+" "+label);throw e;}}
 export function showTool(name,args={}){const detail=Object.entries(args).map(([k,v])=>k+": "+String(v).replace(/\s+/g," ").slice(0,75)).join(" · ");console.log("\n  "+violet("⚙")+" "+bold(name)+" "+dim(detail));}
 export function agentText(value){if(value)console.log("\n"+cyan("◆")+" "+bold("AGENT")+"\n"+value.trim()+"\n");}
