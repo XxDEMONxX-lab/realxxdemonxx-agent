@@ -5,11 +5,11 @@ const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/op
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
 const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
-let activePrompt=null, dashboard=false, logs=[], inputValue="", inputCursor=0, selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions",diff:[]};
+let activePrompt=null, dashboard=false, logs=[], scrollOffset=0, inputValue="", inputCursor=0, selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions",diff:[]};
 const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["EDITOR","/editor"],["TERMINAL","/terminal"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
 let originalLog=null,originalError=null,renderCache=null,promptHistory=[];
 if(tty)readline.emitKeypressEvents(process.stdin);
-function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
+function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.length>400)logs=logs.slice(-400);if(scrollOffset===0&&dashboard)drawDashboard();}
 function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
@@ -22,7 +22,7 @@ function drawDashboard(){
  rows.push(dim("─".repeat(width)));
  rows.push(" "+bold("EXPLORER")+" ".repeat(Math.max(1,side-10))+dim("│")+" "+bold("ACTIVITY")+(contextWidth?" ".repeat(Math.max(1,main-8))+dim("│")+" "+bold("DIFF / CONTEXT"):""));
  rows.push(" "+dim("─".repeat(side))+"  "+dim("┌"+"─".repeat(Math.max(8,main-2))+"┐")+(contextWidth?"  "+dim("┌"+"─".repeat(contextWidth-2)+"┐"):""));
- const visibleLogs=logs.slice(-body);if(streamLine)visibleLogs.push(streamLine);
+ const end=Math.max(0,logs.length-scrollOffset);const visibleLogs=logs.slice(Math.max(0,end-body),end);if(streamLine&&scrollOffset===0)visibleLogs.push(streamLine);
  for(let r=0;r<body;r++){
   const nav=NAV[r];
   const left=nav?(r===selectedNav?cyan(" ❯ "+nav[0].padEnd(side-4)):dim("   "+nav[0].padEnd(side-4))):" ".repeat(side);
@@ -48,7 +48,7 @@ function drawDashboard(){
  if(inputLines.length>1)rows.push(secondPrefix+Array.from(inputLines[firstVisibleLine+1]||"").slice(0,Math.max(8,width-secondPrefix.length-2)).join(""));
  const matches=inputLines.length===1&&inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
  if(matches.length)rows.push(" "+dim("COMMANDS  ")+matches.join("   "));
- rows.push(dim(" ↑↓ Navigate when input is empty   Enter Select/Send   Tab Complete   Esc Back   Ctrl+P Palette"));
+ rows.push(dim(" ↑↓ Navigate when input is empty   PgUp/PgDn Scroll   Enter Send   Tab Complete   Esc Back   Ctrl+P Palette"));
  while(rows.length<height)rows.push("");
  rows.length=height;
  if(!renderCache||renderCache.length!==height)renderCache=Array(height).fill(null);
@@ -108,6 +108,7 @@ export async function ask(prompt){
    if(key.name==="right"){cursor=nextCursorIndex(value,cursor);render();return;}
    if(key.name==="home"){cursor=lineStartIndex(value,cursor);render();return;}
    if(key.name==="end"){cursor=lineEndIndex(value,cursor);render();return;}
+   if(key.name==="pageup"||key.name==="pagedown"){scrollOffset=key.name==="pageup"?Math.min(Math.max(0,logs.length),scrollOffset+Math.max(5,(process.stdout.rows||24)-12)):Math.max(0,scrollOffset-Math.max(5,(process.stdout.rows||24)-12));render();return;}
    if(key.name==="up"||key.name==="down"){
     if(!value&&dashboard){selectedNav=(selectedNav+(key.name==="up"?NAV.length-1:1))%NAV.length;render();return;}
     if(key.name==="up"&&promptHistory.length){if(historyIndex===-1)draft=value;historyIndex=Math.min(promptHistory.length-1,historyIndex+1);value=promptHistory[promptHistory.length-1-historyIndex];cursor=value.length;render();return;}
