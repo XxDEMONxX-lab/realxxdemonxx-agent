@@ -1,5 +1,5 @@
 import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.js";
-import {toolSchemas,executeTool} from "./tools.js";
+import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
 import {saveConfig} from "./config.js";
 import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu} from "./ui.js";
 
@@ -19,7 +19,7 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /model      Enter model ID manually
   /provider   Show active API configuration
   /test       Test model connection
-  /maxsteps   Set maximum tool cycles (1-30)\n  /settings   Configure permissions and agent settings\n  /limits     Set maximum response tokens
+  /maxsteps   Set maximum tool cycles (1-30)\n  /settings   Configure permissions and agent settings\n  /limits     Set maximum response tokens\n  /undo       Restore the latest backed-up file
   /status     Show workspace status
   /clear      Clear chat context
   /exit       Exit agent
@@ -58,7 +58,7 @@ export async function runAgent(config) {
       } catch(e) {error(e.message);}
       continue;
     }
-    if (command==="/clear") {messages.splice(1);success("Conversation context cleared.");continue;}
+    if (command==="/clear") {messages.splice(1);success("Conversation context cleared.");continue;}\n    if (command==="/undo") { try { success(await undoLastChange()); } catch(e) { error(e.message); } continue; }
     if (command==="/provider") {
       info("Provider: " + (config.providerName||config.provider));
       info("Endpoint: " + config.baseURL);
