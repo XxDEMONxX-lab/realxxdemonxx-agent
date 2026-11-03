@@ -1,5 +1,5 @@
 import readline from "node:readline";
-import {clipAnsi} from "./core.js";
+import {clipAnsi,previousCursorIndex,nextCursorIndex,lineStartIndex,lineEndIndex} from "./core.js";
 export const ESC="\u001b";
 const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/open","/edit","/editor","/terminal","/map","/pwd","/providers","/models","/fallback","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
@@ -101,12 +101,12 @@ export async function ask(prompt){
    if(key.ctrl&&key.name==="e"){cursor=value.length;render();return;}
    if(key.ctrl&&key.name==="u"){value=value.slice(cursor);cursor=0;render();return;}
    if(key.ctrl&&key.name==="w"){const left=value.slice(0,cursor).replace(/\s+$/,"").replace(/\S+$/,"");value=left+value.slice(cursor);cursor=left.length;render();return;}
-   if(key.name==="backspace"){if(cursor>0){value=value.slice(0,cursor-1)+value.slice(cursor);cursor--;}render();return;}
-   if(key.name==="delete"){if(cursor<value.length)value=value.slice(0,cursor)+value.slice(cursor+1);render();return;}
-   if(key.name==="left"){cursor=Math.max(0,cursor-1);render();return;}
-   if(key.name==="right"){cursor=Math.min(value.length,cursor+1);render();return;}
-   if(key.name==="home"){cursor=0;render();return;}
-   if(key.name==="end"){cursor=value.length;render();return;}
+   if(key.name==="backspace"){if(cursor>0){const previous=previousCursorIndex(value,cursor);value=value.slice(0,previous)+value.slice(cursor);cursor=previous;}render();return;}
+   if(key.name==="delete"){if(cursor<value.length){const next=nextCursorIndex(value,cursor);value=value.slice(0,cursor)+value.slice(next);}render();return;}
+   if(key.name==="left"){cursor=previousCursorIndex(value,cursor);render();return;}
+   if(key.name==="right"){cursor=nextCursorIndex(value,cursor);render();return;}
+   if(key.name==="home"){cursor=lineStartIndex(value,cursor);render();return;}
+   if(key.name==="end"){cursor=lineEndIndex(value,cursor);render();return;}
    if(key.name==="up"||key.name==="down"){
     if(!value&&dashboard){selectedNav=(selectedNav+(key.name==="up"?NAV.length-1:1))%NAV.length;render();return;}
     if(key.name==="up"&&promptHistory.length){if(historyIndex===-1)draft=value;historyIndex=Math.min(promptHistory.length-1,historyIndex+1);value=promptHistory[promptHistory.length-1-historyIndex];cursor=value.length;render();return;}
