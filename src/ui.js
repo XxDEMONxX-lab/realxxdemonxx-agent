@@ -129,7 +129,7 @@ export async function editText(initial="",filename="untitled"){
  };
  const yellowMark=()=>color("33"," *");
  return await new Promise(resolve=>{
-  const finish=result=>{if(done)return;done=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}dashboard=wasDashboard;if(dashboard)drawDashboard();else process.stdout.write("\\x1b[?25h");resolve(result);};
+  const finish=result=>{if(done)return;done=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}dashboard=wasDashboard;if(dashboard){renderCache=null;drawDashboard();}else process.stdout.write("\\x1b[?25h");resolve(result);};
   const onKey=(str,key={})=>{
    if(key.ctrl&&key.name==="s"){finish({saved:true,content:lines.join("\n")});return;}
    if(key.ctrl&&key.name==="q"){finish({saved:false,content:lines.join("\n")});return;}
