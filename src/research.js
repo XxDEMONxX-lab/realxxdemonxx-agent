@@ -7,11 +7,7 @@ export function validatePublicUrl(value){
  if(url.username||url.password)throw new Error("URLs containing embedded credentials are blocked.");
  const host=url.hostname.toLowerCase().replace(/^\[|\]$/g,"");
  if(!host||host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local")||host.endsWith(".internal"))throw new Error("Local and private network hosts are blocked.");
- if(net.isIP(host)===4){
-  const p=host.split(".").map(Number);
-  if(p[0]===0||p[0]===10||p[0]===127||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168)||(p[0]===169&&p[1]===254))throw new Error("Private IP addresses are blocked.");
- }
- if(net.isIP(host)===6&&(host==="::"||host==="::1"||host.startsWith("fc")||host.startsWith("fd")||host.startsWith("fe80")))throw new Error("Private IP addresses are blocked.");
+ if(net.isIP(host)&&isPrivateAddress(host))throw new Error("Private IP addresses are blocked.");
  return url;
 }
 
