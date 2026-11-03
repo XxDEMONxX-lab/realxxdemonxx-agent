@@ -46,7 +46,7 @@ export async function chooseProvider(catalog) {
   return selected;
 }
 
-async function request(config, messages, toolsEnabled) {
+async function request(config, messages, tools) {
   const base = (config.baseURL || "").replace(/\/+$/, "");
   if (!base) throw new Error("Provider base URL is missing. Edit ~/.realxxdemonxx-agent/config.json");
   if (!config.apiKey && !["ollama","lmstudio"].includes(config.provider)) throw new Error("API key is missing. Edit ~/.realxxdemonxx-agent/config.json");
@@ -57,7 +57,7 @@ async function request(config, messages, toolsEnabled) {
     headers["X-Title"] = "REALXXDEMONXX AGENT";
   }
   const body = { model:config.model, messages, temperature:0.2, stream:false };
-  if (toolsEnabled && tools?.length) body.tools = tools;
+  if (tools?.length) body.tools = tools;
   const response = await fetch(base+"/chat/completions", {
     method:"POST", headers, body:JSON.stringify(body), signal:AbortSignal.timeout(120000)
   });
