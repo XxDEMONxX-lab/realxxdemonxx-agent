@@ -352,6 +352,10 @@ export async function runAgent(config) {
     } else if (!hadOutput && messages.length===userMessageIndex) {
       info("No response was added to the conversation.");
     }
+    if(input && !input.startsWith("/")){
+      try{await addTaskHistory({task:input.slice(0,1000),durationMs:Date.now()-currentTaskStarted,status:completed?"completed":"incomplete"});}
+      catch(e){info("Task history could not be saved: "+e.message);}
+    }
   }
   success("Session ended.");
 }
