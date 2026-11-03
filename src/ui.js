@@ -8,7 +8,7 @@ let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, s
 const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
 let originalLog=null,originalError=null;
 if(tty)readline.emitKeypressEvents(process.stdin);
-function pushLog(value){logs.push(String(value));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
+function pushLog(value){logs.push(...String(value).split(/\\r?\\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
 function drawDashboard(){
  if(!dashboard||!tty)return;
  const width=Math.max(60,process.stdout.columns||80),height=Math.max(18,process.stdout.rows||24);
