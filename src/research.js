@@ -1,6 +1,6 @@
 import net from "node:net";
 
-function validatePublicUrl(value){
+export function validatePublicUrl(value){
  let url;try{url=new URL(value);}catch{throw new Error("Enter a valid http(s) URL.");}
  if(!["http:","https:"].includes(url.protocol))throw new Error("Only http and https URLs are allowed.");
  const host=url.hostname.toLowerCase().replace(/^\[|\]$/g,"");
