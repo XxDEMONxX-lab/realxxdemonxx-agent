@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {clipAnsi,stripAnsi,classifyCommand} from "../src/core.js";
+import {clipAnsi,stripAnsi,classifyCommand,previousCursorIndex,nextCursorIndex,lineStartIndex,lineEndIndex} from "../src/core.js";
 
 test("stripAnsi removes terminal color sequences",()=>{
   assert.equal(stripAnsi("\u001b[31mred\u001b[0m"),"red");
@@ -30,4 +30,16 @@ test("classifyCommand leaves ordinary commands in the terminal category",()=>{
   assert.equal(classifyCommand("node index.js"),"terminal");
   assert.equal(classifyCommand("git status --short"),"terminal");
   assert.equal(classifyCommand(""),"empty");
+});
+
+test("cursor movement does not split Unicode surrogate pairs",()=>{
+  const value="A😀B";
+  assert.equal(previousCursorIndex(value,3),1);
+  assert.equal(nextCursorIndex(value,1),3);
+});
+
+test("Home and End move within the current chat line",()=>{
+  const value="first\nsecond\nthird";
+  assert.equal(lineStartIndex(value,10),6);
+  assert.equal(lineEndIndex(value,10),12);
 });
