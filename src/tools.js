@@ -3,7 +3,7 @@ import path from "node:path";
 import { ask } from "./ui.js";
 
 const root=await fs.realpath(process.cwd());
-const ignored=new Set([".git","node_modules",".venv","venv","dist","build",".next"]);
+const ignored=new Set([".git","node_modules",".venv","venv","dist","build",".next",".realxxdemonxx-backups"]);
 
 async function safePath(input=".") {
   const target=path.resolve(root,input);
@@ -22,6 +22,41 @@ async function safePath(input=".") {
     }
   }
   return target;
+}
+
+const backupRoot=path.join(root,".realxxdemonxx-backups");
+async function backupExisting(file) {
+  try {
+    const stat=await fs.stat(file);
+    if (!stat.isFile()) throw new Error("Refusing to replace a non-file path.");
+    const relative=path.relative(root,file);
+    const folder=path.join(backupRoot,String(Date.now()));
+    const destination=path.join(folder,relative);
+    await fs.mkdir(path.dirname(destination),{recursive:true});
+    await fs.copyFile(file,destination);
+    await fs.writeFile(path.join(folder,"backup.json"),JSON.stringify({relative},null,2));
+    return true;
+  } catch(e) {
+    if(e.code==="ENOENT") return false;
+    throw e;
+  }
+}
+export async function undoLastChange() {
+  let folders=[];
+  try { folders=await fs.readdir(backupRoot,{withFileTypes:true}); }
+  catch(e) { if(e.code==="ENOENT") return "No file backup exists yet."; throw e; }
+  const stamps=folders.filter(x=>x.isDirectory() && /^\\d+$/.test(x.name)).map(x=>x.name).sort((a,b)=>Number(b)-Number(a));
+  for(const stamp of stamps) {
+    const folder=path.join(backupRoot,stamp);
+    try {
+      const meta=JSON.parse(await fs.readFile(path.join(folder,"backup.json"),"utf8"));
+      const destination=await safePath(meta.relative);
+      await fs.mkdir(path.dirname(destination),{recursive:true});
+      await fs.copyFile(path.join(folder,meta.relative),destination);
+      return "Restored previous version of "+meta.relative+".";
+    } catch {}
+  }
+  return "No restorable backup was found.";
 }
 
 export const toolSchemas=[
@@ -89,9 +124,10 @@ export async function executeTool(name,args={},config={}) {
     const file=await safePath(args.path);
     if (typeof args.content!=="string") throw new Error("File content must be text.");
     if (Buffer.byteLength(args.content,"utf8")>500000) throw new Error("Refusing to write a file larger than 500 KB in one operation.");
+    const backedUp=await backupExisting(file);
     await fs.mkdir(path.dirname(file),{recursive:true});
     await fs.writeFile(file,args.content,"utf8");
-    return `Wrote ${path.relative(root,file)} (${Buffer.byteLength(args.content,"utf8")} bytes)`;
+    return `Wrote ${path.relative(root,file)} (${Buffer.byteLength(args.content,"utf8")} bytes)${backedUp?" · previous version backed up":""}`;
   }
   if (name==="run_command") {
     const command=String(args.command||"").trim();
