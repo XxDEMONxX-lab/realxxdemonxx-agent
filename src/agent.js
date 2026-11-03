@@ -108,7 +108,10 @@ export async function runAgent(config) {
       info(descriptions[nextMode]);
       continue;
     }
-    if(command==="/diagnostics") {\n      try{section("PROJECT DIAGNOSTICS");say(await executeTool("project_diagnostics",{},config));}catch(e){error(e.message);}continue;\n    }\n    if(command==="/skills") {
+    if(command==="/diagnostics") {
+      try{section("PROJECT DIAGNOSTICS");say(await executeTool("project_diagnostics",{},config));}catch(e){error(e.message);}continue;
+    }
+    if(command==="/skills") {
       try{section("AVAILABLE SKILLS");say(await executeTool("list_skills",{},config));}catch(e){error(e.message);}continue;
     }
     if (command==="/map") {
