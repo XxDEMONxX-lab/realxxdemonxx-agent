@@ -13,7 +13,7 @@ export async function loadConfig() {
     const config={...DEFAULTS,...parsed};
     config.fallbackModels=Array.isArray(parsed.fallbackModels)?parsed.fallbackModels.filter(x=>typeof x==="string").slice(0,5):[];
     config.mcpServers=Array.isArray(parsed.mcpServers)?parsed.mcpServers.filter(x=>x&&typeof x==="object"&&!Array.isArray(x)).slice(0,10):[];
-    config.modelRoutes=parsed.modelRoutes&&typeof parsed.modelRoutes==="object"&&!Array.isArray(parsed.modelRoutes)?parsed.modelRoutes:{};
+    config.modelRoutes=parsed.modelRoutes&&typeof parsed.modelRoutes==="object"&&!Array.isArray(parsed.modelRoutes)?Object.fromEntries(Object.entries(parsed.modelRoutes).filter(([key,value])=>["simple","complex","review","debug"].includes(key)&&typeof value==="string"&&value.trim()).map(([key,value])=>[key,value.trim()])):{};
     config.permissions={...DEFAULTS.permissions,...(parsed.permissions&&typeof parsed.permissions==="object"&&!Array.isArray(parsed.permissions)?parsed.permissions:{})};
     config.maxSteps=Number.isInteger(parsed.maxSteps)?Math.max(1,Math.min(30,parsed.maxSteps)):DEFAULTS.maxSteps;
     config.maxTokens=Number.isInteger(parsed.maxTokens)?Math.max(128,Math.min(4096,parsed.maxTokens)):DEFAULTS.maxTokens;
