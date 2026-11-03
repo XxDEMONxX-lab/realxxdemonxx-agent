@@ -1,6 +1,6 @@
 # REALXXDEMONXX AGENT
 
-A terminal-based AI coding agent designed for Android Termux and Node.js 18+. It supports multiple API endpoints, project-scoped file tools, and approval-gated shell execution.
+A Termux-first AI software engineering agent built with Node.js. It provides a polished terminal workspace, model-provider discovery, conversational coding assistance, project file tools, and approval-gated shell execution.
 
 ## Install in Termux
 
@@ -14,31 +14,56 @@ npm start
 
 No native modules or heavy dependencies are required.
 
-## Providers
+## First launch
 
-At startup the agent loads built-in endpoint profiles and attempts to download the live provider directory from models.dev. The displayed count depends on directory availability. Built-in profiles include OpenRouter, OpenAI, Groq, Together AI, Fireworks, DeepSeek, Mistral, Ollama, LM Studio and a custom OpenAI-compatible endpoint.
+1. Search for a provider such as `openrouter`.
+2. Select the number shown beside it.
+3. Enter your API key.
+4. Enter a model that is enabled for your account and supports chat completions. For coding, choose a model with tool/function calling support.
 
-The models.dev directory is a discovery catalog, not a guarantee that every listed provider uses the same API protocol. This first release sends OpenAI-compatible `/chat/completions` requests. Providers using other protocols need a dedicated adapter. Many model vendors can also be reached through an aggregator such as OpenRouter.
+Settings are saved in `~/.realxxdemonxx-agent/config.json`. Keep this file private.
 
-## Configure
+## Use
 
-First run asks for provider, API key and model. Settings are stored at `~/.realxxdemonxx-agent/config.json` with restrictive file permissions. You can edit that file to change provider, endpoint, model, or maxSteps.
+Start the agent from the root of the project you want it to work on:
 
-Never commit API keys or share your config file.
+```sh
+cd ~/your-project
+node ~/realxxdemonxx-agent/index.js
+```
 
-## Agent tools
+Try prompts such as:
+- `hi` — verifies the model connection and chat response.
+- `Inspect this project and explain its architecture.`
+- `Find and fix the bug in src/index.js, then run the relevant tests.`
+- `Add a clean help command to this CLI.`
 
-- List project files
-- Read and write project files
-- Run shell commands only after the user types `YES`
-- Restricts file tools to the current working directory
-- Conversation commands: `/help`, `/clear`, `/provider`, `/exit`
+Commands: `/help`, `/clear`, `/provider`, `/status`, `/exit`.
 
-Run the agent from the root of the project you want it to work on. Review generated changes before using them.
+## Capabilities
 
-## Limitations
+- Dynamic endpoint discovery from models.dev plus built-in profiles.
+- OpenAI-compatible chat completions.
+- Project file listing, reading, and writing.
+- Shell execution with explicit approval.
+- Visible model activity, tool execution, and errors.
+- Conversation context and multi-step tool workflows.
 
-This is an initial functional foundation, not a full IDE or a claim of autonomous production-grade reliability. Tool calling depends on the selected model and provider supporting OpenAI-compatible tool calls. Keep backups and review commands and edits.
+The directory count is dynamic and is not a guarantee that every listed provider uses the same API protocol. This release uses OpenAI-compatible `/chat/completions`; providers with different protocols require dedicated adapters. Tool calling depends on the selected provider/model supporting it.
+
+## Troubleshooting
+
+If the agent gives no response:
+1. Check the API key, endpoint and model in `~/.realxxdemonxx-agent/config.json`.
+2. Confirm that the model is enabled for your provider account.
+3. Use a model supporting chat completions. For coding tools, use one supporting tool/function calling.
+4. Update the project: `git pull`, then run `npm start`.
+
+If you get a provider HTTP error, the agent now prints the provider's error message instead of silently doing nothing.
+
+## Safety and limitations
+
+File tools are restricted to the current working directory using lexical path checks. Shell commands require you to type `YES`. Review proposed changes and commands before approving them. This is an evolving CLI coding agent, not a full IDE or a guarantee of autonomous production-grade reliability.
 
 ## License
 
