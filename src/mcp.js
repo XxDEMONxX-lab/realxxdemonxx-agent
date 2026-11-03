@@ -65,7 +65,7 @@ export async function listMcpTools(config){
     const id="mcp_"+server.name+"_"+(index++);toolMap.set(id,{serverName:server.name,toolName:tool.name});
     output.push({type:"function",function:{name:id,description:("[MCP "+server.name+"] "+String(tool.description||"External MCP tool")).slice(0,900),parameters:tool.inputSchema&&typeof tool.inputSchema==="object"?tool.inputSchema:{type:"object",properties:{}}}});
    }
-  }catch(error){}
+  }catch(error){console.error("[MCP] "+server.name+": "+error.message);}
  }
  return output;
 }
