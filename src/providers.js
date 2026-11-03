@@ -192,3 +192,16 @@ export async function chatCompletion(config,messages,tools) {
     return request(config,messages,[]);
   }
 }
+
+export async function chooseCurrentModel(config, save = async()=>{}) {
+  const catalog = await discoverProviders();
+  const provider = catalog.find(p => p.id === config.provider) || {
+    id:config.provider, name:config.providerName || config.provider,
+    baseURL:config.baseURL, defaultModel:config.model
+  };
+  const model = await selectModel({...provider,baseURL:config.baseURL},config.apiKey,config.model);
+  if (!model) return null;
+  config.model=model;
+  await save(config);
+  return model;
+}
