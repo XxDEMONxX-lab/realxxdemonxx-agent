@@ -160,7 +160,7 @@ export async function executeTool(name,args={},config={}) {
     const {execFile}=await import("node:child_process");
     return await new Promise(resolve=>execFile("git",args,{cwd:root,timeout:20000,maxBuffer:512*1024},(err,stdout,stderr)=>{
       if(err&&err.code==="ENOENT")return resolve("Git is not installed or not available in PATH.");
-      resolve([stdout,stderr,err?("Exit code: "+(err.code??"unknown")):"Exit code: 0"].filter(Boolean).join("\\n").slice(0,16000)||"(no Git output)");
+      resolve([stdout,stderr,err?("Exit code: "+(err.code??"unknown")):"Exit code: 0"].filter(Boolean).join("\n").slice(0,16000)||"(no Git output)");
     }));
   }
   if (name==="run_tests") {
@@ -171,7 +171,7 @@ export async function executeTool(name,args={},config={}) {
     if(config.permissions?.runTests!==true && (await ask("  Approve npm run "+script+"? Type YES: ")).trim()!=="YES")return "User denied test execution.";
     const {execFile}=await import("node:child_process");
     return await new Promise(resolve=>execFile("npm",["run",script],{cwd:root,timeout:120000,maxBuffer:1024*1024},(err,stdout,stderr)=>{
-      resolve([stdout,stderr,"Exit code: "+(err?(err.code??"unknown"):0)].filter(Boolean).join("\\n").slice(0,16000)||"(test script completed with no output)");
+      resolve([stdout,stderr,"Exit code: "+(err?(err.code??"unknown"):0)].filter(Boolean).join("\n").slice(0,16000)||"(test script completed with no output)");
     }));
   }
   if (name==="run_command") {
