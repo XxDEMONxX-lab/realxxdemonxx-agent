@@ -1,11 +1,11 @@
 import readline from "node:readline";
 export const ESC="\u001b";
-const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/map","/pwd","/providers","/models","/fallback","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
+const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/open","/edit","/terminal","/map","/pwd","/providers","/models","/fallback","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
 const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
 let activePrompt=null, dashboard=false, logs=[], inputValue="", selectedNav=0, session={provider:"",model:"",workspace:process.cwd(),status:"READY",task:"Waiting for instructions"};
-const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
+const NAV=[["CHAT","/chat"],["PROJECT FILES","/files"],["TERMINAL","/terminal"],["PROVIDERS","/providers"],["MODELS","/models"],["API TEST","/test"],["PERMISSIONS","/settings"],["TOKEN LIMIT","/limits"],["UNDO CHANGE","/undo"],["SESSION STATUS","/status"],["HELP","/help"]];
 let originalLog=null,originalError=null,renderCache=null;
 if(tty)readline.emitKeypressEvents(process.stdin);
 function pushLog(value){logs.push(...String(value).split(/\r?\n/));if(logs.length>400)logs=logs.slice(-400);if(dashboard)drawDashboard();}
