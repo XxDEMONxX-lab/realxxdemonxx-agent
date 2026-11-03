@@ -11,11 +11,11 @@ export const PROVIDERS = [
   {id:"cerebras",name:"Cerebras",baseURL:"https://api.cerebras.ai/v1"}
 ];
 
-export function listProviders() {
+export function listProviders(config = {}) {
   console.log("\n  PROVIDER SELECT");
   console.log("  ─────────────────────────────────────────────");
   PROVIDERS.forEach((p,i) => {
-    const active = p.id === globalThis.__agentConfig?.provider ? "  [ACTIVE]" : "";
+    const active = p.id === config.provider ? "  [ACTIVE]" : "";
     console.log(`  ${i+1}. ${p.name}${active}`);
   });
   console.log("  0. Back");
@@ -71,7 +71,7 @@ async function chooseModel(provider, apiKey, currentModel = "") {
 
 export async function configureProvider(config, save) {
   while (true) {
-    listProviders();
+    listProviders(config);
     const value=(await ask("\n  Choose provider number: ")).trim();
     if (value==="0" || value.toLowerCase()==="back") return null;
     const provider=PROVIDERS[Number(value)-1];
