@@ -24,4 +24,4 @@ jobs:
       - name: Run regression tests
         run: npm test
       - name: Smoke-test module imports
-        run: node --input-type=module -e "await Promise.all(['./src/core.js','./src/config.js','./src/ui.js','./src/providers.js','./src/tools.js','./src/workspace.js','./src/subagents.js','./src/agent.js'].map((file)=>import(file))); console.log('Module imports OK')"
+        run: node --input-type=module -e "await Promise.all(['./src/core.js','./src/config.js','./src/ui.js','./src/providers.js','./src/tools.js','./src/workspace.js','./src/subagents.js','./src/mcp.js','./src/research.js','./src/git-worktree.js','./src/agent.js'].map((file)=>import(file))); console.log('Module imports OK')"
