@@ -1,7 +1,7 @@
 import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.js";
 import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
 import {saveConfig} from "./config.js";
-import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu} from "./ui.js";
+import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,ESC} from "./ui.js";
 
 const SYSTEM=`You are REALXXDEMONXX AGENT, a capable terminal software engineering agent.
 You work inside the user's current project directory. Behave like a practical coding partner, not a generic chatbot.
@@ -46,7 +46,7 @@ export async function runAgent(config) {
 
   while (true) {
     const input=(await ask(promptLabel())).trim();
-    if (!input) continue;
+    if (!input || input===ESC) continue;
     const command=input.toLowerCase();
     if (command==="/exit"||command==="/quit") break;
     if (command==="/help" || command==="/") {say(HELP);continue;}
@@ -126,7 +126,7 @@ export async function runAgent(config) {
         labels.forEach(([key,label],i)=>info(`${i+1}. ${label}: ${config.permissions[key]===true?"ON":"OFF"}`));
         info("0. Back");
         const choice=(await ask("  Toggle setting number: ")).trim();
-        if (choice==="0" || choice.toLowerCase()==="back") break;
+        if (choice===ESC || choice==="0" || choice.toLowerCase()==="back") { info("Returned to chat."); break; }
         const item=labels[Number(choice)-1];
         if (!item) {error("Choose a number from 0 to 6.");continue;}
         config.permissions[item[0]]=config.permissions[item[0]]!==true;
@@ -137,7 +137,7 @@ export async function runAgent(config) {
     }
     if (command==="/limits") {
       const raw=(await ask(`  Maximum response tokens [${config.maxTokens||512}]: `)).trim();
-      if (!raw) continue;
+      if (!raw || raw===ESC) continue;
       const n=Number(raw);
       if (Number.isInteger(n)&&n>=128&&n<=4096) {
         config.maxTokens=n;
