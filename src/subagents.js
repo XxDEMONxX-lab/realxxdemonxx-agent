@@ -1,7 +1,7 @@
 import {chatCompletion} from "./providers.js";
 import {toolSchemas,executeTool} from "./tools.js";
 
-const ALLOWED=new Set(["list_files","search_files","project_map","read_file","git_status","git_diff"]);
+const ALLOWED=new Set(["list_files","search_files","project_map","read_file"]);
 const TOOLS=toolSchemas.filter(tool=>ALLOWED.has(tool.function?.name));
 
 export async function runSubagent(config,role,task){
