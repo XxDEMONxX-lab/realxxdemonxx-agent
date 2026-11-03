@@ -90,6 +90,8 @@ export const toolSchemas=[
  {type:"function",function:{name:"write_file",description:"Create or replace a UTF-8 project file. Preserve existing code unless the requested change requires otherwise.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
  {type:"function",function:{name:"preview_file_change",description:"Preview a proposed file edit as a compact line diff without changing the file. Use before write_file.",parameters:{type:"object",properties:{path:{type:"string"},content:{type:"string"}},required:["path","content"]}}},
  {type:"function",function:{name:"edit_file",description:"Open a project file in the built-in keyboard editor. Saving requires write permission.",parameters:{type:"object",properties:{path:{type:"string"}},required:["path"]}}},
+ {type:"function",function:{name:"ast_inspect",description:"Parse a JavaScript or TypeScript file and list declarations/imports with syntax diagnostics. Requires TypeScript installed in the project.",parameters:{type:"object",properties:{file:{type:"string"}},required:["file"]}}},
+ {type:"function",function:{name:"rename_symbol",description:"Use the TypeScript language service to find semantic references and preview a cross-file symbol rename. Requires explicit approval to apply.",parameters:{type:"object",properties:{file:{type:"string"},line:{type:"integer"},column:{type:"integer"},newName:{type:"string"}},required:["file","line","column","newName"]}}},
  {type:"function",function:{name:"delegate_subagent",description:"Delegate a focused read-only investigation to a specialist subagent. It cannot edit files or execute commands.",parameters:{type:"object",properties:{role:{type:"string",enum:["architect","debugger","security-reviewer","test-analyst"]},task:{type:"string"}},required:["role","task"]}}},
  {type:"function",function:{name:"git_status",description:"Inspect the current Git working tree status. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"git_diff",description:"Inspect unstaged and staged Git changes. Read-only.",parameters:{type:"object",properties:{},required:[]}}},
@@ -217,6 +219,25 @@ export async function executeTool(name,args={},config={}) {
     await fs.mkdir(path.dirname(file),{recursive:true});
     await fs.writeFile(file,args.content,"utf8");
     return `Wrote ${path.relative(root,file)} (${Buffer.byteLength(args.content,"utf8")} bytes)${backedUp.created?" · new file can be undone":" · previous version backed up"}`;
+  }
+  if(name==="ast_inspect"){
+    if(config.permissions?.readFiles!==true&&(await ask("  Read source file for AST analysis? Type YES: ")).trim()!=="YES")return "User denied AST inspection.";
+    const {inspectAst}=await import("./ast.js");return await inspectAst(args.file);
+  }
+  if(name==="rename_symbol"){
+    if(config.permissions?.readFiles!==true&&(await ask("  Read project sources for semantic rename? Type YES: ")).trim()!=="YES")return "User denied source inspection.";
+    const {renameAstSymbol}=await import("./ast.js");
+    const result=await renameAstSymbol({...args,apply:false});
+    const preview=result.preview+"\n\nType APPLY to update these files with backups, or anything else to cancel.";
+    setDiffPanel(preview);
+    if((await ask("  Apply semantic rename? Type APPLY: ")).trim()!=="APPLY")return "Rename cancelled. Preview:\n"+result.preview;
+    if(config.permissions?.writeFiles!==true&&(await ask("  Approve writing renamed files? Type YES: ")).trim()!=="YES")return "User denied file writes.";
+    for(const item of result.files){
+      const file=await safePath(item.path);
+      await backupExisting(file);
+      await fs.writeFile(file,item.content,"utf8");
+    }
+    return "Renamed symbol in "+result.files.length+" file(s). Backups were saved; run tests and review the diff.";
   }
   if (name==="delegate_subagent") {
     const task=String(args.task||"").trim();
