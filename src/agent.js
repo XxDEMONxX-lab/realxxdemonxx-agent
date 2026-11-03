@@ -42,7 +42,8 @@ export async function runAgent(config) {
   const projectMemory=await readProjectMemory();
   const messages=[{role:"system",content:SYSTEM+(projectMemory?"\\n\\nPROJECT MEMORY (user-maintained; treat as project context):\\n"+projectMemory:"")}];
   let nextMode="";
-  const usage={prompt:0,completion:0,total:0};\n  let currentTaskStarted=0;
+  const usage={prompt:0,completion:0,total:0};
+  let currentTaskStarted=0;
   const persist=()=>saveConfig(config);
   startTUI(config);
   section("WORKSPACE");
