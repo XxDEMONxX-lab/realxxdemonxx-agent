@@ -117,19 +117,19 @@ export async function editText(initial="",filename="untitled"){
  let row=0,col=0,top=0,left=0,dirty=false,done=false;
  const width=Math.max(30,process.stdout.columns||80),height=Math.max(10,process.stdout.rows||24),visible=height-3;
  const render=()=>{
-  process.stdout.write("\\x1b[2J\\x1b[H");
-  process.stdout.write(bold(violet("EDITOR"))+"  "+filename+(dirty?yellowMark():"")+"\\n");
+  process.stdout.write("\x1b[2J\x1b[H");
+  process.stdout.write(bold(violet("EDITOR"))+"  "+filename+(dirty?yellowMark():"")+"\n");
   if(row<top)top=row;if(row>=top+visible)top=row-visible+1;if(col<left)left=col;if(col>=left+width-6)left=col-width+7;
   for(let i=0;i<visible;i++){
    const line=lines[top+i];
-   process.stdout.write(line===undefined?"\\n":String(i+top+1).padStart(3)+" "+line.slice(left,left+width-6)+"\\n");
+   process.stdout.write(line===undefined?"\n":String(i+top+1).padStart(3)+" "+line.slice(left,left+width-6)+"\n");
   }
   process.stdout.write(dim(" Ctrl+S Save   Ctrl+Q Cancel   Enter New line   Tab Indent"));
   readline.cursorTo(process.stdout,Math.min(width-1,4+col-left),Math.min(visible,row-top)+1);
  };
  const yellowMark=()=>color("33"," *");
  return await new Promise(resolve=>{
-  const finish=result=>{if(done)return;done=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}dashboard=wasDashboard;if(dashboard){renderCache=null;drawDashboard();}else process.stdout.write("\\x1b[?25h");resolve(result);};
+  const finish=result=>{if(done)return;done=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}dashboard=wasDashboard;if(dashboard){renderCache=null;drawDashboard();}else process.stdout.write("\x1b[?25h");resolve(result);};
   const onKey=(str,key={})=>{
    if(key.ctrl&&key.name==="s"){finish({saved:true,content:lines.join("\n")});return;}
    if(key.ctrl&&key.name==="q"){finish({saved:false,content:lines.join("\n")});return;}
