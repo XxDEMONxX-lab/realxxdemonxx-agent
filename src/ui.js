@@ -1,6 +1,6 @@
 import readline from "node:readline";
 export const ESC="\u001b";
-const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/map","/pwd","/providers","/models","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
+const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/map","/pwd","/providers","/models","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/checkpoint","/checkpoints","/restore","/undo","/status","/clear","/exit"];
 const tty=Boolean(process.stdin.isTTY&&process.stdout.isTTY);
 const color=(code,value)=>tty?"\x1b["+code+"m"+value+"\x1b[0m":value;
 const cyan=s=>color("38;5;81",s),violet=s=>color("38;5;141",s),dim=s=>color("2;37",s),green=s=>color("38;5;78",s),red=s=>color("38;5;203",s),bold=s=>color("1",s);
