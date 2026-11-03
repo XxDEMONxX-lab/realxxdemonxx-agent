@@ -1,27 +1,29 @@
 #!/usr/bin/env node
 import { loadConfig, saveConfig } from "./src/config.js";
-import { configureProvider } from "./src/providers.js";
+import { configureProvider, PROVIDERS } from "./src/providers.js";
 import { runAgent } from "./src/agent.js";
-import { banner, say, closeInput } from "./src/ui.js";
+import { banner, say, closeInput, error } from "./src/ui.js";
 
 async function main() {
   banner();
-  const config = await loadConfig();
-  const local = ["ollama","lmstudio"].includes(config.provider);
-  if (!config.provider || (!config.apiKey && !local)) {
-    const selected = await configureProvider(config, saveConfig);
-    if (!selected && !config.provider) {
-      say("No provider configured. Exiting.");
+  const config=await loadConfig();
+  const supported=PROVIDERS.some(p=>p.id===config.provider);
+  if (!supported || !config.apiKey || !config.model) {
+    if (config.provider && !supported) {
+      error("The saved provider is no longer supported in this simplified build. Please select one of the 8 supported providers.");
+    }
+    const selected=await configureProvider(config,saveConfig);
+    if (!selected) {
+      say("Setup cancelled. Run npm start to configure a provider.");
       return;
     }
   }
-  if (!config.provider || !config.baseURL || !config.model) {
-    say("Provider setup is incomplete. Start again and configure a provider, endpoint and model.");
-    return;
-  }
-  say(`\nConnected: ${config.providerName || config.provider} · ${config.model}`);
-  say("Type /help for commands. Use /exit to quit.\n");
+  say(`\n  CONNECTED  ${config.providerName || config.provider}  ·  ${config.model}`);
+  say("  Type /help for commands.\n");
   try { await runAgent(config); }
   finally { closeInput(); }
 }
-main().catch(e => { console.error("\n[FATAL]", e.message); process.exitCode = 1; });
+main().catch(e=>{
+  console.error("\n[FATAL]",e.stack || e.message);
+  process.exitCode=1;
+});
