@@ -2,7 +2,7 @@ import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.j
 import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
 import {saveConfig} from "./config.js";
 import {readProjectMemory,writeProjectMemory,addTaskHistory,getTaskHistory,createCheckpoint,listCheckpoints,restoreCheckpoint} from "./workspace.js";
-import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,streamToken,streamEnd,ESC} from "./ui.js";
+import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,streamToken,streamEnd,setTaskLabel,ESC} from "./ui.js";
 
 const SYSTEM=`You are REALXXDEMONXX AGENT, a capable terminal software engineering agent.
 You work inside the user's current project directory. Behave like a practical coding partner, not a generic chatbot.
@@ -257,6 +257,7 @@ export async function runAgent(config) {
 
     const userMessageIndex=messages.length;
     currentTaskStarted=Date.now();
+    setTaskLabel(input);
     const modeInstruction=nextMode?({plan:"\n\nMODE: PLANNING. First inspect relevant project files, then present a numbered plan and wait for approval before making edits.",review:"\n\nMODE: CODE REVIEW. Inspect relevant files and report findings ordered by severity with file and line references. Do not edit files.",debug:"\n\nMODE: DEBUGGING. Reproduce or trace the issue from available evidence, inspect relevant files, explain the likely root cause, then make a minimal fix only when sufficiently supported."}[nextMode]||""):"";
     messages.push({role:"user",content:input+modeInstruction});
     nextMode="";
