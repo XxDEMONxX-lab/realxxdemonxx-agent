@@ -502,7 +502,8 @@ export async function runAgent(config) {
       catch(e){info("Task history could not be saved: "+e.message);}
     }
     if(routeModel){if(config.model!==routeModel){config.modelRoutes[route]=config.model;info("Updated "+route+" route to fallback model "+config.model);}config.model=baseModel;await persist();}
-    compactConversation(messages,Number(config.maxContextMessages)||30);\n    try{await saveConversation(messages.slice(1));}catch(e){info("Session could not be saved: "+e.message);}
+    compactConversation(messages,Number(config.maxContextMessages)||30);
+    try{await saveConversation(messages.slice(1));}catch(e){info("Session could not be saved: "+e.message);}
   }
   success("Session ended.");
 }
