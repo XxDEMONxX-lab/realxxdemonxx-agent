@@ -19,7 +19,7 @@ function isPrivateAddress(address){
  }
  if(version===6){
   const host=address.toLowerCase();
-  if(host.startsWith("::ffff:"))return isPrivateAddress(host.slice(7));
+  if(host.startsWith("::ffff:"))return true;
   return host==="::"||host==="::1"||host.startsWith("fc")||host.startsWith("fd")||/^fe[89ab]/.test(host)||host.startsWith("ff");
  }
  return true;
