@@ -1,6 +1,6 @@
 # REALXXDEMONXX AGENT
 
-A Termux-first AI software engineering agent built with Node.js. It provides a polished terminal workspace, model-provider discovery, conversational coding assistance, project file tools, and approval-gated shell execution.
+A Termux-first AI software engineering agent built with Node.js. It provides a terminal workspace, searchable provider directory, model browser, saved favorites, conversational coding assistance, project file tools, and approval-gated shell execution.
 
 ## Install in Termux
 
@@ -14,16 +14,47 @@ npm start
 
 No native modules or heavy dependencies are required.
 
-## First launch
+## Provider Control Center
 
-1. Search for a provider such as `openrouter`.
-2. Select the number shown beside it.
-3. Enter your API key.
-4. Enter a model that is enabled for your account and supports chat completions. For coding, choose a model with tool/function calling support.
+On first launch, the agent opens a searchable provider manager.
 
-Settings are saved in `~/.realxxdemonxx-agent/config.json`. Keep this file private.
+- Search provider names and IDs.
+- Browse provider categories.
+- Move through paginated results.
+- Mark providers as favorites with `f <number>`.
+- Refresh the live directory with `r`.
+- See the active provider and endpoint.
+- Select a model from the provider's `/models` endpoint when available.
+- Fall back to the models.dev catalog or manually enter a model ID.
+- Save provider, endpoint, model, API key, and favorites locally.
 
-## Use
+The provider directory is discovered from models.dev, with built-in profiles for common providers and local endpoints. Its size changes as the directory changes; it is not a promise that every provider uses the same protocol.
+
+## Agent commands
+
+| Command | Action |
+| --- | --- |
+| `/providers` | Open provider search, categories and model selection |
+| `/models` | Browse models from the active provider |
+| `/model` | Enter a model ID manually |
+| `/provider` | Show active provider, endpoint and model |
+| `/favorites` | Show saved favorite providers |
+| `/test` | Test the current API connection |
+| `/maxsteps` | Change agent tool/reasoning step limit (1–30) |
+| `/status` | Show workspace and runtime settings |
+| `/clear` | Clear conversation context |
+| `/help` | Show commands and examples |
+| `/exit` | Close the agent |
+
+Provider and model changes are saved automatically in `~/.realxxdemonxx-agent/config.json`. Keep this file private because it contains your API key.
+
+## Coding features
+
+- Project file listing, reading and writing.
+- Shell execution after explicit approval.
+- Multi-step tool workflows and conversation context.
+- Visible model activity, tool execution and provider errors.
+- Configurable agent step limit.
 
 Start the agent from the root of the project you want it to work on:
 
@@ -32,34 +63,17 @@ cd ~/your-project
 node ~/realxxdemonxx-agent/index.js
 ```
 
-Try prompts such as:
-- `hi` — verifies the model connection and chat response.
-- `Inspect this project and explain its architecture.`
-- `Find and fix the bug in src/index.js, then run the relevant tests.`
-- `Add a clean help command to this CLI.`
+## API compatibility
 
-Commands: `/help`, `/clear`, `/provider`, `/status`, `/exit`.
-
-## Capabilities
-
-- Dynamic endpoint discovery from models.dev plus built-in profiles.
-- OpenAI-compatible chat completions.
-- Project file listing, reading, and writing.
-- Shell execution with explicit approval.
-- Visible model activity, tool execution, and errors.
-- Conversation context and multi-step tool workflows.
-
-The directory count is dynamic and is not a guarantee that every listed provider uses the same API protocol. This release uses OpenAI-compatible `/chat/completions`; providers with different protocols require dedicated adapters. Tool calling depends on the selected provider/model supporting it.
+This release sends OpenAI-compatible `/chat/completions` requests. The directory is for discovery, not a guarantee that every provider implements this API. Providers using Anthropic, Gemini, or another protocol need dedicated adapters. Tool calling also depends on provider/model support.
 
 ## Troubleshooting
 
-If the agent gives no response:
-1. Check the API key, endpoint and model in `~/.realxxdemonxx-agent/config.json`.
-2. Confirm that the model is enabled for your provider account.
-3. Use a model supporting chat completions. For coding tools, use one supporting tool/function calling.
-4. Update the project: `git pull`, then run `npm start`.
-
-If you get a provider HTTP error, the agent now prints the provider's error message instead of silently doing nothing.
+- Run `/test` to check the configured endpoint and model.
+- Run `/providers` to switch providers or re-enter credentials.
+- Run `/models` to browse the current provider's available models.
+- Use `/model` to enter an exact model ID manually.
+- If the directory is unavailable, built-in provider profiles remain available.
 
 ## Safety and limitations
 
