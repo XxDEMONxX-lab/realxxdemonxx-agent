@@ -43,4 +43,17 @@ test("Home and End move within the current chat line",()=>{
   assert.equal(lineStartIndex(value,10),6);
   assert.equal(lineEndIndex(value,10),12);
 });
-\nimport {validatePublicUrl} from "../src/research.js";\nimport {listMcpTools} from "../src/mcp.js";\n\ntest("web research accepts public HTTP URLs and rejects local targets",()=>{\n  assert.equal(validatePublicUrl("https://example.com").hostname,"example.com");\n  assert.throws(()=>validatePublicUrl("file:///etc/passwd"));\n  assert.throws(()=>validatePublicUrl("http://127.0.0.1"));\n  assert.throws(()=>validatePublicUrl("http://localhost"));\n});\n\ntest("MCP tool discovery safely handles an empty server list",async()=>{\n  assert.deepEqual(await listMcpTools({mcpServers:[]}),[]);\n});\n
+
+import {validatePublicUrl} from "../src/research.js";
+import {listMcpTools} from "../src/mcp.js";
+
+test("web research accepts public HTTP URLs and rejects local targets",()=>{
+  assert.equal(validatePublicUrl("https://example.com").hostname,"example.com");
+  assert.throws(()=>validatePublicUrl("file:///etc/passwd"));
+  assert.throws(()=>validatePublicUrl("http://127.0.0.1"));
+  assert.throws(()=>validatePublicUrl("http://localhost"));
+});
+
+test("MCP tool discovery safely handles an empty server list",async()=>{
+  assert.deepEqual(await listMcpTools({mcpServers:[]}),[]);
+});
