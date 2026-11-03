@@ -7,7 +7,8 @@ import { banner, say, closeInput, error } from "./src/ui.js";
 async function main() {
   banner();
   const config=await loadConfig();
-  const provider=PROVIDERS.find(p=>p.id===config.provider);\n  const supported=Boolean(provider);\n  if (provider) {\n    config.providerName=provider.name;\n    config.baseURL=provider.baseURL;\n  }
+  const provider=PROVIDERS.find(p=>p.id===config.provider);
+  const supported=Boolean(provider);\n  if (provider) {\n    config.providerName=provider.name;\n    config.baseURL=provider.baseURL;\n  }
   if (!supported || !config.apiKey || !config.model) {
     if (config.provider && !supported) {
       error("The saved provider is no longer supported in this simplified build. Please select one of the 8 supported providers.");
