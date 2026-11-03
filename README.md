@@ -56,6 +56,7 @@ Select **OpenRouter Auto** to use the OpenRouter `openrouter/auto` router. It us
 - Connect configured Model Context Protocol (MCP) stdio servers and expose their tools after explicit trust approval.
 - Create, list, and remove isolated Git worktrees under `.agent-worktrees`.
 - Route simple, complex, review, and debug tasks to separately configured model IDs.
+- Load repository-specific instructions from `AGENTS.md` and reusable `SKILL.md` files from project or user skill folders.
 - Delegate independent investigations to architect, debugger, security, test, research, performance, dependency, and documentation specialists.
 - Inspect tool results and continue working through multiple steps.
 - Show connection errors and suggestions rather than silently failing.
@@ -91,6 +92,7 @@ Planning, review, and debugging modes are available through `/plan`, `/review`, 
 | `/providers` | Switch provider and model |
 | `/models` | Browse models for current provider |
 | `/routing` | Configure simple, complex, review and debug models |
+| `/skills` | List available reusable skills |
 | `/web` | Toggle public web research |
 | `/mcp` | Add or remove MCP stdio servers |
 | `/fallback` | Configure up to five backup model IDs |
@@ -121,6 +123,8 @@ Run `npm test` for the built-in regression tests and `npm run check` for JavaScr
 Provider settings and API keys are stored in `~/.realxxdemonxx-agent/config.json` with owner-only file permissions. Do not share that file or your API key.
 
 MCP servers execute external programs and can access whatever those programs can access. Only configure servers you trust; server commands and arguments are stored in the local config. Public web results and MCP output are treated as untrusted data. URL checks block common local/private address forms but are not a substitute for a network sandbox.
+
+Place repository guidance in `AGENTS.md`. Reusable skills use `.agent/skills/<skill-name>/SKILL.md` inside a project or `~/.realxxdemonxx-agent/skills/<skill-name>/SKILL.md` globally; list them with `/skills`.
 
 AST inspection and semantic rename use the TypeScript compiler API when it is installed in the project. Install it only if needed with `npm install -D typescript` after reviewing the dependency.
 
