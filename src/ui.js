@@ -141,7 +141,7 @@ export async function runInteractiveCommand(command,cwd=process.cwd(),env=proces
  const wasDashboard=dashboard;
  if(wasDashboard){
   dashboard=false;
-  process.stdout.write("\\x1b[?25h\\x1b[?1049l");
+  process.stdout.write("\x1b[?25h\x1b[?1049l");
  }
  try{
   const code=await new Promise((resolve,reject)=>{
@@ -153,7 +153,7 @@ export async function runInteractiveCommand(command,cwd=process.cwd(),env=proces
   return "Exit code: "+code.exitCode;
  }finally{
   if(wasDashboard){
-   process.stdout.write("\\x1b[?1049h\\x1b[?25l");
+   process.stdout.write("\x1b[?1049h\x1b[?25l");
    dashboard=true;renderCache=null;drawDashboard();
   }
  }
