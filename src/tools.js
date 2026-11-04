@@ -257,7 +257,8 @@ export async function executeTool(name,args={},config={}) {
   }
   if(name==="project_profile"){if(config.permissions?.readFiles!==true&&(await ask("  Analyze project files and manifests? Type YES: ")).trim()!=="YES")return "User denied project profiling.";return await projectProfile(root);}
   if(name==="security_audit"){if(config.permissions?.readFiles!==true&&(await ask("  Scan project files for security indicators? Type YES: ")).trim()!=="YES")return "User denied security audit.";return await runSecurityAudit(root);}
-  if(name==="delegate_agent_team"){const task=String(args.task||"").trim();if(!task)throw new Error("Agent team task cannot be empty.");if(config.permissions?.readFiles!==true&&(await ask("  Allow up to four read-only specialist agents to inspect project files? Type YES: ")).trim()!=="YES")return "User denied agent team inspection.";const {runAgentTeam}=await import("./subagents.js");return await runAgentTeam(config,task,args.roles);}\n  if (name==="delegate_subagent") {
+  if(name==="delegate_agent_team"){const task=String(args.task||"").trim();if(!task)throw new Error("Agent team task cannot be empty.");if(config.permissions?.readFiles!==true&&(await ask("  Allow up to four read-only specialist agents to inspect project files? Type YES: ")).trim()!=="YES")return "User denied agent team inspection.";const {runAgentTeam}=await import("./subagents.js");return await runAgentTeam(config,task,args.roles);}
+  if (name==="delegate_subagent") {
     const task=String(args.task||"").trim();
     if(!task)throw new Error("Subagent task cannot be empty.");
     const role=["architect","debugger","security-reviewer","test-analyst","researcher","performance-analyst","dependency-analyst","documentation"].includes(args.role)?args.role:"architect";
