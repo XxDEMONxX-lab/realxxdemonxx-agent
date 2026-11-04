@@ -1,4 +1,4 @@
-import {spawn} from "node:child_process";
+import {spawn} from "node:child_process";\nimport {withHttpMcpServer} from "./mcp-http.js";
 
 const PROTOCOL="2024-11-05";
 const SAFE=/^[a-zA-Z0-9_-]{1,40}$/;
@@ -52,7 +52,7 @@ async function withServer(server,work){
  }
 }
 
-export async function listMcpTools(config){
+async function withServer(server,work){\n validateServer(server);\n if(server.transport==="http"||server.url)return await withHttpMcpServer(server,work);\n return await withStdioServer(server,work);\n}\n\nexport async function listMcpTools(config){
  const servers=config.mcpServers||[];
  const output=[];toolMap.clear();
  for(const server of servers){
