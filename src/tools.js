@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {classifyCommand} from "./core.js";
 import {searchWeb,researchUrl} from "./research.js";
-import { ask,editText,setDiffPanel,runInteractiveCommand } from "./ui.js";\nimport {runSecurityAudit,projectProfile} from "./security.js";
+import { ask,editText,setDiffPanel,runInteractiveCommand } from "./ui.js";
+import {runSecurityAudit,projectProfile} from "./security.js";
 
 const root=await fs.realpath(process.cwd());
 const ignored=new Set([".git","node_modules",".venv","venv","dist","build",".next",".realxxdemonxx-backups"]);
