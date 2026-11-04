@@ -145,7 +145,7 @@ export async function runAgent(config) {
         if(!raw||raw===ESC)continue;
         try {
           const server=JSON.parse(raw);
-          if(!/^[a-zA-Z0-9_-]{1,40}$/.test(server.name||"")||typeof server.command!=="string"||!server.command.trim()||!Array.isArray(server.args)||server.args.some(x=>typeof x!=="string")||server.args.length>40)throw new Error("Invalid server definition.");
+          const isHttp=server.transport==="http"||Boolean(server.url);if(!/^[a-zA-Z0-9_-]{1,40}$/.test(server.name||"")||(isHttp?typeof server.url!=="string"||!/^https?:\\/\\//i.test(server.url):typeof server.command!=="string"||!server.command.trim()||!Array.isArray(server.args)||server.args.some(x=>typeof x!=="string")||server.args.length>40))throw new Error("Invalid server definition. Use stdio {name,command,args} or HTTP {name,transport:\"http\",url,headers}.");
           if((await ask("  This starts an external program that may access files or services. Type TRUST to save: ")).trim()!=="TRUST")continue;
           config.mcpServers=config.mcpServers||[];
           config.mcpServers=config.mcpServers.filter(item=>item.name!==server.name);
