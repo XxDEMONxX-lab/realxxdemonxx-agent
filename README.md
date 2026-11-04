@@ -142,3 +142,21 @@ This is a terminal coding agent, not a full IDE. Choose a model that supports ch
 ## License
 
 MIT
+
+
+## Advanced agent features
+
+The current upgrade branch adds:
+
+- **Specialist teams:** `/agents` runs up to four parallel, read-only specialists for architecture, debugging, security, tests, performance, dependencies and documentation.
+- **Project profile:** `/profile` identifies common frameworks, package scripts, dependency counts and file types.
+- **Security audit:** `/security` scans source and manifests for likely exposed credentials and risky patterns. Findings are heuristic; credentials are redacted.
+- **MCP catalog:** `/mcp-catalog` lists starter configurations; `/mcp-add` adds one after explicit confirmation.
+- **MCP transports:** configured servers can use stdio or Streamable HTTP. HTTP entries use `{ "name": "remote", "transport": "http", "url": "https://host.example/mcp", "headers": {} }`.
+- **Workflow plans:** `/workflows` lists feature, bugfix, refactor, security, release, documentation, performance and test workflows. `/workflow` generates a gated checklist.
+
+### MCP environment variables
+
+MCP server arguments support `${NAME}` placeholders. Export secrets in Termux instead of writing them into the agent config. For example, PostgreSQL templates use `${POSTGRES_URL}`; set it in your shell before starting the agent. GitHub MCP can inherit `GITHUB_PERSONAL_ACCESS_TOKEN` from the environment.
+
+MCP servers execute third-party code and may access the resources granted to them. Review every server, its arguments, credentials and permissions before trusting it. Browser and database integrations still require their external runtimes and credentials.
