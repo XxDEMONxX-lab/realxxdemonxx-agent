@@ -6,13 +6,15 @@ const SAFE=/^[a-zA-Z0-9_-]{1,40}$/;
 const toolMap=new Map();
 
 function validateServer(server){
- if(!server||typeof server!=="object"||typeof server.command!=="string"||!server.command.trim())throw new Error("MCP server needs a command.");
+ if(!server||typeof server!=="object")throw new Error("Invalid MCP server configuration.");
+ if(server.transport==="http"||server.url){let url;try{url=new URL(server.url);}catch{throw new Error("HTTP MCP server requires a valid URL.");}if(!["http:","https:"].includes(url.protocol)||url.username||url.password)throw new Error("HTTP MCP URL must use http(s) without embedded credentials.");return server;}
+ if(typeof server.command!=="string"||!server.command.trim())throw new Error("MCP server needs a command.");
  if(!Array.isArray(server.args)||server.args.some(x=>typeof x!=="string")||server.args.length>40)throw new Error("MCP server args must be an array of strings (max 40).");
  if(server.env&&(!server.env||typeof server.env!=="object"||Array.isArray(server.env)))throw new Error("MCP environment must be an object.");
  return server;
 }
 
-async function withServer(server,work){
+async function withStdioServer(server,work){
  validateServer(server);
  const child=spawn(server.command,server.args,{stdio:["pipe","pipe","pipe"],shell:false,env:{...process.env,...Object.fromEntries(Object.entries(server.env||{}).filter(([k,v])=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)&&typeof v==="string"))}});
  let buffer="",nextId=0,stderr="";
@@ -23,8 +25,7 @@ async function withServer(server,work){
  child.stdout.on("data",chunk=>{
   buffer+=chunk.toString("utf8");
   let index;
-  while((index=buffer.indexOf("
-"))>=0){
+  while((index=buffer.indexOf("\n"))>=0){
    const line=buffer.slice(0,index).trim();buffer=buffer.slice(index+1);
    if(!line)continue;
    let packet;try{packet=JSON.parse(line);}catch{continue;}
@@ -36,8 +37,7 @@ async function withServer(server,work){
  });
  const request=(method,params={})=>new Promise((resolve,reject)=>{
   const id=++nextId;pending.set(id,{resolve,reject});
-  child.stdin.write(JSON.stringify({jsonrpc:"2.0",id,method,params})+"
-",error=>{if(error){pending.delete(id);reject(error);}});
+  child.stdin.write(JSON.stringify({jsonrpc:"2.0",id,method,params})+"\n",error=>{if(error){pending.delete(id);reject(error);}});
   const timer=setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(new Error("MCP request timed out: "+method));}},15000);
   const done=()=>clearTimeout(timer);
   const entry=pending.get(id);
@@ -45,8 +45,7 @@ async function withServer(server,work){
  });
  try{
   const initialized=await request("initialize",{protocolVersion:PROTOCOL,capabilities:{},clientInfo:{name:"realxxdemonxx-agent",version:"0.2.0"}});
-  child.stdin.write(JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized",params:{}})+"
-");
+  child.stdin.write(JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized",params:{}})+"\n");
   return await work({request,initialized});
  }finally{
   for(const entry of pending.values())entry.reject(new Error("MCP server closed."));
@@ -87,10 +86,8 @@ export async function callMcpTool(config,qualifiedName,args){
  if(!server)throw new Error("MCP server is not configured: "+mapped.serverName);
  return await withServer(server,async({request})=>{
   const result=await request("tools/call",{name:mapped.toolName,arguments:args||{}});
-  if(result?.isError)throw new Error((result.content||[]).map(item=>item.text||"").join("
-").slice(0,2000)||"MCP tool reported an error.");
+  if(result?.isError)throw new Error((result.content||[]).map(item=>item.text||"").join("\n").slice(0,2000)||"MCP tool reported an error.");
   const parts=(result?.content||[]).map(item=>item.type==="text"?item.text:item.type==="image"?"[Image content returned]":JSON.stringify(item));
-  return parts.join("
-").slice(0,16000)||JSON.stringify(result).slice(0,16000);
+  return parts.join("\n").slice(0,16000)||JSON.stringify(result).slice(0,16000);
  });
 }
