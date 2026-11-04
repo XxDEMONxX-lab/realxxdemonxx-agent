@@ -4,6 +4,7 @@ import {classifyCommand} from "./core.js";
 import {searchWeb,researchUrl} from "./research.js";
 import { ask,editText,setDiffPanel,runInteractiveCommand } from "./ui.js";
 import {runSecurityAudit,projectProfile} from "./security.js";
+import {buildWorkflowPlan} from "./workflows.js";
 
 const root=await fs.realpath(process.cwd());
 const ignored=new Set([".git","node_modules",".venv","venv","dist","build",".next",".realxxdemonxx-backups"]);
@@ -95,6 +96,7 @@ export const toolSchemas=[
  {type:"function",function:{name:"rename_symbol",description:"Use the TypeScript language service to find semantic references and preview a cross-file symbol rename. Requires explicit approval to apply.",parameters:{type:"object",properties:{file:{type:"string"},line:{type:"integer"},column:{type:"integer"},newName:{type:"string"}},required:["file","line","column","newName"]}}},
  {type:"function",function:{name:"project_profile",description:"Analyze project manifests, detected frameworks, scripts and file types without changing files.",parameters:{type:"object",properties:{},required:[]}}},
  {type:"function",function:{name:"security_audit",description:"Scan project text files for possible leaked credentials, risky code patterns and suspicious package scripts. Findings are heuristic and require manual verification.",parameters:{type:"object",properties:{},required:[]}}},
+ {type:"function",function:{name:"workflow_plan",description:"Generate a structured, safety-gated checklist for feature, bugfix, refactor, security, release, docs, performance or tests workflows.",parameters:{type:"object",properties:{workflow:{type:"string",enum:["feature","bugfix","refactor","security","release","docs","performance","tests"]},task:{type:"string"}},required:["workflow"]}}},
  {type:"function",function:{name:"delegate_agent_team",description:"Run up to four independent read-only specialist agents in parallel for an architecture, security, debugging or quality investigation.",parameters:{type:"object",properties:{task:{type:"string"},roles:{type:"array",items:{type:"string",enum:["architect","debugger","security-reviewer","test-analyst","performance-analyst","dependency-analyst","documentation"]}}},required:["task"]}}},
  {type:"function",function:{name:"delegate_subagent",description:"Delegate a focused read-only investigation to a specialist subagent. It cannot edit files or execute commands.",parameters:{type:"object",properties:{role:{type:"string",enum:["architect","debugger","security-reviewer","test-analyst","researcher","performance-analyst","dependency-analyst","documentation"]},task:{type:"string"}},required:["role","task"]}}},
  {type:"function",function:{name:"list_skills",description:"List reusable project and global SKILL.md instruction files.",parameters:{type:"object",properties:{},required:[]}}},
@@ -256,6 +258,7 @@ export async function executeTool(name,args={},config={}) {
     return await readSkill(args.name);
   }
   if(name==="project_profile"){if(config.permissions?.readFiles!==true&&(await ask("  Analyze project files and manifests? Type YES: ")).trim()!=="YES")return "User denied project profiling.";return await projectProfile(root);}
+  if(name==="workflow_plan"){const workflow=String(args.workflow||"");return buildWorkflowPlan(workflow,args.task||"");}
   if(name==="security_audit"){if(config.permissions?.readFiles!==true&&(await ask("  Scan project files for security indicators? Type YES: ")).trim()!=="YES")return "User denied security audit.";return await runSecurityAudit(root);}
   if(name==="delegate_agent_team"){const task=String(args.task||"").trim();if(!task)throw new Error("Agent team task cannot be empty.");if(config.permissions?.readFiles!==true&&(await ask("  Allow up to four read-only specialist agents to inspect project files? Type YES: ")).trim()!=="YES")return "User denied agent team inspection.";const {runAgentTeam}=await import("./subagents.js");return await runAgentTeam(config,task,args.roles);}
   if (name==="delegate_subagent") {
