@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node index.js",
-    "check": "node --check index.js && node --check src/core.js && node --check src/config.js && node --check src/ui.js && node --check src/agent.js && node --check src/providers.js && node --check src/tools.js && node --check src/workspace.js && node --check src/subagents.js && node --check src/security.js && node --check src/mcp-catalog.js && node --check src/mcp.js && node --check src/research.js && node --check src/git-worktree.js && node --check src/ast.js && node --check src/skills.js && node --check src/diagnostics.js && node --check test/core.test.js && node --check test/security.test.js",
+    "check": "node --check index.js && node --check src/core.js && node --check src/config.js && node --check src/ui.js && node --check src/agent.js && node --check src/providers.js && node --check src/tools.js && node --check src/workspace.js && node --check src/subagents.js && node --check src/security.js && node --check src/mcp-catalog.js && node --check src/mcp.js && node --check src/mcp-http.js && node --check src/research.js && node --check src/git-worktree.js && node --check src/ast.js && node --check src/skills.js && node --check src/diagnostics.js && node --check test/core.test.js && node --check test/security.test.js && node --check test/mcp-http.test.js",
     "test": "node --test"
   },
   "engines": {
