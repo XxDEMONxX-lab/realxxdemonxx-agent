@@ -16,7 +16,9 @@ function validateServer(server){
 
 async function withStdioServer(server,work){
  validateServer(server);
- const child=spawn(server.command,server.args,{stdio:["pipe","pipe","pipe"],shell:false,env:{...process.env,...Object.fromEntries(Object.entries(server.env||{}).filter(([k,v])=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)&&typeof v==="string"))}});
+ const env={...process.env,...Object.fromEntries(Object.entries(server.env||{}).filter(([k,v])=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)&&typeof v==="string"))};
+ const args=server.args.map(arg=>arg.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,(_,key)=>{const value=env[key];if(typeof value!=="string"||!value)throw new Error("MCP server requires environment variable "+key+".");return value;}));
+ const child=spawn(server.command,args,{stdio:["pipe","pipe","pipe"],shell:false,env});
  let buffer="",nextId=0,stderr="";
  const pending=new Map();
  child.on("error",error=>{for(const entry of pending.values())entry.reject(new Error("Could not start MCP server: "+error.message));pending.clear();});
