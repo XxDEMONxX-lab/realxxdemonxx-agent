@@ -1,4 +1,5 @@
-import {spawn} from "node:child_process";\nimport {withHttpMcpServer} from "./mcp-http.js";
+import {spawn} from "node:child_process";
+import {withHttpMcpServer} from "./mcp-http.js";
 
 const PROTOCOL="2024-11-05";
 const SAFE=/^[a-zA-Z0-9_-]{1,40}$/;
@@ -22,7 +23,8 @@ async function withServer(server,work){
  child.stdout.on("data",chunk=>{
   buffer+=chunk.toString("utf8");
   let index;
-  while((index=buffer.indexOf("\n"))>=0){
+  while((index=buffer.indexOf("
+"))>=0){
    const line=buffer.slice(0,index).trim();buffer=buffer.slice(index+1);
    if(!line)continue;
    let packet;try{packet=JSON.parse(line);}catch{continue;}
@@ -34,7 +36,8 @@ async function withServer(server,work){
  });
  const request=(method,params={})=>new Promise((resolve,reject)=>{
   const id=++nextId;pending.set(id,{resolve,reject});
-  child.stdin.write(JSON.stringify({jsonrpc:"2.0",id,method,params})+"\n",error=>{if(error){pending.delete(id);reject(error);}});
+  child.stdin.write(JSON.stringify({jsonrpc:"2.0",id,method,params})+"
+",error=>{if(error){pending.delete(id);reject(error);}});
   const timer=setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(new Error("MCP request timed out: "+method));}},15000);
   const done=()=>clearTimeout(timer);
   const entry=pending.get(id);
@@ -42,7 +45,8 @@ async function withServer(server,work){
  });
  try{
   const initialized=await request("initialize",{protocolVersion:PROTOCOL,capabilities:{},clientInfo:{name:"realxxdemonxx-agent",version:"0.2.0"}});
-  child.stdin.write(JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized",params:{}})+"\n");
+  child.stdin.write(JSON.stringify({jsonrpc:"2.0",method:"notifications/initialized",params:{}})+"
+");
   return await work({request,initialized});
  }finally{
   for(const entry of pending.values())entry.reject(new Error("MCP server closed."));
@@ -52,7 +56,13 @@ async function withServer(server,work){
  }
 }
 
-async function withServer(server,work){\n validateServer(server);\n if(server.transport==="http"||server.url)return await withHttpMcpServer(server,work);\n return await withStdioServer(server,work);\n}\n\nexport async function listMcpTools(config){
+async function withServer(server,work){
+ validateServer(server);
+ if(server.transport==="http"||server.url)return await withHttpMcpServer(server,work);
+ return await withStdioServer(server,work);
+}
+
+export async function listMcpTools(config){
  const servers=config.mcpServers||[];
  const output=[];toolMap.clear();
  for(const server of servers){
@@ -77,8 +87,10 @@ export async function callMcpTool(config,qualifiedName,args){
  if(!server)throw new Error("MCP server is not configured: "+mapped.serverName);
  return await withServer(server,async({request})=>{
   const result=await request("tools/call",{name:mapped.toolName,arguments:args||{}});
-  if(result?.isError)throw new Error((result.content||[]).map(item=>item.text||"").join("\n").slice(0,2000)||"MCP tool reported an error.");
+  if(result?.isError)throw new Error((result.content||[]).map(item=>item.text||"").join("
+").slice(0,2000)||"MCP tool reported an error.");
   const parts=(result?.content||[]).map(item=>item.type==="text"?item.text:item.type==="image"?"[Image content returned]":JSON.stringify(item));
-  return parts.join("\n").slice(0,16000)||JSON.stringify(result).slice(0,16000);
+  return parts.join("
+").slice(0,16000)||JSON.stringify(result).slice(0,16000);
  });
 }
