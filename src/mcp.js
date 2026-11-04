@@ -1,19 +1,24 @@
 import {spawn} from "node:child_process";
+import {withHttpMcpServer} from "./mcp-http.js";
 
 const PROTOCOL="2024-11-05";
 const SAFE=/^[a-zA-Z0-9_-]{1,40}$/;
 const toolMap=new Map();
 
 function validateServer(server){
- if(!server||typeof server!=="object"||typeof server.command!=="string"||!server.command.trim())throw new Error("MCP server needs a command.");
+ if(!server||typeof server!=="object")throw new Error("Invalid MCP server configuration.");
+ if(server.transport==="http"||server.url){let url;try{url=new URL(server.url);}catch{throw new Error("HTTP MCP server requires a valid URL.");}if(!["http:","https:"].includes(url.protocol)||url.username||url.password)throw new Error("HTTP MCP URL must use http(s) without embedded credentials.");return server;}
+ if(typeof server.command!=="string"||!server.command.trim())throw new Error("MCP server needs a command.");
  if(!Array.isArray(server.args)||server.args.some(x=>typeof x!=="string")||server.args.length>40)throw new Error("MCP server args must be an array of strings (max 40).");
  if(server.env&&(!server.env||typeof server.env!=="object"||Array.isArray(server.env)))throw new Error("MCP environment must be an object.");
  return server;
 }
 
-async function withServer(server,work){
+async function withStdioServer(server,work){
  validateServer(server);
- const child=spawn(server.command,server.args,{stdio:["pipe","pipe","pipe"],shell:false,env:{...process.env,...Object.fromEntries(Object.entries(server.env||{}).filter(([k,v])=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)&&typeof v==="string"))}});
+ const env={...process.env,...Object.fromEntries(Object.entries(server.env||{}).filter(([k,v])=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)&&typeof v==="string"))};
+ const args=server.args.map(arg=>arg.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,(_,key)=>{const value=env[key];if(typeof value!=="string"||!value)throw new Error("MCP server requires environment variable "+key+".");return value;}));
+ const child=spawn(server.command,args,{stdio:["pipe","pipe","pipe"],shell:false,env});
  let buffer="",nextId=0,stderr="";
  const pending=new Map();
  child.on("error",error=>{for(const entry of pending.values())entry.reject(new Error("Could not start MCP server: "+error.message));pending.clear();});
@@ -50,6 +55,12 @@ async function withServer(server,work){
   const killTimer=setTimeout(()=>child.kill("SIGTERM"),1200);
   child.once("exit",()=>clearTimeout(killTimer));
  }
+}
+
+async function withServer(server,work){
+ validateServer(server);
+ if(server.transport==="http"||server.url)return await withHttpMcpServer(server,work);
+ return await withStdioServer(server,work);
 }
 
 export async function listMcpTools(config){

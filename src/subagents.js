@@ -28,3 +28,15 @@ export async function runSubagent(config,role,task){
   }
   return "Subagent reached its investigation limit.";
 }
+
+
+const TEAM_ROLES=["architect","debugger","security-reviewer","test-analyst","performance-analyst","dependency-analyst","documentation"];
+export async function runAgentTeam(config,task,roles=TEAM_ROLES){
+ const selected=[...new Set((Array.isArray(roles)?roles:TEAM_ROLES).filter(role=>TEAM_ROLES.includes(role)))].slice(0,4);
+ if(!selected.length)throw new Error("Choose at least one supported specialist role.");
+ const results=await Promise.all(selected.map(async role=>{
+  try{return {role,status:"completed",findings:await runSubagent(config,role,String(task).slice(0,4000))};}
+  catch(error){return {role,status:"failed",findings:error.message};}
+ }));
+ return results.map(item=>"## "+item.role+" ["+item.status+"]\\n"+item.findings).join("\\n\\n").slice(0,24000);
+}
