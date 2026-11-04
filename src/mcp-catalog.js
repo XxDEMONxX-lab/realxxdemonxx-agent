@@ -8,7 +8,7 @@ export const MCP_CATALOG=[
  entry("playwright","Browser automation and UI testing","npx",["-y","@playwright/mcp"],["A supported browser installation or remote browser"]),
  entry("chrome-devtools","Chrome debugging, network and performance inspection","npx",["-y","chrome-devtools-mcp@latest"],["Chrome/Chromium browser environment"]),
  entry("sentry","Sentry issue and error investigation","npx",["-y","@sentry/mcp-server"],["Sentry authentication and project access"]),
- entry("postgres","PostgreSQL schema and query tools","npx",["-y","@modelcontextprotocol/server-postgres","postgresql://USER:PASSWORD@HOST:5432/DATABASE"],["Database URL; use a least-privilege account"]),
+ entry("postgres","PostgreSQL schema and query tools","npx",["-y","@modelcontextprotocol/server-postgres","${POSTGRES_URL}"],["Export POSTGRES_URL in Termux; use a least-privilege database account"]),
  entry("serena","Semantic code navigation and refactoring","uvx",["--from","git+https://github.com/oraios/serena","serena-mcp-server"],["Python uv/uvx and project configuration"],"Python/uv")
 ];
 export function listMcpCatalog(){
