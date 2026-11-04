@@ -84,7 +84,7 @@ export async function projectProfile(root=process.cwd()){
  let pkg={};try{pkg=JSON.parse(await fs.readFile(path.join(base,"package.json"),"utf8"));}catch{}
  const stack=[];
  if(pkg.name)stack.push("Node.js project: "+pkg.name);
- if(pkg.dependencies?.discord.js||pkg.devDependencies?.["discord.js"])stack.push("Discord.js");
+ if(pkg.dependencies?.["discord.js"]||pkg.devDependencies?.["discord.js"])stack.push("Discord.js");
  if(pkg.dependencies?.react||pkg.devDependencies?.react)stack.push("React");
  if(pkg.dependencies?.next||pkg.devDependencies?.next)stack.push("Next.js");
  if(pkg.dependencies?.typescript||pkg.devDependencies?.typescript)stack.push("TypeScript");
