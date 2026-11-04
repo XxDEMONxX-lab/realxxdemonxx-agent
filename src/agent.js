@@ -4,6 +4,7 @@ import {chatCompletion,configureProvider,chooseCurrentModel} from "./providers.j
 import {toolSchemas,executeTool,undoLastChange} from "./tools.js";
 import {listMcpTools} from "./mcp.js";
 import {listMcpCatalog,getMcpTemplate} from "./mcp-catalog.js";
+import {listWorkflows} from "./workflows.js";
 import {saveConfig} from "./config.js";
 import {readProjectMemory,writeProjectMemory,addTaskHistory,getTaskHistory,createCheckpoint,listCheckpoints,restoreCheckpoint,saveConversation,readConversation,clearConversation} from "./workspace.js";
 import {ask,say,withSpinner,showTool,agentText,promptLabel,section,info,success,error,chatReady,quickMenu,startTUI,streamToken,streamEnd,setTaskLabel,ESC} from "./ui.js";
@@ -45,6 +46,8 @@ const HELP=`REALXXDEMONXX AGENT — COMMANDS
   /restore    Restore a saved snapshot
   /undo       Restore the latest backed-up file
   /mcp       Configure external MCP tool servers\n  /mcp-catalog Browse supported MCP server templates\n  /mcp-add   Add an MCP server template\n  /agents    Run a parallel specialist investigation\n  /security  Scan project for potential security issues\n  /profile   Analyze project stack and structure
+  /workflows List built-in engineering workflows
+  /workflow  Generate a safety-gated workflow plan
   /web       Enable/disable public web research
   /status     Show workspace status
   /resume     Resume the last saved conversation
@@ -110,6 +113,8 @@ export async function runAgent(config) {
       info(descriptions[nextMode]);
       continue;
     }
+    if(command==="/workflows") {section("ENGINEERING WORKFLOWS");for(const item of listWorkflows())info(item.id+" · "+item.title);continue;}
+    if(command==="/workflow") {const name=(await ask("  Workflow (feature/bugfix/refactor/security/release/docs/performance/tests): ")).trim().toLowerCase();if(!name||name===ESC)continue;const task=(await ask("  Task description: ")).trim();if(task===ESC)continue;try{section("WORKFLOW PLAN");say(await executeTool("workflow_plan",{workflow:name,task},config));}catch(e){error(e.message);}continue;}
     if(command==="/profile") {try{section("PROJECT PROFILE");say(await executeTool("project_profile",{},config));}catch(e){error(e.message);}continue;}
     if(command==="/security") {try{section("SECURITY AUDIT");say(await executeTool("security_audit",{},config));}catch(e){error(e.message);}continue;}
     if(command==="/agents") {const task=(await ask("  Investigation task for specialist agents: ")).trim();if(!task||task===ESC)continue;try{section("SPECIALIST AGENT TEAM");say(await executeTool("delegate_agent_team",{task},config));}catch(e){error(e.message);}continue;}
