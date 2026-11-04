@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {clipAnsi,stripAnsi,classifyCommand,previousCursorIndex,nextCursorIndex,lineStartIndex,lineEndIndex} from "../src/core.js";
+import {runInteractiveCommand,editText} from "../src/ui.js";
 
 test("stripAnsi removes terminal color sequences",()=>{
   assert.equal(stripAnsi("\u001b[31mred\u001b[0m"),"red");
@@ -84,4 +85,14 @@ test("MCP stdio client initializes, discovers and calls a tool",async()=>{
   const tools=await listMcpTools(config);
   assert.equal(tools.length,1);
   assert.equal(await callMcpTool(config,tools[0].function.name,{value:"ping"}),"pong");
+});
+
+test("interactive terminal runner returns the real shell exit status",async()=>{
+  assert.equal(await runInteractiveCommand("exit 7",process.cwd()),"Exit code: 7");
+});
+
+test("editor reports unavailable when no interactive TTY exists",async()=>{
+  const result=await editText("preserve this text","test.txt");
+  assert.equal(result.saved,false);
+  assert.equal(result.content,"preserve this text");
 });
