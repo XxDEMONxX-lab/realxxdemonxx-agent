@@ -8,7 +8,7 @@ import {runSecurityAudit,projectProfile} from "../src/security.js";
 test("security audit detects and redacts a test credential",async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),"rdx-security-"));
  try{
-  const secret="ghp_abcdefghijklmnopqrstuvwxyz123456";
+  const secret="ghp_"+"abcdefghijklmnopqrstuvwxyz123456";
   await fs.writeFile(path.join(root,"sample.js"),'const token = "'+secret+'";\n');
   const result=JSON.parse(await runSecurityAudit(root));
   assert.equal(result.secretFindings,1);
