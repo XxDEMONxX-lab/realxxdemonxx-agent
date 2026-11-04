@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {classifyCommand} from "./core.js";
 import {searchWeb,researchUrl} from "./research.js";
-import { ask,editText,setDiffPanel } from "./ui.js";
+import { ask,editText,setDiffPanel,runInteractiveCommand } from "./ui.js";
 
 const root=await fs.realpath(process.cwd());
 const ignored=new Set([".git","node_modules",".venv","venv","dist","build",".next",".realxxdemonxx-backups"]);
@@ -316,14 +316,7 @@ export async function executeTool(name,args={},config={}) {
     const permissionLabel=risk==="destructive"?"destructive command":risk==="packageInstall"?"package installation":"terminal command";
     const approval=config.permissions?.[permissionKey]===true?"YES":(await ask(`  Approve ${permissionLabel}? Type YES: `)).trim();
     if (approval!=="YES") return "User denied command execution.";
-    const {execFile}=await import("node:child_process");
-    return await new Promise(resolve=>execFile("sh",["-lc",command],{
-      cwd:root,timeout:120000,maxBuffer:1024*1024,env:process.env
-    },(err,stdout,stderr)=>{
-      const code=err?(err.code??"unknown"):0;
-      const result=[stdout,stderr,`Exit code: ${code}`].filter(Boolean).join("\n");
-      resolve(result.slice(0,16000)||"(command completed with no output)");
-    }));
+    return await runInteractiveCommand(command,root,process.env);
   }
   throw new Error("Unknown tool: "+name);
 }
