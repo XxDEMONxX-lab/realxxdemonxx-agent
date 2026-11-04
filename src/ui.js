@@ -37,24 +37,29 @@ function drawDashboard(){
  const inputLines=inputValue.split("\n");
  const beforeLines=inputValue.slice(0,inputCursor).split("\n");
  const cursorLine=beforeLines.length-1;
- const firstVisibleLine=Math.max(0,Math.min(cursorLine,inputLines.length-2));
- const firstPrefixWidth=firstVisibleLine===0?5:3;
- const firstPrefix=firstVisibleLine===0?" "+bold(green("YOU"))+" "+violet("›")+" ":"   ";
- const secondPrefix="   ";
- const promptRowIndex=rows.length;
- const firstChars=Array.from(inputLines[firstVisibleLine]||"");
  const cursorChars=Array.from(beforeLines[beforeLines.length-1]||"");
- const firstOffset=cursorLine===firstVisibleLine?Math.max(0,cursorChars.length-Math.max(8,width-firstPrefixWidth-2)+1):0;
- rows.push(firstPrefix+firstChars.slice(firstOffset,firstOffset+Math.max(8,width-firstPrefixWidth-2)).join(""));
- if(inputLines.length>1)rows.push(secondPrefix+Array.from(inputLines[firstVisibleLine+1]||"").slice(0,Math.max(8,width-secondPrefix.length-2)).join(""));
  const matches=inputLines.length===1&&inputValue.startsWith("/")?COMMANDS.filter(x=>x.startsWith(inputValue)).slice(0,7):[];
+ const promptRowIndex=rows.length;
+ const availableInputRows=Math.max(1,Math.min(6,height-rows.length-1-(matches.length?1:0)));
+ const firstVisibleLine=Math.max(0,Math.min(cursorLine,inputLines.length-availableInputRows));
+ let cursorCol=5;
+ for(let lineIndex=firstVisibleLine;lineIndex<Math.min(inputLines.length,firstVisibleLine+availableInputRows);lineIndex++){
+  const isFirst=lineIndex===0;
+  const prefix=isFirst?" "+bold(green("YOU"))+" "+violet("›")+" ":"   ";
+  const prefixWidth=isFirst?5:3;
+  const chars=Array.from(inputLines[lineIndex]||"");
+  const lineCursor=lineIndex===cursorLine?cursorChars.length:0;
+  const offset=lineIndex===cursorLine?Math.max(0,lineCursor-Math.max(8,width-prefixWidth-2)+1):0;
+  rows.push(prefix+chars.slice(offset,offset+Math.max(8,width-prefixWidth-2)).join(""));
+  if(lineIndex===cursorLine)cursorCol=Math.min(width,prefixWidth+lineCursor-offset+1);
+ }
  if(matches.length)rows.push(" "+dim("COMMANDS  ")+matches.join("   "));
  rows.push(dim(" ↑↓ Navigate when input is empty   PgUp/PgDn Scroll   Enter Send   Tab Complete   Esc Back   Ctrl+P Palette"));
  while(rows.length<height)rows.push("");
  rows.length=height;
  if(!renderCache||renderCache.length!==height)renderCache=Array(height).fill(null);
  for(let i=0;i<height;i++){const next=clip(rows[i],width);if(renderCache[i]!==next){process.stdout.write("\x1b["+(i+1)+";1H"+next+"\x1b[K");renderCache[i]=next;}}
- const promptRow=promptRowIndex+1;const cursorRow=Math.min(height,promptRow+cursorLine-firstVisibleLine);const cursorPrefix=cursorLine===0?5:3;const cursorCol=Math.min(width,cursorPrefix+cursorChars.length-firstOffset+1);process.stdout.write("\x1b["+cursorRow+";"+cursorCol+"H\x1b[?25h");
+ const promptRow=promptRowIndex+1;const cursorRow=Math.min(height,promptRow+cursorLine-firstVisibleLine);process.stdout.write("\x1b["+cursorRow+";"+cursorCol+"H\x1b[?25h");
 }
 function captureConsole(){
  if(!tty||originalLog)return;
