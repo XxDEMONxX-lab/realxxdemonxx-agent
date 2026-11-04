@@ -1,4 +1,5 @@
 import readline from "node:readline";
+import {spawn} from "node:child_process";
 import {clipAnsi,previousCursorIndex,nextCursorIndex,lineStartIndex,lineEndIndex} from "./core.js";
 export const ESC="\u001b";
 const COMMANDS=["/help","/menu","/chat","/plan","/review","/debug","/files","/open","/edit","/editor","/terminal","/map","/skills","/pwd","/providers","/models","/routing","/web","/mcp","/skills","/fallback","/model","/provider","/test","/maxsteps","/settings","/limits","/usage","/memory","/history","/git","/diff","/run-tests","/diagnostics","/checkpoint","/checkpoints","/restore","/undo","/status","/resume","/clear","/exit"];
@@ -136,40 +137,87 @@ export async function quickMenu(){
   try{input.setRawMode(true);}catch{}draw();input.on("keypress",onKey);
  });
 }
+export async function runInteractiveCommand(command,cwd=process.cwd(),env=process.env){
+ const wasDashboard=dashboard;
+ if(wasDashboard){
+  dashboard=false;
+  process.stdout.write("\\x1b[?25h\\x1b[?1049l");
+ }
+ try{
+  const code=await new Promise((resolve,reject)=>{
+   const child=spawn("sh",["-lc",String(command)],{cwd,env,stdio:"inherit"});
+   child.once("error",reject);
+   child.once("close",(exitCode,signal)=>resolve({exitCode,signal}));
+  });
+  if(code.signal)return "Command terminated by signal "+code.signal+".";
+  return "Exit code: "+code.exitCode;
+ }finally{
+  if(wasDashboard){
+   process.stdout.write("\\x1b[?1049h\\x1b[?25l");
+   dashboard=true;renderCache=null;drawDashboard();
+  }
+ }
+}
 export async function editText(initial="",filename="untitled"){
  if(!tty)return {saved:false,content:initial};
  const input=process.stdin,wasDashboard=dashboard;
  const lines=String(initial).split("\n");
  let row=0,col=0,top=0,left=0,dirty=false,done=false;
  const width=Math.max(30,process.stdout.columns||80),height=Math.max(10,process.stdout.rows||24),visible=height-3;
+ const insert=value=>{
+  const chunks=String(value).replace(/\r\n?/g,"\n").split("\n");
+  const before=lines[row].slice(0,col),after=lines[row].slice(col);
+  if(chunks.length===1){lines[row]=before+chunks[0]+after;col+=chunks[0].length;}
+  else{lines.splice(row,1,before+chunks[0],...chunks.slice(1,-1),chunks[chunks.length-1]+after);row+=chunks.length-1;col=chunks[chunks.length-1].length;}
+  dirty=true;
+ };
  const render=()=>{
   process.stdout.write("\x1b[2J\x1b[H");
   process.stdout.write(bold(violet("EDITOR"))+"  "+filename+(dirty?yellowMark():"")+"\n");
-  if(row<top)top=row;if(row>=top+visible)top=row-visible+1;if(col<left)left=col;if(col>=left+width-6)left=col-width+7;
+  if(row<top)top=row;if(row>=top+visible)top=row-visible+1;
+  const displayWidth=Math.max(20,process.stdout.columns||width);
+  if(col<left)left=col;if(col>=left+displayWidth-8)left=col-displayWidth+9;
   for(let i=0;i<visible;i++){
    const line=lines[top+i];
-   process.stdout.write(line===undefined?"\n":String(i+top+1).padStart(3)+" "+line.slice(left,left+width-6)+"\n");
+   process.stdout.write(line===undefined?"\n":String(i+top+1).padStart(3)+" "+line.slice(left,left+displayWidth-6)+"\n");
   }
-  process.stdout.write(dim(" Ctrl+S Save   Ctrl+Q Cancel   Enter New line   Tab Indent"));
-  readline.cursorTo(process.stdout,Math.min(width-1,4+col-left),Math.min(visible,row-top)+1);
+  process.stdout.write(dim(" Ctrl+S Save   Ctrl+Q Cancel   Enter New line   Tab Indent   Paste supported"));
+  readline.cursorTo(process.stdout,Math.min(displayWidth-1,4+col-left),Math.min(visible,row-top)+1);
  };
  const yellowMark=()=>color("33"," *");
  return await new Promise(resolve=>{
-  const finish=result=>{if(done)return;done=true;input.removeListener("keypress",onKey);try{input.setRawMode(false);}catch{}dashboard=wasDashboard;if(dashboard){renderCache=null;drawDashboard();}else process.stdout.write("\x1b[?25h");resolve(result);};
+  const finish=result=>{
+   if(done)return;done=true;input.removeListener("keypress",onKey);
+   try{input.setRawMode(false);}catch{}
+   dashboard=wasDashboard;
+   if(dashboard){renderCache=null;drawDashboard();}
+   else process.stdout.write("\x1b[?25h");
+   resolve(result);
+  };
   const onKey=(str,key={})=>{
    if(key.ctrl&&key.name==="s"){finish({saved:true,content:lines.join("\n")});return;}
    if(key.ctrl&&key.name==="q"){finish({saved:false,content:lines.join("\n")});return;}
-   if(key.name==="left"){if(col>0)col--;else if(row>0){row--;col=lines[row].length;}}
-   else if(key.name==="right"){if(col<lines[row].length)col++;else if(row<lines.length-1){row++;col=0;}}
+   if(key.ctrl&&key.name==="c"){finish({saved:false,content:lines.join("\n")});return;}
+   if(key.name==="left"){if(col>0)col=previousCursorIndex(lines[row],col);else if(row>0){row--;col=lines[row].length;}}
+   else if(key.name==="right"){if(col<lines[row].length)col=nextCursorIndex(lines[row],col);else if(row<lines.length-1){row++;col=0;}}
    else if(key.name==="up"){if(row>0)row--;col=Math.min(col,lines[row].length);}
    else if(key.name==="down"){if(row<lines.length-1)row++;col=Math.min(col,lines[row].length);}
    else if(key.name==="home")col=0;
    else if(key.name==="end")col=lines[row].length;
-   else if(key.name==="backspace"){if(col>0){lines[row]=lines[row].slice(0,col-1)+lines[row].slice(col);col--;dirty=true;}else if(row>0){const previous=lines[row-1].length;lines[row-1]+=lines[row];lines.splice(row,1);row--;col=previous;dirty=true;}}
-   else if(key.name==="delete"){if(col<lines[row].length){lines[row]=lines[row].slice(0,col)+lines[row].slice(col+1);dirty=true;}else if(row<lines.length-1){lines[row]+=lines[row+1];lines.splice(row+1,1);dirty=true;}}
-   else if(key.name==="return"||key.name==="enter"){const rest=lines[row].slice(col);lines[row]=lines[row].slice(0,col);lines.splice(row+1,0,rest);row++;col=0;dirty=true;}
-   else if(key.name==="tab"){lines[row]=lines[row].slice(0,col)+"  "+lines[row].slice(col);col+=2;dirty=true;}
-   else if(str&&!key.ctrl&&!key.meta&&str.length===1&&str>=" "){lines[row]=lines[row].slice(0,col)+str+lines[row].slice(col);col++;dirty=true;}
+   else if(key.name==="backspace"){
+    if(col>0){const previous=previousCursorIndex(lines[row],col);lines[row]=lines[row].slice(0,previous)+lines[row].slice(col);col=previous;dirty=true;}
+    else if(row>0){const previous=lines[row-1].length;lines[row-1]+=lines[row];lines.splice(row,1);row--;col=previous;dirty=true;}
+   }
+   else if(key.name==="delete"){
+    if(col<lines[row].length){const next=nextCursorIndex(lines[row],col);lines[row]=lines[row].slice(0,col)+lines[row].slice(next);dirty=true;}
+    else if(row<lines.length-1){lines[row]+=lines[row+1];lines.splice(row+1,1);dirty=true;}
+   }
+   else if(key.name==="return"||key.name==="enter")insert("\n");
+   else if(key.name==="tab")insert("  ");
+   else if(str&&!key.ctrl&&!key.meta){
+    const clean=String(str).replace(/\r\n?/g,"\n").replace(/[^\P{Cc}\n\t]/gu,"");
+    if(clean)insert(clean);
+   }
    render();
   };
   dashboard=false;
