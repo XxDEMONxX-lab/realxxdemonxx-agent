@@ -36,36 +36,34 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 ## Commands
 | Command | Purpose |
 |---|---|
-| /providers | List configured providers |
+| /providers | List providers |
 | /provider ID | Select provider |
-| /key | Save API key without echoing it |
+| /key | Save hidden API key |
 | /models [all] | Discover models |
 | /model ID | Select model |
-| /base URL | Override current provider endpoint |
-| /custom | Add an OpenAI-compatible provider |
-| /fallback ID MODEL | Configure provider failover |
+| /base URL | Override endpoint |
+| /custom | Add compatible provider |
+| /fallback ID MODEL | Configure failover |
 | /fallbacks on or off | Toggle failover |
-| /status | Show active configuration |
-| /files | List project files |
+| /status | Show configuration |
+| /files, /read PATH | Inspect project |
 | /search QUERY | Search tracked and unignored project files |
-| /read PATH | Load a file into context |
+| /skills, /skill NAME | Discover and activate reusable skills |
+| /review | Review staged and unstaged Git changes |
 | /write PATH | Preview and write with approval |
 | /undo PATH | Restore the latest pre-write backup |
-| /agent TASK | Execute a coding task with approval gates |
-| /plan TASK | Create a plan without executing changes |
-| /review | Ask the model to review uncommitted Git changes |
+| /agent TASK | Execute approved coding actions |
+| /plan TASK | Show a plan without executing actions |
 | /run COMMAND | Execute a shell command with approval |
 | /test | Run npm test with approval |
-| /git status, diff, log --oneline -5, branch --show-current | Inspect Git state |
-| /skills | List discovered skills |
-| /skill NAME | Activate a reusable skill; bare /skill disables it |
-| /github auth, repo, prs, issues, pr-status | Read-only GitHub CLI operations (requires gh) |
-| /memory show, edit, clear | Manage persistent project notes |
+| /github auth, repo, prs, issues, pr-status | Read-only GitHub CLI queries |
+| /git status or /git diff | Git inspection |
+| /memory show, edit, clear | Persistent project notes |
 | /session save NAME | Save the current conversation |
 | /session load NAME | Restore a saved conversation |
 | /session list | List saved conversations |
 | /scroll up, down, bottom | Scroll the TUI transcript |
-| /clear | Clear conversation context |
+| /clear | Clear conversation |
 | /exit | Quit |
 
 ## Streaming and skills
