@@ -1,4 +1,4 @@
-# Demon Agent 3.0 ⚡
+# Demon Agent 3.1 ⚡
 
 Production-oriented Node.js multi-provider coding agent with a keyboard-driven full-screen TUI, native provider streaming, project symbol indexing, parallel analysis subagents, reusable skills, MCP tools, lifecycle hooks and transactional file edits. Supports Termux, Linux, macOS and Windows.
 
@@ -98,9 +98,9 @@ OpenAI-compatible providers, Anthropic, Gemini and Ollama stream response tokens
 GitHub read operations and CI inspection require the official `gh` CLI to be installed and authenticated. Write operations are explicit: `/github branch NAME`, `/github commit MESSAGE` (commits only files already staged by you), `/github push`, and `/github pr-create TITLE | BODY`. Each operation asks for confirmation. No command stages all files automatically. Review staged diffs before committing.
 
 ## TUI
-Full-screen alternate-screen interface with a continuously animated activity spinner, live streamed tokens, responsive provider sidebar, wrapped transcript, and terminal-resize redraws. Input is handled in raw terminal mode with cursor editing, Home/End, Delete/Backspace, command history (Up/Down), Ctrl+A/E/U/W editing shortcuts, Ctrl+K command palette, and Ctrl+C exit. Approval prompts use the same in-screen input editor; no readline prompt is drawn outside the UI. Transcript scrolling supports PageUp/PageDown, Ctrl+Up/Ctrl+Down (three-line steps), and `/scroll up`, `/scroll down`, `/scroll bottom`; the scroll offset is clamped to the available transcript and the status bar shows the current offset. Terminal state (raw mode, cursor visibility, alternate screen, signal handlers) is restored on shutdown. `NO_COLOR=1` disables prompt colors; terminal control sequences remain enabled.
+Full-screen alternate-screen interface with a continuously animated activity spinner, live streamed tokens, full-width wrapped transcript and live slash-command suggestions, and terminal-resize redraws. Input is handled in raw terminal mode with cursor editing, Home/End, Delete/Backspace, command history (Up/Down), Ctrl+A/E/U/W editing shortcuts, live `/` command menu with prefix filtering, Up/Down selection, Tab completion and Escape dismissal, Ctrl+K command palette, and Ctrl+C exit. Approval prompts use the same in-screen input editor; no readline prompt is drawn outside the UI. Transcript scrolling supports PageUp/PageDown, Ctrl+Up/Ctrl+Down (three-line steps), and `/scroll up`, `/scroll down`, `/scroll bottom`; the scroll offset is clamped to the available transcript and the status bar shows the current offset. Terminal state (raw mode, cursor visibility, alternate screen, signal handlers) is restored on shutdown. `NO_COLOR=1` disables prompt colors; terminal control sequences remain enabled.
 
-## Tests
+Typing `/` opens the command menu immediately; continue typing to filter commands. Use Up/Down to navigate all matches, Tab to complete the selected command, or Escape to dismiss suggestions. The chat transcript spans the terminal width and expands to use the available terminal height.\n\n## Tests
 ~~~sh
 npm test
 ~~~
