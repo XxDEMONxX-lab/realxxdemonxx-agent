@@ -49,7 +49,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /files, /read PATH | Inspect project |
 | /search QUERY | Search tracked and unignored project files |
 | /skills, /skill NAME | Discover and activate reusable skills |
-| /review | Review staged and unstaged Git changes |
+| /review | Review changes with the active model |\n| /review all | Run up to three independent model reviewers in parallel |
 | /write PATH | Preview and write with approval |
 | /undo PATH | Restore the latest pre-write backup |
 | /agent TASK | Execute approved coding actions |
