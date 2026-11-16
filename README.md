@@ -59,7 +59,6 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /skills, /skill NAME | Discover and activate reusable skills |
 | /review | Review changes with the active model |
 | /review all | Run up to three independent model reviewers in parallel |
-| /write PATH | Preview and write with approval |\n| /patch PATH | Model-proposed exact-context patches use SHA-256 compare-and-swap |
 | /undo PATH | Restore the latest pre-write backup |
 | /agent TASK | Execute approved coding actions |
 | /plan TASK | Show a plan without executing actions |
