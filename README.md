@@ -1,6 +1,6 @@
-# Demon Agent 2.3 ⚡
+# Demon Agent 2.4 ⚡
 
-Node.js-first animated full-screen terminal UI (TUI) coding agent with streamed model output, project search, reusable skills and code review for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
+Node.js-first animated full-screen terminal UI (TUI) coding agent with streamed model output, project search, reusable skills, code review and MCP tool support for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
 
 ## Termux install
 ~~~sh
@@ -65,6 +65,9 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /scroll up, down, bottom | Scroll the TUI transcript |
 | /clear | Clear conversation |
 | /exit | Quit |
+
+## MCP tool servers
+Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and argument array as JSON. Environment variables are not inherited by default; explicitly allowlist only required variable names when prompted. Use `/mcp tools ID` to discover tools, `/mcp list` to inspect configured servers, and `/mcp remove ID` to disconnect. Model-proposed MCP calls display their arguments and require per-call approval. Server output is treated as untrusted. Only the MCP tools/list and tools/call methods are currently supported.
 
 ## Streaming and skills
 OpenAI-compatible providers stream response tokens into the TUI. Other provider adapters currently use non-streaming responses. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
