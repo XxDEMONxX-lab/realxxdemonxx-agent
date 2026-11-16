@@ -24,7 +24,7 @@ class TUI {
   this.agent=agent;this.logs=["Welcome to Demon Agent 3.0. Type a message or /help."];
   this.maxLogs=500;this.status="READY";this.busy=false;this.frame=0;this.scroll=0;
   this.input="";this.cursor=0;this.prompt="";this.pending=null;this.history=[];this.historyIndex=0;this.savedInput="";
-  this.exitRequested=false;this.started=false;this.lastRender="";
+  this.exitRequested=false;this.started=false;this.lastRender="";this.streamOpen=false;
  }
  dimensions(){return {w:Math.max(40,process.stdout.columns||80),h:Math.max(12,process.stdout.rows||24)};}
  line(s,w){const raw=String(s),visible=strip(raw),body=visible.length>w-2?truncate(visible,w-2):raw;return "│"+body+" ".repeat(Math.max(0,w-2-strip(body).length))+"│";}
@@ -68,10 +68,17 @@ class TUI {
   process.stdout.write("\x1b[?25l\x1b[H\x1b[2J"+out.join("\n")+"\n");
  }
  stream(chunk){
-  const parts=String(chunk).split("\n");
+  const value=String(chunk);
+  // A streamed assistant response must never share the user prompt line.
+  if(!this.streamOpen){
+   if(this.logs.length&&this.logs[this.logs.length-1]!=="")this.logs.push("");
+   this.logs.push("DEMON");this.logs.push("");this.streamOpen=true;
+  }
+  const parts=value.split("\n");
   if(!this.logs.length)this.logs.push("");
   this.logs[this.logs.length-1]+=parts.shift();
   for(const part of parts)this.logs.push(part);
+  if(value.endsWith("\n"))this.streamOpen=false;
   if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
  }
  log(...args){
