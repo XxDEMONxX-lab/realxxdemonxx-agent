@@ -111,8 +111,6 @@ class TUI {
  }
  finishInput(value){
   if(!this.pending)return;
-  if(key?.name==="escape"&&this.input.startsWith("/")){this.input="";this.cursor=0;this.commandSelection=0;this.render();return;}
-  if(key?.name==="tab"&&this.commandMatches().length){this.completeCommand();this.render();return;}
   const pending=this.pending;this.pending=null;
   if(pending.remember&&value!==null&&value.trim()){
    this.history.push(value);if(this.history.length>100)this.history.shift();
@@ -121,6 +119,8 @@ class TUI {
  }
  onKeypress(str,key){
   if(!this.pending)return;
+  if(key?.name==="escape"&&this.input.startsWith("/")){this.input="";this.cursor=0;this.commandSelection=0;this.render();return;}
+  if(key?.name==="tab"&&this.commandMatches().length){this.completeCommand();this.render();return;}
   if(key?.ctrl){
    if(key.name==="c"){this.exitRequested=true;this.finishInput(null);return;}
    if(key.name==="d"){this.exitRequested=true;this.finishInput(null);return;}
