@@ -250,7 +250,7 @@ class Agent{
   if(!matches.length){console.log("No matching commands");break;}
   matches.forEach((x,i)=>console.log((i+1)+". "+x));
   const selected=await this.ask("Select number or command: ");
-  const command=/^\\d+$/.test(selected)?matches[Number(selected)-1]:selected;
+  const command=/^\d+$/.test(selected)?matches[Number(selected)-1]:selected;
   if(!command||!matches.includes(command))throw Error("Invalid palette selection");
   const extra=await this.ask("Arguments (blank for none): ");
   await this.command(command+(extra?" "+extra:""));
