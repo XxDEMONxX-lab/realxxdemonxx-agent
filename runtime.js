@@ -21,6 +21,37 @@ async function completion(id,model,msg,c){const p=provider(id,c),k=key(p,c);let 
  if(p.kind==="gemini"){if(!k)throw Error("API key missing");const contents=msg.filter(x=>x.role!=="system").map(x=>({role:x.role==="assistant"?"model":"user",parts:[{text:x.content}]})),system=msg.filter(x=>x.role==="system").map(x=>x.content).join("\n");d=await req(p.url+"/models/"+encodeURIComponent(model)+":generateContent?key="+encodeURIComponent(k),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contents,systemInstruction:{parts:[{text:system}]},generationConfig:{temperature:.2}})});const t=d.candidates?.[0]?.content?.parts?.map(x=>x.text||"").join("");if(!t)throw Error("No Gemini text");return t;}
  if(p.kind==="ollama"){d=await req(p.url+"/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({model,messages:msg,stream:false})});if(typeof d.message?.content!=="string")throw Error("Bad Ollama response");return d.message.content;}
  if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2})});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
+async function completionStream(id,model,msg,c,onToken){
+ const p=provider(id,c),k=key(p,c);
+ if(p.kind!=="openai")throw Error("Streaming is currently supported for OpenAI-compatible providers");
+ if(!k)throw Error("API key missing");
+ const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),120000);
+ let responseText="";
+ try{
+  const r=await fetch(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k,Accept:"text/event-stream"},body:JSON.stringify({model,messages:msg,temperature:.2,stream:true}),signal:ac.signal});
+  if(!r.ok){const body=await r.text();throw Error("HTTP "+r.status+": "+body.slice(0,500));}
+  if(!r.body)throw Error("Streaming response body unavailable");
+  const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
+  while(true){
+   const {value,done}=await reader.read();if(done)break;
+   buffer+=decoder.decode(value,{stream:true});
+   let cut;
+   while((cut=buffer.indexOf("\n"))>=0){
+    const line=buffer.slice(0,cut).trim();buffer=buffer.slice(cut+1);
+    if(!line.startsWith("data:"))continue;
+    const data=line.slice(5).trim();if(!data||data==="[DONE]")continue;
+    let event;try{event=JSON.parse(data);}catch{continue;}
+    const delta=event.choices?.[0]?.delta?.content;
+    if(typeof delta==="string"&&delta){responseText+=delta;onToken(delta);}
+    else if(Array.isArray(delta)){for(const part of delta)if(typeof part.text==="string"){responseText+=part.text;onToken(part.text);}}
+   }
+  }
+  buffer+=decoder.decode();
+  if(!responseText)throw Error("Streaming provider returned no text");
+  return responseText;
+ }catch(e){if(e.name==="AbortError")throw Error("Streaming request timed out");throw e;}
+ finally{clearTimeout(tm);}
+}
 function safe(raw){if(!raw)throw Error("Relative path required");const f=path.resolve(ROOT,raw),rel=path.relative(ROOT,f);if(rel===".."||rel.startsWith(".."+path.sep)||path.isAbsolute(rel))throw Error("Path outside project");let cur=ROOT;for(const x of rel.split(path.sep)){cur=path.join(cur,x);try{const r=path.relative(ROOT,fs.realpathSync(cur));if(r===".."||r.startsWith(".."+path.sep)||path.isAbsolute(r))throw Error("Symlink outside project");}catch(e){if(e.code!=="ENOENT")throw e;}}return f;}
 function readFile(p){const f=safe(p),s=fs.statSync(f);if(!s.isFile()||s.size>200000)throw Error("Not a file or over 200KB");return fs.readFileSync(f,"utf8");}
 function listFiles(){const out=[],skip=new Set([".git","node_modules",".venv","venv","__pycache__",".demon"]);function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){if(skip.has(e.name)||e.isSymbolicLink())continue;const f=path.join(d,e.name);if(e.isDirectory())walk(f);else if(e.isFile())out.push(path.relative(ROOT,f));if(out.length>=250)return;}}walk(ROOT);return out.sort();}
@@ -43,7 +74,7 @@ class Agent{
  async secret(){if(!stdin.isTTY)throw Error("Interactive terminal required");const {execSync}=require("node:child_process");stdout.write("API key (hidden): ");const old=execSync("stty -g",{stdio:["inherit","pipe","ignore"]}).toString().trim();try{execSync("stty -echo",{stdio:"inherit"});const v=await this.rl.question("");stdout.write("\n");return v.trim();}finally{execSync("stty "+old,{stdio:"inherit"});}}
  async fetchModels(id){const s=new Spinner("Fetching models · "+id);s.start();try{const m=await models(id,this.c);s.stop(color(m.length+" models found","g"));m.slice(0,200).forEach(x=>console.log("  "+x));if(id===this.c.provider&&m.length&&!this.c.model){this.c.model=m[0];save(this.c);console.log("Auto-selected "+m[0]);}}catch(e){s.stop(color(id+": "+e.message,"red"));}}
  async askModel(prompt,agent){if(!this.c.model){console.log("Select model first: /models");return;}const loaded=Array.from(this.ctx,([p,s])=>"\n--- "+p+" ---\n"+s).join("\n"),sys=SYSTEM+skillPrompt(this.skills.filter(x=>x.name===this.activeSkill))+(this.memory?"\nProject memory:\n"+this.memory:"")+(loaded?"\nLoaded files:\n"+loaded:""),msgs=[{role:"system",content:sys},...this.hist.slice(-16),{role:"user",content:prompt}],ids=[this.c.provider,...(this.c.autoFallback?this.c.fallbacks:[])];let answer,used;
- for(const id of [...new Set(ids)]){const model=id===this.c.provider?this.c.model:this.c.fallbackModels[id],sp=new Spinner("Thinking · "+id);sp.start();try{if(!model)throw Error("Fallback model not configured");answer=await completion(id,model,msgs,this.c);used=id;sp.stop(color("Response ready · "+id,"g"));break;}catch(e){sp.stop(color(id+" failed: "+e.message,"y"));}}
+ for(const id of [...new Set(ids)]){const model=id===this.c.provider?this.c.model:this.c.fallbackModels[id],sp=new Spinner("Thinking · "+id);sp.start();try{if(!model)throw Error("Fallback model not configured");const selected=provider(id,this.c);answer=selected.kind==="openai"?await completionStream(id,model,msgs,this.c,chunk=>{if(this.onStream)this.onStream(chunk);else stdout.write(chunk);}):await completion(id,model,msgs,this.c);if(selected.kind==="openai"&&!this.onStream)stdout.write("\n");used=id;sp.stop(color("Response ready · "+id,"g"));break;}catch(e){sp.stop(color(id+" failed: "+e.message,"y"));}}
  if(answer===undefined){console.log(color("All providers failed","red"));return;}if(used!==this.c.provider)console.log("Fallback used: "+used);
  if(agent){let x;try{x=parse(answer);}catch(e){console.log(e.message+"\n"+answer);return;}console.log("\n"+color(x.message,"c"));await this.apply(x.actions);}else console.log("\n"+answer);
  this.hist.push({role:"user",content:prompt},{role:"assistant",content:answer});this.hist=this.hist.slice(-32);if(this.sessionName)saveSession(this.sessionName,this.hist);}
@@ -79,4 +110,4 @@ class Agent{
  async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
 const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /search QUERY /skills /skill NAME /review /read PATH /write PATH\n/agent TASK /run COMMAND /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
-module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview};
+module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream};
