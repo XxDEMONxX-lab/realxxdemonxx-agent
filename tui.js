@@ -2,15 +2,15 @@
 
 const ANSI=/\x1b\[[0-?]*[ -/]*[@-~]/g;
 const strip=s=>String(s).replace(ANSI,"");
-const truncate=(s,n)=>{s=String(s);return s.length>n?s.slice(0,Math.max(0,n-1))+"…":s;};
+const truncate=(s,n)=>{s=strip(s);return s.length>n?s.slice(0,Math.max(0,n-1))+"…":s;};
 const wrap=(value,width)=>{
- const out=[];
+ const out=[],limit=Math.max(1,width|0);
  for(const raw of String(value).split("\n")){
   let line="";
-  for(let word of raw.split(/\s+/)){
+  for(let word of strip(raw).split(/\s+/)){
    if(!word)continue;
-   if(line&&strip(line+" "+word).length>width){out.push(line);line="";}
-   while(strip(word).length>width){out.push(word.slice(0,width));word=word.slice(width);}
+   if(line&&line.length+1+word.length>limit){out.push(line);line="";}
+   while(word.length>limit){if(line){out.push(line);line="";}out.push(word.slice(0,limit));word=word.slice(limit);}
    line+=(line?" ":"")+word;
   }
   out.push(line);
@@ -18,54 +18,74 @@ const wrap=(value,width)=>{
  return out;
 };
 class TUI {
- constructor(agent){this.agent=agent;this.logs=["Welcome to Demon Agent. Type a message or /help."];this.maxLogs=500;this.status="READY";this.busy=false;}
+ constructor(agent){
+  this.agent=agent;this.logs=["Welcome to Demon Agent. Type a message or /help."];
+  this.maxLogs=500;this.status="READY";this.busy=false;this.frame=0;this.scroll=0;
+  this.frames=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+ }
  dimensions(){return {w:Math.max(40,process.stdout.columns||80),h:Math.max(12,process.stdout.rows||24)};}
  line(s,w){return "│"+truncate(s,w-2).padEnd(w-2)+"│";}
  render(){
-  const {w,h}=this.dimensions(),small=w<72,left=small?0:Math.max(22,Math.min(29,Math.floor(w*.27))),right=small?w:w-left-1;
+  const {w,h}=this.dimensions(),small=w<76,left=small?0:Math.max(22,Math.min(30,Math.floor(w*.27))),right=small?w:w-left-1;
   const out=[],top="╭"+"─".repeat(w-2)+"╮",mid="├"+"─".repeat(w-2)+"┤",bottom="╰"+"─".repeat(w-2)+"╯";
-  out.push(top,this.line(" ◈ DEMON AGENT 2.1 · NODE TUI ⚡",w),mid);
+  out.push(top,this.line(" ◈ DEMON AGENT 3.0 · NODE TUI ⚡",w),mid);
   const rows=Math.max(4,h-9),side=[];
   if(!small){
    side.push(" PROVIDERS");
    const ids=["openai","openrouter","groq","together","cerebras","deepseek","mistral","fireworks","xai","sambanova","perplexity","anthropic","gemini","ollama",...Object.keys(this.agent.c.custom||{})];
    for(const id of ids){const active=id===this.agent.c.provider;side.push((active?" ❯ ":"   ")+id+(active?"  ●":""));}
-   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","/help  commands","/models discover","/agent  code task","/clear  reset chat");
+   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ input history","/help commands","/models discover","/agent coding task","/clear reset chat");
   }
-  const chat=this.logs.slice(-rows);
+  const chat=[];
+  for(const log of this.logs)chat.push(...wrap(log,small?w-4:right-4));
+  const end=Math.max(0,chat.length-this.scroll),start=Math.max(0,end-rows),visible=chat.slice(start,end);
   for(let i=0;i<rows;i++){
-   const message=chat[i]||"";
-   if(small)out.push(this.line(message,w));
-   else out.push("│"+truncate(side[i]||"",left-2).padEnd(left-2)+"│ "+truncate(message,right-1).padEnd(right-1)+"│");
+   const message=visible[i]||"";
+   if(small)out.push(this.line(" "+message,w));
+   else out.push("│"+truncate(side[i]||"",left-2).padEnd(left-2)+"│ "+truncate(message,right-4).padEnd(right-4)+" │");
   }
-  out.push(mid,this.line(" "+(this.busy?"◌ WORKING":"● "+this.status)+"  │  "+this.agent.c.provider+" / "+(this.agent.c.model||"choose model"),w));
-  out.push(this.line(" Enter send · / commands · Ctrl+C exit · NO_COLOR=1 disables color",w),bottom);
-  process.stdout.write("\x1b[2J\x1b[H"+out.join("\n")+"\n");
+  out.push(mid,this.line(" "+(this.busy?this.frames[this.frame%this.frames.length]+" WORKING":"● "+this.status)+"  │  "+this.agent.c.provider+" / "+(this.agent.c.model||"choose model")+"  │  "+(this.scroll?"SCROLL":"LIVE"),w));
+  out.push(this.line(" Enter send · /scroll up|down · /commands · Ctrl+C exit",w),bottom);
+  process.stdout.write("\x1b[?25l\x1b[2J\x1b[H"+out.join("\n")+"\n\x1b[?25h");
  }
- log(...args){const s=args.map(x=>typeof x==="string"?x:(x instanceof Error?x.stack||x.message:JSON.stringify(x))).join(" ");this.logs.push(...s.split("\n"));if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);}
+ log(...args){
+  const s=args.map(x=>typeof x==="string"?x:(x instanceof Error?x.stack||x.message:JSON.stringify(x))).join(" ");
+  this.logs.push(...s.split("\n"));
+  if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
+  if(!this.scroll)this.scroll=0;
+ }
  async start(){
-  const a=this.agent,originalLog=console.log,originalError=console.error;
+  const a=this.agent,originalLog=console.log,originalError=console.error,oldDemonTui=process.env.DEMON_TUI;
   if(!process.stdin.isTTY||!process.stdout.isTTY){originalLog("Demon Agent TUI needs an interactive terminal. Launch it directly in Termux.");a.rl.close();return;}
   console.log=(...x)=>this.log(...x);console.error=(...x)=>this.log(...x);
   process.env.DEMON_TUI="1";
+  let animation=null;
+  const redraw=()=>{if(this.busy){this.frame++;this.render();}};
+  const onResize=()=>this.render();
   const sig=()=>{this.status="STOPPING";this.render();a.rl.close();process.exitCode=130;};
-  process.once("SIGINT",sig);
+  process.once("SIGINT",sig);process.stdout.on("resize",onResize);
   try{
    let live=true;
    while(live){
     this.busy=false;this.status="READY";this.render();
     const input=await a.ask("\x1b[36m❯\x1b[0m ");
     if(!input)continue;
-    this.log("\x1b[36m❯ "+input+"\x1b[0m");this.busy=true;this.status="PROCESSING";
-    try{if(input.startsWith("/agent "))await a.askModel(input.slice(7).trim(),true);else if(input.startsWith("/"))live=await a.command(input);else await a.askModel(input,false);}
-    catch(e){this.log("\x1b[31m"+e.message+"\x1b[0m");}
-    finally{this.busy=false;}
+    this.log("❯ "+input);this.busy=true;this.status="PROCESSING";animation=setInterval(redraw,100);
+    try{
+     if(input.startsWith("/agent "))await a.askModel(input.slice(7).trim(),true);
+     else if(input.startsWith("/"))live=await a.command(input);
+     else await a.askModel(input,false);
+    }catch(e){this.log("ERROR: "+(e?.message||String(e)));}
+    finally{this.busy=false;if(animation){clearInterval(animation);animation=null;}this.render();}
    }
   }finally{
-   console.log=originalLog;console.error=originalError;process.removeListener("SIGINT",sig);
+   if(animation)clearInterval(animation);
+   console.log=originalLog;console.error=originalError;
+   process.removeListener("SIGINT",sig);process.stdout.removeListener("resize",onResize);
+   if(oldDemonTui===undefined)delete process.env.DEMON_TUI;else process.env.DEMON_TUI=oldDemonTui;
    if(!a.rl.closed)a.rl.close();
    process.stdout.write("\x1b[0m\x1b[?25h\n");originalLog("Demon Agent closed.");
   }
  }
 }
-module.exports={TUI,wrap,truncate};
+module.exports={TUI,wrap,truncate,strip};
