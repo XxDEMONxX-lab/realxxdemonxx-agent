@@ -17,6 +17,9 @@ const wrap=(value,width)=>{
  }
  return out;
 };
+const COMMANDS=[
+ ["/help","Show every command"],["/palette","Open command search"],["/providers","List AI providers"],["/provider","Select provider"],["/key","Configure API key"],["/models","Discover available models"],["/model","Select model"],["/base","Set provider base URL"],["/custom","Add custom provider"],["/fallback","Configure provider fallback"],["/fallbacks","Toggle provider fallback"],["/status","Show agent configuration"],["/files","List project files"],["/search","Search project source"],["/symbols","Find code symbols"],["/diagnose","Diagnose project"],["/verify","Check syntax and tests"],["/subagents","Run parallel analysis"],["/skills","List installed skills"],["/skill","Activate a skill"],["/review","Review project changes"],["/read","Read a project file"],["/write","Write a project file"],["/run","Run command with approval"],["/test","Run test suite"],["/agent","Run a coding task"],["/plan","Plan a coding task"],["/hook","Manage lifecycle hooks"],["/mcp","Manage MCP servers"],["/github","GitHub operations"],["/git","Inspect Git state"],["/memory","Manage project memory"],["/session","Manage sessions"],["/undo","Restore a file backup"],["/scroll","Scroll conversation"],["/clear","Clear conversation"],["/exit","Exit Demon Agent"],["/quit","Exit Demon Agent"]
+];
 const SPIN=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
 const BAR=["▰▱▱▱▱▱▱▱","▰▰▱▱▱▱▱▱","▰▰▰▱▱▱▱▱","▰▰▰▰▱▱▱▱","▰▰▰▰▰▱▱▱","▰▰▰▰▰▰▱▱","▰▰▰▰▰▰▰▱","▰▰▰▰▰▰▰▰","▱▰▰▰▰▰▰▰","▱▱▰▰▰▰▰▰","▱▱▱▰▰▰▰▰","▱▱▱▱▰▰▰▰","▱▱▱▱▱▰▰▰","▱▱▱▱▱▱▰▰","▱▱▱▱▱▱▱▰","▱▱▱▱▱▱▱▱"];
 class TUI {
@@ -24,7 +27,7 @@ class TUI {
   this.agent=agent;this.logs=["Welcome to Demon Agent 3.0. Type a message or /help."];
   this.maxLogs=500;this.status="READY";this.busy=false;this.frame=0;this.scroll=0;this.maxScroll=0;this.viewportRows=3;
   this.input="";this.cursor=0;this.prompt="";this.pending=null;this.history=[];this.historyIndex=0;this.savedInput="";
-  this.exitRequested=false;this.started=false;this.lastRender="";this.streamOpen=false;
+  this.exitRequested=false;this.started=false;this.lastRender="";this.streamOpen=false;this.commandSelection=0;
  }
  dimensions(){return {w:Math.max(40,process.stdout.columns||80),h:Math.max(12,process.stdout.rows||24)};}
  line(s,w){const raw=String(s),visible=strip(raw),body=visible.length>w-2?truncate(visible,w-2):raw;return "│"+body+" ".repeat(Math.max(0,w-2-strip(body).length))+"│";}
@@ -33,42 +36,42 @@ class TUI {
   if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
   if(!this.scroll)this.scroll=0;
  }
+ commandMatches(){
+  if(!this.input.startsWith("/")||this.input.includes(" "))return [];
+  const query=this.input.slice(1).toLowerCase();
+  return COMMANDS.filter(([name])=>name.slice(1).startsWith(query)).slice(0,7);
+ }
+ completeCommand(){
+  const matches=this.commandMatches();if(!matches.length)return false;
+  this.input=matches[Math.min(this.commandSelection,matches.length-1)][0]+" ";
+  this.cursor=this.input.length;this.commandSelection=0;return true;
+ }
  render(){
-  const {w,h}=this.dimensions(),small=w<76,left=small?0:Math.max(22,Math.min(30,Math.floor(w*.27))),right=small?w:w-left-1;
-  const out=[],top="╭"+"─".repeat(w-2)+"╮",mid="├"+"─".repeat(w-2)+"┤",bottom="╰"+"─".repeat(w-2)+"╯";
-  const model=truncate(this.agent.c.model||"choose model",small?w-28:right-4);
-  out.push(top,this.line(" ◈ DEMON AGENT 3.0  ⚡  "+(this.busy?"LIVE":"READY"),w),mid);
-  const rows=Math.max(3,h-10),side=[];
-  if(!small){
-   side.push(" PROVIDERS");
-   const ids=["openai","openrouter","groq","together","cerebras","deepseek","mistral","fireworks","xai","sambanova","perplexity","anthropic","gemini","ollama",...Object.keys(this.agent.c.custom||{})];
-   for(const id of ids){const active=id===this.agent.c.provider;side.push((active?" ❯ ":"   ")+id+(active?"  ●":""));}
-   side.push(""," MODEL",model,""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ history","Ctrl+K commands","/search code","/agent task");
-  }
-  const chat=[];
-  for(const log of this.logs)chat.push(...wrap(log,small?w-4:right-4));
-  this.viewportRows=rows;
-  this.maxScroll=Math.max(0,chat.length-rows);
+  const {w,h}=this.dimensions(),out=[];
+  const top="╭"+"─".repeat(w-2)+"╮",mid="├"+"─".repeat(w-2)+"┤",bottom="╰"+"─".repeat(w-2)+"╯";
+  const model=truncate(this.agent.c.model||"choose model",Math.max(12,w-38));
+  out.push(top,this.line(" ◈ DEMON AGENT 3.1  ⚡  FULL SCREEN  │  "+(this.busy?"WORKING":"READY"),w));
+  out.push(this.line(" "+this.agent.c.provider+" / "+model+"  │  "+truncate(process.cwd(),Math.max(12,w-30)),w),mid);
+  const matches=this.commandMatches(),menuRows=matches.length?matches.length+1:0;
+  const rows=Math.max(2,h-7-menuRows),chat=[];
+  for(const log of this.logs)chat.push(...wrap(log,w-4));
+  this.viewportRows=rows;this.maxScroll=Math.max(0,chat.length-rows);
   this.scroll=Math.max(0,Math.min(this.scroll,this.maxScroll));
-  const end=Math.max(0,chat.length-this.scroll),start=Math.max(0,end-rows),visible=chat.slice(start,end);
-  for(let i=0;i<rows;i++){
-   const message=visible[i]||"";
-   if(small)out.push(this.line(" "+message,w));
-   else out.push("│"+truncate(side[i]||"",left-2).padEnd(left-2)+"│ "+truncate(message,right-2).padEnd(right-2)+" │");
+  const end=Math.max(0,chat.length-this.scroll),visible=chat.slice(Math.max(0,end-rows),end);
+  for(let i=0;i<rows;i++)out.push(this.line(" "+(visible[i]||""),w));
+  if(matches.length){
+   out.push(mid,this.line(" COMMANDS  ·  ↑/↓ select  ·  Tab complete  ·  Esc close",w));
+   matches.forEach(([name,desc],i)=>out.push(this.line((i===this.commandSelection?" ❯ ":"   ")+name.padEnd(19)+" "+desc,w)));
   }
   out.push(mid);
   const activity=this.busy?SPIN[this.frame%SPIN.length]+" "+this.status:"● "+this.status;
-  out.push(this.line(" "+activity+"  │  "+this.agent.c.provider+" / "+model+"  │  "+(this.scroll?"SCROLL ↑↓ "+this.scroll+"/"+this.maxScroll:"LIVE"),w));
-  const prompt=truncate(this.prompt||"MESSAGE",8);
-  const available=Math.max(1,w-7);
-  let visibleInput=this.input;
-  let cursor=this.cursor;
-  if(visibleInput.length>available){const start=Math.max(0,Math.min(visibleInput.length-available,cursor-available+1));visibleInput=visibleInput.slice(start,start+available);cursor-=start;}
-  const before=visibleInput.slice(0,cursor),at=visibleInput[cursor]||" ";
-  const inputLine=" "+prompt+" ❯ "+before+"\x1b[7m"+at+"\x1b[0m"+visibleInput.slice(cursor+1);
-  out.push(this.line(inputLine,w));
-  out.push(this.line(" Enter send · ↑/↓ history · PgUp/PgDn scroll · Ctrl+K palette · Ctrl+C exit",w),bottom);
-  process.stdout.write("\x1b[?25l\x1b[H\x1b[2J"+out.join("\n")+"\n");
+  out.push(this.line(" "+activity+"  │  "+(this.scroll?"SCROLL "+this.scroll+"/"+this.maxScroll:"LATEST")+"  │  Ctrl+K commands",w));
+  const prompt=truncate(this.prompt||"MESSAGE",8),available=Math.max(1,w-14);
+  let value=this.input,cursor=this.cursor;
+  if(value.length>available){const offset=Math.max(0,Math.min(value.length-available,cursor-available+1));value=value.slice(offset,offset+available);cursor-=offset;}
+  out.push(this.line(" "+prompt+" ❯ "+value.slice(0,cursor)+"\\x1b[7m"+(value[cursor]||" ")+"\\x1b[0m"+value.slice(cursor+1),w));
+  out.push(this.line(" Enter send/run  ·  ↑/↓ history  ·  PgUp/PgDn scroll  ·  Ctrl+C exit",w),bottom);
+  process.stdout.write("\\x1b[?25l\\x1b[H\\x1b[2J"+out.join("\\n")+"\\n");
  }
  beginStream(){
   // Stream chunks belong to one response, even when a chunk ends with a newline.
@@ -108,6 +111,8 @@ class TUI {
  }
  finishInput(value){
   if(!this.pending)return;
+  if(key?.name==="escape"&&this.input.startsWith("/")){this.input="";this.cursor=0;this.commandSelection=0;this.render();return;}
+  if(key?.name==="tab"&&this.commandMatches().length){this.completeCommand();this.render();return;}
   const pending=this.pending;this.pending=null;
   if(pending.remember&&value!==null&&value.trim()){
    this.history.push(value);if(this.history.length>100)this.history.shift();
@@ -139,9 +144,11 @@ class TUI {
    case "home":if(key?.ctrl){this.scroll=this.maxScroll;this.render();return;}this.cursor=0;break;
    case "end":if(key?.ctrl){this.scrollToBottom();return;}this.cursor=this.input.length;break;
    case "up":
+    if(this.commandMatches().length){this.commandSelection=(this.commandSelection+this.commandMatches().length-1)%this.commandMatches().length;this.render();return;}
     if(key?.shift){this.scrollBy(Math.max(1,this.viewportRows-2));return;}
     if(this.history.length){if(this.historyIndex===this.history.length)this.savedInput=this.input;this.historyIndex=Math.max(0,this.historyIndex-1);this.input=this.history[this.historyIndex];this.cursor=this.input.length;}break;
    case "down":
+    if(this.commandMatches().length){this.commandSelection=(this.commandSelection+1)%this.commandMatches().length;this.render();return;}
     if(key?.shift){this.scrollBy(-Math.max(1,this.viewportRows-2));return;}
     if(this.historyIndex<this.history.length-1){this.historyIndex++;this.input=this.history[this.historyIndex];}
     else if(this.historyIndex===this.history.length-1){this.historyIndex=this.history.length;this.input=this.savedInput;}
@@ -199,4 +206,4 @@ class TUI {
   }
  }
 }
-module.exports={TUI,wrap,truncate,strip,SPIN,BAR};
+module.exports={TUI,wrap,truncate,strip,SPIN,BAR,COMMANDS};
