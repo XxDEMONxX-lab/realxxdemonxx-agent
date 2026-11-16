@@ -161,7 +161,7 @@ class Agent{
   if(!this.c.model){console.log("Select the main model first: /models then /model MODEL_ID");return;}
   const selected=provider(this.c.provider,this.c);
   if(selected.kind!=="ollama"&&!key(selected,this.c)){console.log("Main model API key missing. Configure it with /provider "+this.c.provider+" then /key.");return;}
-  const messages=[{role:"system",content:"You are Demon Agent task router. Classify the latest user request. Return ONLY JSON: {\\"type\\":\\"coding\\"} or {\\"type\\":\\"chat\\"}. Use coding ONLY when the user asks to create, modify, debug, refactor, test, or otherwise perform a concrete change to source code or a software project. Questions, explanations, brainstorming, general knowledge, greetings, and requests for coding advice are chat, not coding. Never execute or propose actions."},{role:"user",content:"Task:\\n"+prompt}];
+  const messages=[{role:"system",content:"You are Demon Agent task router. Classify the latest user request. Return ONLY JSON: {\\"type\\":\\"coding\\"} or {\\"type\\":\\"chat\\"}. Use coding ONLY when the user asks to create, modify, debug, refactor, test, or otherwise perform a concrete change to source code or a software project. Questions, explanations, brainstorming, general knowledge, greetings, and requests for coding advice are chat, not coding. Never execute or propose actions."},{role:"user",content:"Task:\n"+prompt}];
   let type="chat";
   try{type=classifyTask(await completion(this.c.provider,this.c.model,messages,this.c));}
   catch(error){console.log(color("Task classification unavailable; safely treating this as normal chat: "+error.message,"y"));}
@@ -170,7 +170,7 @@ class Agent{
   const mode=this.c.mode;this.c.mode="normal";
   try{await this.askModel(prompt,false);}
   finally{this.c.mode=mode;}
-  console.log(color("\\nReminder: Give me a concrete coding task when you want the five-AI coding team to work on your project.","y"));
+  console.log(color("\nReminder: Give me a concrete coding task when you want the five-AI coding team to work on your project.","y"));
  }
  async askCodingModels(prompt){
   const selected=validateCodingModels(this.c.codingModels,this.c),manifest=listFiles();
