@@ -27,6 +27,7 @@ async function readSSE(response,kind,onToken,state){
  const handle=data=>{
   if(data==="[DONE]"){finished=true;return;}
   let event;try{event=JSON.parse(data);}catch{return;}
+  if(event.error)throw Error(event.error.message||String(event.error));
   if(kind==="openai"){
    const delta=event.choices?.[0]?.delta?.content;
    if(typeof delta==="string")emitText(delta,onToken,state);
@@ -42,12 +43,12 @@ async function readSSE(response,kind,onToken,state){
   while(!finished){
    const {value,done}=await reader.read();if(done)break;
    buffer+=decoder.decode(value,{stream:true});
-   if(buffer.length>MAX_EVENT)throw Error("Streaming event exceeds 1MiB");
    buffer=parseSSE(buffer,handle);
+   if(buffer.length>MAX_EVENT)throw Error("Streaming event exceeds 1MiB");
   }
   buffer+=decoder.decode();
   if(buffer.trim())parseSSE(buffer+"\n\n",handle);
- }finally{try{reader.releaseLock();}catch{}}
+ }finally{try{await reader.cancel();}catch{}try{reader.releaseLock();}catch{}}
 }
 
 async function readOllama(response,onToken,state){
@@ -56,7 +57,6 @@ async function readOllama(response,onToken,state){
   while(true){
    const {value,done}=await reader.read();if(done)break;
    buffer+=decoder.decode(value,{stream:true});
-   if(buffer.length>MAX_EVENT)throw Error("Streaming event exceeds 1MiB");
    let index;
    while((index=buffer.indexOf("\n"))>=0){
     const line=buffer.slice(0,index).trim();buffer=buffer.slice(index+1);
@@ -66,6 +66,7 @@ async function readOllama(response,onToken,state){
     if(item.error)throw Error(String(item.error));
     if(item.done) return;
    }
+   if(buffer.length>MAX_EVENT)throw Error("Streaming event exceeds 1MiB");
   }
   buffer+=decoder.decode();
   if(buffer.trim()){
