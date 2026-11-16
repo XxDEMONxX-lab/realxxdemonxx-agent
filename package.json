@@ -1,0 +1,14 @@
+{
+  "name": "demon-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Termux-friendly multi-provider AI coding agent",
+  "main": "start.js",
+  "scripts": {
+    "start": "node start.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT"
+}
