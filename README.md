@@ -98,7 +98,7 @@ OpenAI-compatible providers, Anthropic, Gemini and Ollama stream response tokens
 GitHub read operations and CI inspection require the official `gh` CLI to be installed and authenticated. Write operations are explicit: `/github branch NAME`, `/github commit MESSAGE` (commits only files already staged by you), `/github push`, and `/github pr-create TITLE | BODY`. Each operation asks for confirmation. No command stages all files automatically. Review staged diffs before committing.
 
 ## TUI
-Responsive provider sidebar, wrapped transcript, live activity indicator, terminal-resize handling, searchable command palette (`Ctrl+K` or `/palette`), and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
+Full-screen alternate-screen interface with a continuously animated activity spinner, live streamed tokens, responsive provider sidebar, wrapped transcript, and terminal-resize redraws. Input is handled in raw terminal mode with cursor editing, Home/End, Delete/Backspace, command history (Up/Down), Ctrl+A/E/U/W editing shortcuts, Ctrl+K command palette, and Ctrl+C exit. Approval prompts use the same in-screen input editor; no readline prompt is drawn outside the UI. Transcript scrolling is available with `/scroll up`, `/scroll down`, and `/scroll bottom`. Terminal state (raw mode, cursor visibility, alternate screen, signal handlers) is restored on shutdown. `NO_COLOR=1` disables prompt colors; terminal control sequences remain enabled.
 
 ## Tests
 ~~~sh
