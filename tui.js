@@ -48,16 +48,16 @@ class TUI {
   out.push(this.line(" Enter send · /scroll up|down · /commands · Ctrl+C exit",w),bottom);
   process.stdout.write("\x1b[?25l\x1b[2J\x1b[H"+out.join("\n")+"\n\x1b[?25h");
  }
- log(...args){
+ stream(chunk){const parts=String(chunk).split("\n");if(!this.logs.length)this.logs.push("");this.logs[this.logs.length-1]+=parts.shift();for(const part of parts)this.logs.push(part);if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);}\n log(...args){
   const s=args.map(x=>typeof x==="string"?x:(x instanceof Error?x.stack||x.message:JSON.stringify(x))).join(" ");
   this.logs.push(...s.split("\n"));
   if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
   if(!this.scroll)this.scroll=0;
  }
  async start(){
-  const a=this.agent,originalLog=console.log,originalError=console.error,oldDemonTui=process.env.DEMON_TUI;
+  const a=this.agent,originalLog=console.log,originalError=console.error,originalStream=a.onStream,oldDemonTui=process.env.DEMON_TUI;
   if(!process.stdin.isTTY||!process.stdout.isTTY){originalLog("Demon Agent TUI needs an interactive terminal. Launch it directly in Termux.");a.rl.close();return;}
-  console.log=(...x)=>this.log(...x);console.error=(...x)=>this.log(...x);
+  console.log=(...x)=>this.log(...x);console.error=(...x)=>this.log(...x);a.onStream=chunk=>this.stream(chunk);
   process.env.DEMON_TUI="1";
   let animation=null;
   const redraw=()=>{if(this.busy){this.frame++;this.render();}};
@@ -80,7 +80,7 @@ class TUI {
    }
   }finally{
    if(animation)clearInterval(animation);
-   console.log=originalLog;console.error=originalError;
+   console.log=originalLog;console.error=originalError;a.onStream=originalStream;
    process.removeListener("SIGINT",sig);process.stdout.removeListener("resize",onResize);
    if(oldDemonTui===undefined)delete process.env.DEMON_TUI;else process.env.DEMON_TUI=oldDemonTui;
    if(!a.rl.closed)a.rl.close();
