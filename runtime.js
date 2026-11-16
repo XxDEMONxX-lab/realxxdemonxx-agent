@@ -102,8 +102,9 @@ class Agent{
    if(!id)throw Error("Use /mcp add ID");
    const command=await this.ask("Executable (e.g. npx): ");
    const raw=await this.ask('Arguments as JSON array (e.g. ["-y","package"]): ');
-   let args;try{args=JSON.parse(raw);}catch{throw Error("Arguments must be valid JSON");}
-   this.c.mcpServers[id]=validateServer(id,{command,args});save(this.c);console.log("MCP server saved: "+id);
+   const envRaw=await this.ask("Environment variable allowlist JSON array (optional): ");
+   let args,envAllow=[];try{args=JSON.parse(raw);if(envRaw)envAllow=JSON.parse(envRaw);}catch{throw Error("Arguments and environment allowlist must be valid JSON");}
+   this.c.mcpServers[id]=validateServer(id,{command,args,envAllow});save(this.c);console.log("MCP server saved: "+id);
   }else if(action==="remove"){
    if(!id||!this.c.mcpServers[id])throw Error("Unknown MCP server");
    delete this.c.mcpServers[id];delete this.mcpTools[id];save(this.c);console.log("MCP server removed");
