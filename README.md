@@ -26,7 +26,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 ~~~text
 /agent inspect this project, find a bug, fix it and run relevant tests
 ~~~
-The model can list/read files and propose writes or shell commands. Every write and command requires approval. Iterate by asking it to inspect, patch, then test. Review all changes. This is not an OS-level sandbox.
+The model can list/read files and propose writes or shell commands. Every write and command requires approval. Proposed writes show a Git-based diff preview. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Iterate by asking it to inspect, patch, then test. Review all changes. This is not an OS-level sandbox.
 
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
@@ -47,7 +47,8 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /fallbacks on or off | Toggle failover |
 | /status | Configuration |
 | /files, /read PATH | Inspect project |
-| /write PATH | Write with approval |
+| /write PATH | Preview and write with approval |
+| /undo PATH | Restore the latest pre-write backup |
 | /agent TASK | Coding workflow |
 | /run COMMAND | Execute with approval |
 | /git status or /git diff | Git inspection |
