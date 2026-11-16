@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {TUI,wrap,truncate,strip,SPIN}=require("../tui");
+const {TUI,wrap,truncate,strip,SPIN,COMMANDS}=require("../tui");
 
 function makeTui(){
  const agent={c:{provider:"openrouter",model:"test-model",custom:{}},rl:{closed:false,close(){this.closed=true;}},ask:async()=>"",command:async()=>true};
@@ -108,5 +108,27 @@ test("Ctrl+Home and Ctrl+End jump to transcript extremes",async()=>{
  const p=ui.readLine("MESSAGE");
  ui.onKeypress("",{name:"home",ctrl:true});assert.equal(ui.scroll,25);
  ui.onKeypress("",{name:"end",ctrl:true});assert.equal(ui.scroll,0);
+ ui.finishInput("");await p;
+});
+
+test("slash command menu filters known commands and completes selection",async()=>{
+ const ui=makeTui(),p=ui.readLine("MESSAGE");
+ ui.onKeypress("/",{name:"/"});
+ assert.ok(ui.commandMatches().length>=30);
+ ui.onKeypress("s",{name:"s"});
+ assert.deepEqual(ui.commandMatches().map(x=>x[0]).slice(0,3),["/search","/symbols","/status"]);
+ ui.onKeypress("",{name:"down"});
+ assert.equal(ui.commandSelection,1);
+ ui.onKeypress("",{name:"tab"});
+ assert.equal(ui.input,"/symbols ");
+ assert.equal(COMMANDS.some(x=>x[0]==="/verify"),true);
+ ui.finishInput("");await p;
+});
+test("Escape closes slash command suggestions",async()=>{
+ const ui=makeTui(),p=ui.readLine("MESSAGE");
+ ui.onKeypress("/",{name:"/"});
+ assert.ok(ui.commandMatches().length);
+ ui.onKeypress("",{name:"escape"});
+ assert.equal(ui.input,"");assert.equal(ui.commandMatches().length,0);
  ui.finishInput("");await p;
 });
