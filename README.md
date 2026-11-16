@@ -59,6 +59,8 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /mcp add ID | Configure an MCP stdio server |
 | /mcp tools ID | Discover its tools |
 | /mcp list or remove ID | Manage configured MCP servers |
+| /hook add EVENT | Configure a lifecycle hook |
+| /hook list or remove EVENT | Manage lifecycle hooks |
 | /github auth, repo, prs, issues, pr-status | Read-only GitHub CLI queries |
 | /git status or /git diff | Git inspection |
 | /memory show, edit, clear | Persistent project notes |
@@ -68,6 +70,10 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /scroll up, down, bottom | Scroll the TUI transcript |
 | /clear | Clear conversation |
 | /exit | Quit |
+
+## Lifecycle hooks
+
+Optional hooks run before or after file writes and shell commands: `before_write`, `after_write`, `before_run`, and `after_run`. Configure them with `/hook add EVENT`; each hook uses an executable plus a JSON argument array and an optional environment-variable allowlist. Every hook invocation requires its own approval. A failed or denied `before_*` hook blocks the operation; an `after_*` hook reports its result after the operation. Hooks run without a shell and do not inherit provider API keys by default.
 
 ## MCP tool servers
 Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and argument array as JSON, then optionally provide a JSON array of environment-variable names to allow through (for example, `["GITHUB_TOKEN"]`). Provider API keys and the rest of the Termux environment are not inherited by default. Values are read from the process environment and are not copied into the agent config.
