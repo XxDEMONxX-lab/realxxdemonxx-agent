@@ -46,9 +46,9 @@ class Agent{
  case "key":{const p=provider(this.c.provider,this.c);if(p.kind==="ollama")break;const k=await this.secret();if(k){this.c.keys[this.c.provider]=k;save(this.c);console.log("Key saved");}break;}
  case "models":if(arg==="all"){for(const id of [...Object.keys(P),...Object.keys(this.c.custom)])await this.fetchModels(id);}else await this.fetchModels(this.c.provider);break;
  case "model":this.c.model=arg;save(this.c);console.log("Model "+arg);break;
- case "base":if(!/^https?:\\/\\//i.test(arg))throw Error("Use /base https://host/v1");this.c.baseUrls[this.c.provider]=arg;save(this.c);break;
- case "custom":{const id=(await this.ask("Provider ID: ")).toLowerCase(),name=await this.ask("Name: "),url=await this.ask("Base URL: "),env=await this.ask("Key env var (optional): ");if(!/^[a-z0-9_-]+$/.test(id)||P[id]||!name||!/^https?:\\/\\//i.test(url))throw Error("Invalid custom provider");this.c.custom[id]={name,url,env};this.c.provider=id;this.c.model="";save(this.c);break;}
- case "fallback":{const [id,m]=arg.split(/\\s+/,2);provider(id,this.c);this.c.fallbacks=[...new Set([...this.c.fallbacks,id])];if(m)this.c.fallbackModels[id]=m;save(this.c);break;}
+ case "base":if(!/^https?:\/\//i.test(arg))throw Error("Use /base https://host/v1");this.c.baseUrls[this.c.provider]=arg;save(this.c);break;
+ case "custom":{const id=(await this.ask("Provider ID: ")).toLowerCase(),name=await this.ask("Name: "),url=await this.ask("Base URL: "),env=await this.ask("Key env var (optional): ");if(!/^[a-z0-9_-]+$/.test(id)||P[id]||!name||!/^https?:\/\//i.test(url))throw Error("Invalid custom provider");this.c.custom[id]={name,url,env};this.c.provider=id;this.c.model="";save(this.c);break;}
+ case "fallback":{const [id,m]=arg.split(/\s+/,2);provider(id,this.c);this.c.fallbacks=[...new Set([...this.c.fallbacks,id])];if(m)this.c.fallbackModels[id]=m;save(this.c);break;}
  case "fallbacks":this.c.autoFallback=arg!=="off";save(this.c);break;
  case "status":console.log("Provider: "+this.c.provider+"\nModel: "+(this.c.model||"none")+"\nFallbacks: "+this.c.fallbacks.join(", ")+"\nProject: "+ROOT+"\nMemory: "+(this.memory?"loaded":"empty"));break;
  case "files":console.log(listFiles().join("\n"));break;
