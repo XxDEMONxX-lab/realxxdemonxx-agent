@@ -57,7 +57,7 @@ test("Ctrl+C cancels the active prompt and requests shutdown",async()=>{
  assert.equal(await p,null);assert.equal(ui.exitRequested,true);
 });
 test("streams partial tokens into the transcript without losing line boundaries",()=>{
- const ui=makeTui();ui.stream("hello ");ui.stream("world\nnext");
+ const ui=makeTui();ui.logs=[];ui.stream("hello ");ui.stream("world\nnext");
  assert.deepEqual(ui.logs.slice(-2),["hello world","next"]);
 });
 test("rejects concurrent input prompts",async()=>{
