@@ -28,7 +28,7 @@ class TUI {
  render(){
   const {w,h}=this.dimensions(),small=w<76,left=small?0:Math.max(22,Math.min(30,Math.floor(w*.27))),right=small?w:w-left-1;
   const out=[],top="╭"+"─".repeat(w-2)+"╮",mid="├"+"─".repeat(w-2)+"┤",bottom="╰"+"─".repeat(w-2)+"╯";
-  out.push(top,this.line(" ◈ DEMON AGENT 2.5 · NODE TUI ⚡",w),mid);
+  out.push(top,this.line(" ◈ DEMON AGENT 3.0 · NODE TUI ⚡",w),mid);
   const rows=Math.max(4,h-9),side=[];
   if(!small){
    side.push(" PROVIDERS");
