@@ -38,8 +38,9 @@ function contextSnapshot(context,maxChars=120000){
   const entries=Array.from(context.entries()).reverse(),parts=[];let remaining=maxChars;
   for(const [file,content] of entries){
     if(remaining<=0)break;
-    const header="\n--- "+file+" ---\n",body=String(content).slice(0,remaining);
-    parts.push(header+body);remaining-=header.length+body.length;
+    const header=("\n--- "+file+" ---\n").slice(0,remaining);
+    const body=String(content).slice(0,Math.max(0,remaining-header.length));
+    const part=header+body;parts.push(part);remaining-=part.length;
   }
   return parts.reverse().join("\n");
 }
