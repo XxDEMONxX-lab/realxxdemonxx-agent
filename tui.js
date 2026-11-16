@@ -22,7 +22,7 @@ const BAR=["▰▱▱▱▱▱▱▱","▰▰▱▱▱▱▱▱","▰▰▰▱�
 class TUI {
  constructor(agent){
   this.agent=agent;this.logs=["Welcome to Demon Agent 3.0. Type a message or /help."];
-  this.maxLogs=500;this.status="READY";this.busy=false;this.frame=0;this.scroll=0;
+  this.maxLogs=500;this.status="READY";this.busy=false;this.frame=0;this.scroll=0;this.maxScroll=0;this.viewportRows=3;
   this.input="";this.cursor=0;this.prompt="";this.pending=null;this.history=[];this.historyIndex=0;this.savedInput="";
   this.exitRequested=false;this.started=false;this.lastRender="";this.streamOpen=false;
  }
@@ -47,6 +47,9 @@ class TUI {
   }
   const chat=[];
   for(const log of this.logs)chat.push(...wrap(log,small?w-4:right-4));
+  this.viewportRows=rows;
+  this.maxScroll=Math.max(0,chat.length-rows);
+  this.scroll=Math.max(0,Math.min(this.scroll,this.maxScroll));
   const end=Math.max(0,chat.length-this.scroll),start=Math.max(0,end-rows),visible=chat.slice(start,end);
   for(let i=0;i<rows;i++){
    const message=visible[i]||"";
@@ -55,7 +58,7 @@ class TUI {
   }
   out.push(mid);
   const activity=this.busy?SPIN[this.frame%SPIN.length]+" "+this.status:"● "+this.status;
-  out.push(this.line(" "+activity+"  │  "+this.agent.c.provider+" / "+model+"  │  "+(this.scroll?"SCROLL":"LIVE"),w));
+  out.push(this.line(" "+activity+"  │  "+this.agent.c.provider+" / "+model+"  │  "+(this.scroll?"SCROLL ↑↓ "+this.scroll+"/"+this.maxScroll:"LIVE"),w));
   const prompt=truncate(this.prompt||"MESSAGE",8);
   const available=Math.max(1,w-7);
   let visibleInput=this.input;
@@ -64,7 +67,7 @@ class TUI {
   const before=visibleInput.slice(0,cursor),at=visibleInput[cursor]||" ";
   const inputLine=" "+prompt+" ❯ "+before+"\x1b[7m"+at+"\x1b[0m"+visibleInput.slice(cursor+1);
   out.push(this.line(inputLine,w));
-  out.push(this.line(" Enter send · ↑/↓ history · Ctrl+K palette · Ctrl+C exit",w),bottom);
+  out.push(this.line(" Enter send · ↑/↓ history · PgUp/PgDn scroll · Ctrl+K palette · Ctrl+C exit",w),bottom);
   process.stdout.write("\x1b[?25l\x1b[H\x1b[2J"+out.join("\n")+"\n");
  }
  stream(chunk){
@@ -85,6 +88,12 @@ class TUI {
   const s=args.map(x=>typeof x==="string"?x:(x instanceof Error?x.stack||x.message:JSON.stringify(x))).join(" ");
   this.addLog(s);
  }
+ scrollBy(delta){
+  const amount=Number.isFinite(delta)?Math.trunc(delta):0;
+  this.scroll=Math.max(0,Math.min(this.maxScroll,this.scroll+amount));
+  this.render();
+ }
+ scrollToBottom(){this.scroll=0;this.render();}
  readLine(prompt,{remember=false}={}){
   if(this.pending) return Promise.reject(new Error("TUI input is already pending"));
   this.prompt=String(prompt||"").replace(/\s+/g," ").trim()||"MESSAGE";
@@ -107,6 +116,8 @@ class TUI {
    if(key.name==="c"){this.exitRequested=true;this.finishInput(null);return;}
    if(key.name==="d"){this.exitRequested=true;this.finishInput(null);return;}
    if(key.name==="k"){this.input="/palette";this.cursor=this.input.length;this.render();return;}
+   if(key.name==="up"){this.scrollBy(3);return;}
+   if(key.name==="down"){this.scrollBy(-3);return;}
    if(key.name==="a"){this.cursor=0;this.render();return;}
    if(key.name==="e"){this.cursor=this.input.length;this.render();return;}
    if(key.name==="u"){this.input=this.input.slice(this.cursor);this.cursor=0;this.render();return;}
@@ -114,6 +125,8 @@ class TUI {
    return;
   }
   switch(key?.name){
+   case "pageup":this.scrollBy(Math.max(1,this.viewportRows-2));return;
+   case "pagedown":this.scrollBy(-Math.max(1,this.viewportRows-2));return;
    case "return":case "enter":this.finishInput(this.input);return;
    case "backspace":if(this.cursor){this.input=this.input.slice(0,this.cursor-1)+this.input.slice(this.cursor);this.cursor--;}break;
    case "delete":this.input=this.input.slice(0,this.cursor)+this.input.slice(this.cursor+1);break;
@@ -157,9 +170,9 @@ class TUI {
     this.addLog("❯ "+input);this.busy=true;this.status="THINKING";this.scroll=0;this.render();
     try{
      if(input.startsWith("/agent "))await a.askModel(input.slice(7).trim(),true);
-     else if(input==="/scroll up"){this.scroll=Math.min(this.logs.length-1,this.scroll+8);}
-     else if(input==="/scroll down"){this.scroll=Math.max(0,this.scroll-8);}
-     else if(input==="/scroll bottom"){this.scroll=0;}
+     else if(input==="/scroll up"){this.scrollBy(8);}
+     else if(input==="/scroll down"){this.scrollBy(-8);}
+     else if(input==="/scroll bottom"){this.scrollToBottom();}
      else if(input==="/clear"){this.logs=["Conversation cleared."];this.scroll=0;}
      else if(input.startsWith("/")){this.status="RUNNING COMMAND";const keep=await a.command(input);if(!keep)this.exitRequested=true;}
      else{this.status="GENERATING";await a.askModel(input,false);}
