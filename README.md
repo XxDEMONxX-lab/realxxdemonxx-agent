@@ -26,7 +26,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 ~~~text
 /agent inspect this project, find a bug, fix it and run relevant tests
 ~~~
-The model can list/read files and propose writes or shell commands. Every write and command requires approval. Proposed writes show a Git-based diff preview. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Iterate by asking it to inspect, patch, then test. Review all changes. This is not an OS-level sandbox.
+The model can list/read/search files, inspect Git, and propose writes or shell commands. Every write and command requires approval. Proposed writes show a Git-based diff preview. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Use `/plan TASK` for a plan without execution, `/agent TASK` to execute approved steps, and `/review` to inspect the working-tree diff. This is not an OS-level sandbox.
 
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
@@ -50,6 +50,12 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /write PATH | Preview and write with approval |
 | /undo PATH | Restore the latest pre-write backup |
 | /agent TASK | Coding workflow |
+| /plan TASK | Plan only; does not execute changes |
+| /review | Review uncommitted changes |
+| /search QUERY | Search tracked and untracked project files |
+| /skills, /skill NAME | List or activate a reusable skill |
+| /test | Run npm test with approval |
+| /github auth\|repo\|prs\|issues\|pr-status | Read-only GitHub CLI status and listings |
 | /run COMMAND | Execute with approval |
 | /git status or /git diff | Git inspection |
 | /memory show, edit, clear | Persistent project notes |
@@ -59,6 +65,11 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /scroll up, down, bottom | Scroll the TUI transcript |
 | /clear | Clear conversation |
 | /exit | Quit |
+
+## Streaming and skills
+OpenAI-compatible providers stream response tokens into the TUI. Other provider adapters currently use non-streaming responses. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
+
+GitHub commands require the official `gh` CLI to be installed and authenticated. The supported commands are read-only; changes still require explicit approval through normal coding actions.
 
 ## TUI
 Responsive provider sidebar, wrapped transcript, live animated activity indicator, terminal-resize handling, and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
