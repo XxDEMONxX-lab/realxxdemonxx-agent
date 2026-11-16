@@ -36,7 +36,7 @@ class TUI {
   for(let i=0;i<rows;i++){
    const message=chat[i]||"";
    if(small)out.push(this.line(message,w));
-   else out.push("│"+truncate(side[i]||"",left-2).padEnd(left-2)+"│ "+truncate(message,right-3).padEnd(right-3)+"│");
+   else out.push("│"+truncate(side[i]||"",left-2).padEnd(left-2)+"│ "+truncate(message,right-1).padEnd(right-1)+"│");
   }
   out.push(mid,this.line(" "+(this.busy?"◌ WORKING":"● "+this.status)+"  │  "+this.agent.c.provider+" / "+(this.agent.c.model||"choose model"),w));
   out.push(this.line(" Enter send · / commands · Ctrl+C exit · NO_COLOR=1 disables color",w),bottom);
@@ -45,6 +45,7 @@ class TUI {
  log(...args){const s=args.map(x=>typeof x==="string"?x:(x instanceof Error?x.stack||x.message:JSON.stringify(x))).join(" ");this.logs.push(...s.split("\n"));if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);}
  async start(){
   const a=this.agent,originalLog=console.log,originalError=console.error;
+  if(!process.stdin.isTTY||!process.stdout.isTTY){originalLog("Demon Agent TUI needs an interactive terminal. Launch it directly in Termux.");a.rl.close();return;}
   console.log=(...x)=>this.log(...x);console.error=(...x)=>this.log(...x);
   process.env.DEMON_TUI="1";
   const sig=()=>{this.status="STOPPING";this.render();a.rl.close();process.exitCode=130;};
