@@ -1,6 +1,6 @@
 "use strict";
-const test=require("node:test"),assert=require("node:assert/strict"),path=require("node:path");
-const {safe,parse,provider,sessionFile}=require("../runtime");
+const test=require("node:test"),assert=require("node:assert/strict"),path=require("node:path"),fs=require("node:fs");
+const {safe,parse,provider,sessionFile,writeFile,undoFile,diffPreview}=require("../runtime");
 test("blocks traversal",()=>assert.throws(()=>safe("../outside"),/outside project/));
 test("allows relative paths",()=>assert.equal(safe("src/a.js"),path.join(process.cwd(),"src/a.js")));
 test("parses agent JSON",()=>assert.equal(parse('{"message":"ok","actions":[{"type":"list"}]}').actions.length,1));
@@ -18,3 +18,5 @@ test("wraps ANSI-styled text without leaking escape codes",()=>assert.deepEqual(
 test("truncates ANSI-styled text by visible width",()=>assert.equal(truncate("\x1b[31mabcdef\x1b[0m",4),"abc…"));
 test("parses braces and escaped quotes inside JSON strings",()=>{const x=parse('prefix {"message":"literal } and \\"quote\\" {","actions":[]} trailing');assert.equal(x.message,'literal } and "quote" {');});
 test("rejects path-like session names",()=>assert.throws(()=>sessionFile("../escape"),/Session name/));
+test("backs up overwritten files and restores the previous version",()=>{const file=".demon-undo-test-"+process.pid+".txt";try{fs.writeFileSync(file,"before");writeFile(file,"after");assert.equal(fs.readFileSync(file,"utf8"),"after");undoFile(file);assert.equal(fs.readFileSync(file,"utf8"),"before");}finally{try{fs.unlinkSync(file);}catch{}}});
+test("previews proposed file changes without modifying the source",()=>{const file=".demon-diff-test-"+process.pid+".txt";try{fs.writeFileSync(file,"before\\n");const diff=diffPreview(file,"after\\n");assert.match(diff,/after/);assert.equal(fs.readFileSync(file,"utf8"),"before\\n");}finally{try{fs.unlinkSync(file);}catch{}}});
