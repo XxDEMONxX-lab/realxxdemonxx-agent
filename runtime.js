@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 const fs=require("node:fs"),path=require("node:path"),os=require("node:os"),crypto=require("node:crypto"),rlib=require("node:readline/promises"),{stdin,stdout}=require("node:process"),{spawn,spawnSync}=require("node:child_process");
-const {searchProject,loadSkills,skillPrompt}=require("./features");
+const {searchProject,loadSkills,skillPrompt,contextSnapshot,boundedHistory}=require("./features");
 const {MCPClient,validateServer,toolsPrompt}=require("./mcp");
 const {EVENTS,validateHook,runHook}=require("./hooks");
 const ROOT=path.resolve(process.env.DEMON_PROJECT||process.cwd()),DIR=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),".config"),"demon-agent"),FILE=path.join(DIR,"config.json");
@@ -72,14 +72,16 @@ class Spinner{constructor(s){this.s=s;this.i=0;this.f=["⠋","⠙","⠹","⠸","
 const SYSTEM='You are Demon Agent, a senior coding engineer. For /agent tasks output only JSON: {"message":"summary","plan":"ordered plan","actions":[...]}. Allowed actions: {"type":"list"}, {"type":"search","query":"literal text"}, {"type":"read","path":"relative"}, {"type":"write","path":"relative","content":"complete file"}, {"type":"run","command":"shell command"}, {"type":"mcp","server":"id","tool":"name","arguments":{}}. Use read/list before editing if context missing. Never claim actions happened before execution. Never access secrets, exfiltrate data, write outside project, or propose destructive commands. Shell writes forbidden; use write actions. Include tests when useful. Max 20 actions.';
 class Agent{
  constructor(){this.c=load();this.rl=rlib.createInterface({input:stdin,output:stdout});this.hist=[];this.sessionName="";this.ctx=new Map();this.skills=loadSkills(ROOT,DIR);this.activeSkill="";this.c.mcpServers=this.c.mcpServers||{};this.c.hooks=this.c.hooks||{};this.mcpTools={};this.memfile=path.join(DIR,"memory",crypto.createHash("sha256").update(ROOT).digest("hex")+".md");this.memory="";try{this.memory=fs.readFileSync(this.memfile,"utf8");}catch{}}
+ rememberFile(file,content){this.ctx.delete(file);this.ctx.set(file,content);while(this.ctx.size>12)this.ctx.delete(this.ctx.keys().next().value);}
  ask(s){return this.rl.question(s).then(x=>x.trim());}
  async secret(){if(!stdin.isTTY)throw Error("Interactive terminal required");const {execSync}=require("node:child_process");stdout.write("API key (hidden): ");const old=execSync("stty -g",{stdio:["inherit","pipe","ignore"]}).toString().trim();try{execSync("stty -echo",{stdio:"inherit"});const v=await this.rl.question("");stdout.write("\n");return v.trim();}finally{execSync("stty "+old,{stdio:"inherit"});}}
  async fetchModels(id){const s=new Spinner("Fetching models · "+id);s.start();try{const m=await models(id,this.c);s.stop(color(m.length+" models found","g"));m.slice(0,200).forEach(x=>console.log("  "+x));if(id===this.c.provider&&m.length&&!this.c.model){this.c.model=m[0];save(this.c);console.log("Auto-selected "+m[0]);}}catch(e){s.stop(color(id+": "+e.message,"red"));}}
  async askModel(prompt,agent,execute=true){
+  if(typeof prompt!=="string"||prompt.length>50000)throw Error("Prompt must be 1-50000 characters");
   if(!this.c.model){console.log("Select model first: /models");return;}
-  const loaded=Array.from(this.ctx,([p,s])=>"\n--- "+p+" ---\n"+s).join("\n");
+  const loaded=contextSnapshot(this.ctx),history=boundedHistory(this.hist);
   const sys=SYSTEM+skillPrompt(this.skills.filter(x=>x.name===this.activeSkill))+toolsPrompt(this.mcpTools)+(this.memory?"\nProject memory:\n"+this.memory:"")+(loaded?"\nLoaded files:\n"+loaded:"");
-  const messages=[{role:"system",content:sys},...this.hist.slice(-16),{role:"user",content:prompt}];
+  const messages=[{role:"system",content:sys},...history,{role:"user",content:prompt}];
   const ids=[...new Set([this.c.provider,...(this.c.autoFallback?this.c.fallbacks:[])])];
   const maxRounds=agent&&execute?6:1;
   let finalAnswer,finalUsed;
@@ -133,7 +135,7 @@ class Agent{
      output=r.results.map(x=>x.path+":"+x.line+": "+x.text).join("\n")||"No matches";
      if(r.truncated)output+="\nSearch output truncated";
     }else if(a.type==="read"){
-     const value=readFile(a.path);this.ctx.set(a.path,value);output="Read "+a.path+":\n"+value;
+     const value=readFile(a.path);this.rememberFile(a.path,value);output="Read "+a.path+":\n"+value;
     }else if(a.type==="write"){
      if(typeof a.content!=="string")throw Error("Invalid content");
      safe(a.path);output=diffPreview(a.path,a.content);
@@ -240,7 +242,7 @@ class Agent{
  }
  case "plan":if(!arg)throw Error("Use /plan TASK");await this.askModel("Create a detailed implementation plan only. Do not propose or execute actions. Identify affected files, tests, risks, and verification steps. Task: "+arg,true,false);break;
  case "review":await this.reviewChanges(arg==="all");break;
- case "read":this.ctx.set(arg,readFile(arg));console.log("Loaded "+arg);break;
+ case "read":this.rememberFile(arg,readFile(arg));console.log("Loaded "+arg);break;
  case "write":{const a=[];console.log("Paste content; finish .done");while(true){const s=await this.ask("");if(s===".done")break;a.push(s);}const content=a.join("\n")+"\n";console.log(diffPreview(arg,content));if(await this.ask("Write "+arg+"? [y/N] ")==="y"){const before=await this.invokeHook("before_write",{path:arg,bytes:Buffer.byteLength(content)});if(before.ok){writeFile(arg,content);await this.invokeHook("after_write",{path:arg});}else console.log("Write blocked by hook");}break;}
  case "run":if(await this.ask("Execute "+arg+"? [y/N] ")==="y"){const before=await this.invokeHook("before_run",{command:arg});if(before.ok){const r=await run(arg);console.log(r.out+"\nExit "+r.code);await this.invokeHook("after_run",{command:arg,exitCode:r.code,timedOut:r.timedOut});}else console.log("Command blocked by hook");}break;
  case "test":if(await this.ask("Run npm test? [y/N] ")==="y"){const r=await run("npm test");console.log(r.out+"\nExit "+r.code);}break;
