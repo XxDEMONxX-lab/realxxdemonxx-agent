@@ -243,6 +243,19 @@ class Agent{
  }
  async command(line){const i=line.indexOf(" "),cmd=(i<0?line:line.slice(0,i)).slice(1),arg=i<0?"":line.slice(i+1).trim();switch(cmd){
  case "help":console.log(HELP);break;
+ case "palette":{
+  const entries=["/providers","/status","/files","/search","/symbols","/diagnose","/skills","/review","/review all","/subagents","/plan","/agent","/git status","/git diff","/test","/github repo","/session list","/memory show","/help","/exit"];
+  const filter=(await this.ask("Palette filter (blank = all): ")).toLowerCase();
+  const matches=entries.filter(x=>x.slice(1).includes(filter));
+  if(!matches.length){console.log("No matching commands");break;}
+  matches.forEach((x,i)=>console.log((i+1)+". "+x));
+  const selected=await this.ask("Select number or command: ");
+  const command=/^\\d+$/.test(selected)?matches[Number(selected)-1]:selected;
+  if(!command||!matches.includes(command))throw Error("Invalid palette selection");
+  const extra=await this.ask("Arguments (blank for none): ");
+  await this.command(command+(extra?" "+extra:""));
+  break;
+ }
  case "providers":Object.entries(P).forEach(([id,p])=>console.log(id.padEnd(13)+p[0]));Object.entries(this.c.custom).forEach(([id,p])=>console.log(id.padEnd(13)+p.name+" custom"));break;
  case "provider":if(!arg)console.log(this.c.provider);else{provider(arg,this.c);this.c.provider=arg;this.c.model="";save(this.c);}break;
  case "key":{const p=provider(this.c.provider,this.c);if(p.kind==="ollama")break;const k=await this.secret();if(k){this.c.keys[this.c.provider]=k;save(this.c);console.log("Key saved");}break;}
