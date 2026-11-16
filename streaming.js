@@ -47,7 +47,7 @@ async function readSSE(response,kind,onToken,state){
   }
   buffer+=decoder.decode();
   if(buffer.trim())parseSSE(buffer+"\n\n",handle);
- }finally{try{reader.releaseLock();}catch{}}
+ }finally{try{await reader.cancel();}catch{}try{reader.releaseLock();}catch{}}
 }
 
 async function readOllama(response,onToken,state){
@@ -72,7 +72,7 @@ async function readOllama(response,onToken,state){
    const item=JSON.parse(buffer);emitText(item.message?.content,onToken,state);
    if(item.error)throw Error(String(item.error));
   }
- }finally{try{reader.releaseLock();}catch{}}
+ }finally{try{await reader.cancel();}catch{}try{reader.releaseLock();}catch{}}
 }
 
 async function streamCompletion(provider,apiKey,model,messages,onToken){
