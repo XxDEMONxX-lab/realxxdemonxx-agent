@@ -27,7 +27,7 @@ class TUI {
   this.exitRequested=false;this.started=false;this.lastRender="";
  }
  dimensions(){return {w:Math.max(40,process.stdout.columns||80),h:Math.max(12,process.stdout.rows||24)};}
- line(s,w){return "│"+truncate(s,w-2).padEnd(w-2)+"│";}
+ line(s,w){const raw=String(s),visible=strip(raw),body=visible.length>w-2?truncate(visible,w-2):raw;return "│"+body+" ".repeat(Math.max(0,w-2-strip(body).length))+"│";}
  addLog(s){
   this.logs.push(...String(s).split("\n"));
   if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
