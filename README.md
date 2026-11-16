@@ -1,6 +1,6 @@
 # Demon Agent 2.0 ⚡
 
-Node.js-first animated terminal coding agent for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
+Node.js-first animated full-screen terminal UI (TUI) coding agent for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
 
 ## Termux install
 ~~~sh
