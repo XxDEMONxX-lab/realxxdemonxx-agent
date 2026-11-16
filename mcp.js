@@ -1,5 +1,6 @@
 "use strict";
 const {spawn}=require("node:child_process");
+const SAFE_ENV=["PATH","HOME","TMPDIR","TEMP","TMP","TERM","LANG","LC_ALL","PREFIX","ANDROID_ROOT","ANDROID_DATA"];
 
 const MAX_MESSAGE=1024*1024;
 class MCPClient{
@@ -9,7 +10,8 @@ class MCPClient{
  }
  async connect(){
   if(!this.config||typeof this.config.command!=="string"||!Array.isArray(this.config.args))throw Error("Invalid MCP server configuration");
-  this.child=spawn(this.config.command,this.config.args,{cwd:this.config.cwd||process.cwd(),shell:false,stdio:["pipe","pipe","pipe"],env:process.env});
+  const env={};for(const name of SAFE_ENV)if(process.env[name]!==undefined)env[name]=process.env[name];for(const name of this.config.envAllow||[])if(process.env[name]!==undefined)env[name]=process.env[name];
+  this.child=spawn(this.config.command,this.config.args,{cwd:this.config.cwd||process.cwd(),shell:false,stdio:["pipe","pipe","pipe"],env});
   this.child.stdout.on("data",chunk=>this.onData(chunk));
   this.child.stderr.on("data",chunk=>{this.stderr=(this.stderr+chunk.toString()).slice(-4000);});
   this.child.on("error",e=>this.failAll(e));
@@ -82,7 +84,9 @@ function validateServer(id,config){
  if(!/^[a-zA-Z0-9_-]{1,40}$/.test(id||""))throw Error("MCP server ID must be 1-40 letters, numbers, _ or -");
  if(!config||typeof config.command!=="string"||!config.command.trim()||config.command.length>256)throw Error("Invalid MCP command");
  if(!Array.isArray(config.args)||config.args.length>32||config.args.some(x=>typeof x!=="string"||x.length>1000))throw Error("MCP args must be an array of at most 32 strings");
- return {command:config.command.trim(),args:config.args};
+ const envAllow=config.envAllow===undefined?[]:config.envAllow;
+ if(!Array.isArray(envAllow)||envAllow.length>16||envAllow.some(x=>typeof x!=="string"||!/^[A-Z_][A-Z0-9_]{0,63}$/.test(x)))throw Error("MCP envAllow must contain at most 16 environment variable names");
+ return {command:config.command.trim(),args:config.args,envAllow};
 }
 function toolsPrompt(cache){
  const entries=Object.entries(cache||{}).flatMap(([server,tools])=>tools.slice(0,20).map(t=>({server,name:t.name,description:String(t.description||"").slice(0,500),inputSchema:JSON.stringify(t.inputSchema||{type:"object"}).slice(0,4000)}))).slice(0,30);
