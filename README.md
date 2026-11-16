@@ -51,7 +51,8 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 ## Commands
 | Command | Purpose |
 |---|---|
-| /mode | Select normal or five-AI coding mode; `/mode set SLOT PROVIDER MODEL` configures a coding slot |
+| /mode | Select normal, main-model routing, or five-AI coding mode; `/mode set SLOT PROVIDER MODEL` configures a coding slot |
+| /mode main model | Use the selected primary model to classify each request; coding tasks go to five workers, other requests receive a normal answer and a coding-task reminder |
 | /mode main model | Use the selected primary model to classify each request; coding tasks go to five workers, other requests receive a normal answer and a coding-task reminder |
 | /providers | List providers |
 | /provider ID | Select provider |
