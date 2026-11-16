@@ -34,7 +34,7 @@ class TUI {
    side.push(" PROVIDERS");
    const ids=["openai","openrouter","groq","together","cerebras","deepseek","mistral","fireworks","xai","sambanova","perplexity","anthropic","gemini","ollama",...Object.keys(this.agent.c.custom||{})];
    for(const id of ids){const active=id===this.agent.c.provider;side.push((active?" ❯ ":"   ")+id+(active?"  ●":""));}
-   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ input history","/help commands","/models discover","/agent coding task","/clear reset chat");
+   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ input history","/help commands","/search code","/skills select skill","/review changes","/agent coding task");
   }
   const chat=[];
   for(const log of this.logs)chat.push(...wrap(log,small?w-4:right-4));
