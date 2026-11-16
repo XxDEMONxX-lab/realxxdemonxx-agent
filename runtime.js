@@ -284,7 +284,7 @@ class Agent{
  case "run":if(await this.ask("Execute "+arg+"? [y/N] ")==="y"){const before=await this.invokeHook("before_run",{command:arg});if(before.ok){const r=await run(arg);console.log(r.out+"\nExit "+r.code);await this.invokeHook("after_run",{command:arg,exitCode:r.code,timedOut:r.timedOut});}else console.log("Command blocked by hook");}break;
  case "test":if(await this.ask("Run npm test? [y/N] ")==="y"){const r=await run("npm test");console.log(r.out+"\nExit "+r.code);}break;
  case "github":{
-  const [action,...rest]=arg.split(/\s+)/,value=arg.slice(action.length).trim();
+  const [action,...rest]=arg.split(/\s+/),value=arg.slice(action.length).trim();
   const readOnly={"auth":["auth","status"],"repo":["repo","view"],"prs":["pr","list"],"issues":["issue","list"],"pr-status":["pr","status"],"ci":["run","list","--limit","5"],"ci-failed":["run","view","--log-failed"]};
   if(readOnly[action]){const r=await runProgram("gh",readOnly[action]);console.log(r.out+"\nExit "+r.code+(r.timedOut?" (timed out)":""));break;}
   if(action==="branch"){
