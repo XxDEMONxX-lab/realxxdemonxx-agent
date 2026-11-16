@@ -302,6 +302,20 @@ class Agent{
  case "write":{const a=[];console.log("Paste content; finish .done");while(true){const s=await this.ask("");if(s===".done")break;a.push(s);}const content=a.join("\n")+"\n";console.log(diffPreview(arg,content));if(await this.ask("Write "+arg+"? [y/N] ")==="y"){const before=await this.invokeHook("before_write",{path:arg,bytes:Buffer.byteLength(content)});if(before.ok){writeFile(arg,content);await this.invokeHook("after_write",{path:arg});}else console.log("Write blocked by hook");}break;}
  case "run":if(await this.ask("Execute "+arg+"? [y/N] ")==="y"){const before=await this.invokeHook("before_run",{command:arg});if(before.ok){const r=await run(arg);console.log(r.out+"\nExit "+r.code);await this.invokeHook("after_run",{command:arg,exitCode:r.code,timedOut:r.timedOut});}else console.log("Command blocked by hook");}break;
  case "test":if(await this.ask("Run npm test? [y/N] ")==="y"){const r=await run("npm test");console.log(r.out+"\nExit "+r.code);}break;
+ case "verify":{
+  const files=listFiles().filter(x=>x.endsWith(".js")),failures=[];
+  for(const file of files){
+   const checked=await runProgram(process.execPath,["--check",safe(file)],30000);
+   if(checked.code!==0)failures.push(file+": "+checked.out);
+  }
+  console.log("Syntax check: "+(failures.length?"FAILED":"passed")+" ("+files.length+" JavaScript files)");
+  if(failures.length){console.log(failures.join("\n"));break;}
+  if(await this.ask("Run full npm test suite? [y/N] ")==="y"){
+   const result=await runProgram("npm",["test"],180000);
+   console.log(result.out+"\nExit "+result.code+(result.timedOut?" (timed out)":""));
+  }
+  break;
+ }
  case "github":{
   const [action,...rest]=arg.split(/\s+/),value=arg.slice(action.length).trim();
   const readOnly={"auth":["auth","status"],"repo":["repo","view"],"prs":["pr","list"],"issues":["issue","list"],"pr-status":["pr","status"],"ci":["run","list","--limit","5"],"ci-failed":["run","view","--log-failed"]};
@@ -333,6 +347,6 @@ class Agent{
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
  async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
-const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /palette /files /search QUERY /symbols [QUERY] /diagnose /subagents TASK /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
+const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /palette /files /search QUERY /symbols [QUERY] /diagnose /verify /subagents TASK /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream,validateBranchName,validateCommitMessage,parsePullRequestInput,runProgram};
