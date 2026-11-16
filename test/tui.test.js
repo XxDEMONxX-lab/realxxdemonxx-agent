@@ -58,13 +58,14 @@ test("Ctrl+C cancels the active prompt and requests shutdown",async()=>{
 });
 test("streams assistant output on a separate transcript line from the user prompt",()=>{
  const ui=makeTui();ui.logs=["Welcome","❯ hi"];
- ui.stream("Hello ");ui.stream("there!\n");
- assert.deepEqual(ui.logs,["Welcome","❯ hi","","Demon Agent","Hello there!",""]);
+ ui.beginStream();ui.stream("Hello\n");ui.stream("there!");
+ assert.deepEqual(ui.logs,["Welcome","❯ hi","","Demon Agent","Hello","there!"]);
 });
 test("starts a fresh assistant block for the next response",()=>{
  const ui=makeTui();ui.logs=["❯ first"];
- ui.stream("reply one\n");ui.stream("reply two\n");
- assert.deepEqual(ui.logs,["❯ first","","Demon Agent","reply one","","Demon Agent","reply two",""]);
+ ui.beginStream();ui.stream("reply one\n");ui.stream("reply two\n");ui.endStream();
+ ui.beginStream();ui.stream("reply three\n");ui.endStream();
+ assert.deepEqual(ui.logs,["❯ first","","Demon Agent","reply one","reply two","","Demon Agent","reply three",""]);
 });
 test("rejects concurrent input prompts",async()=>{
  const ui=makeTui();const pending=ui.readLine("first");
