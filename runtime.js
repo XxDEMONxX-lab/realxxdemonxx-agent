@@ -61,7 +61,10 @@ function parsePullRequestInput(value){
 }
 function runProgram(command,args,timeout=120000){
  return new Promise((resolve,reject)=>{
-  const grouped=process.platform!=="win32",child=spawn(command,args,{cwd:ROOT,shell:false,detached:grouped,stdio:["ignore","pipe","pipe"],env:process.env});
+  const grouped=process.platform!=="win32",env={};
+  for(const name of ["PATH","HOME","USER","LOGNAME","LANG","LC_ALL","TERM","TMPDIR","SSH_AUTH_SOCK","SSH_AGENT_PID","GIT_TERMINAL_PROMPT","GIT_AUTHOR_NAME","GIT_AUTHOR_EMAIL","GIT_COMMITTER_NAME","GIT_COMMITTER_EMAIL"]){if(process.env[name]!==undefined)env[name]=process.env[name];}
+  if(command==="gh")for(const name of ["GH_TOKEN","GITHUB_TOKEN","GH_ENTERPRISE_TOKEN","GH_HOST","GH_CONFIG_DIR","XDG_CONFIG_HOME"]){if(process.env[name]!==undefined)env[name]=process.env[name];}
+  const child=spawn(command,args,{cwd:ROOT,shell:false,detached:grouped,stdio:["ignore","pipe","pipe"],env});
   let output="",timedOut=false,killTimer=null;
   const add=chunk=>{output+=chunk.toString();if(output.length>30000)output=output.slice(-30000);};
   const signal=s=>{try{if(grouped&&child.pid)process.kill(-child.pid,s);else child.kill(s);}catch{}};
