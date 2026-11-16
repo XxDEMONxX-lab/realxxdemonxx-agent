@@ -10,7 +10,7 @@ git clone https://github.com/XxDEMONxX-lab/realxxdemonxx-agent.git
 cd realxxdemonxx-agent
 node start.js
 ~~~
-Node.js 18+ required. No Python or npm dependencies in v2.
+Node.js 18+ required. No Python or npm dependencies.
 
 ## Setup
 ~~~text
@@ -76,12 +76,6 @@ Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and 
 OpenAI-compatible providers stream response tokens into the TUI. Other provider adapters currently use non-streaming responses. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
 
 GitHub commands require the official `gh` CLI to be installed and authenticated. The supported commands are read-only; changes still require explicit approval through normal coding actions.
-
-## MCP integrations
-
-Demon Agent supports MCP servers over the standard stdio transport. Configure one with `/mcp add ID`, entering an executable and a JSON argument array; then use `/mcp tools ID` to discover tools. The model can propose MCP calls, but each call displays its arguments and requires your approval. Tool output is treated as untrusted data.
-
-MCP processes do not inherit provider API keys or the full environment. During setup, you may optionally provide a JSON array of environment-variable names to allow through (for example, `["GITHUB_TOKEN"]`). The values are read from the Termux process environment and are not copied into the agent config. Only configure servers and environment variables you trust; MCP servers execute external code with your Android user's permissions.
 
 ## TUI
 Responsive provider sidebar, wrapped transcript, live animated activity indicator, terminal-resize handling, and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
