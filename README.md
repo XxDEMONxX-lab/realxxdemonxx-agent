@@ -34,7 +34,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 /mode coding          # requires five distinct configured provider/model pairs
 /mode normal
 ~~~
-Normal mode uses the selected primary model (with configured failover). Coding mode runs five configured models concurrently as planner, architect, implementation specialist, security reviewer and test engineer. All five must have distinct provider/model pairs and valid credentials before activation. If any call fails, the run is reported as incomplete and no combined response is saved. The five specialists provide independent reports; this chat workflow does not automatically apply file changes. Use `/agent TASK` for the existing approval-gated file-editing workflow.
+Normal mode uses the selected primary model (with configured failover). Coding mode uses five configured, distinct provider/model pairs. One model assigns exactly five different project files, then all five models implement one file each in parallel. Each worker returns a complete file. Demon Agent checks file ownership, previews every diff, verifies file hashes, asks for approval, creates backups, and applies changes with rollback on an apply failure. It then offers `/verify` and asks you to test the project and report bugs. If planning or any worker fails, no files are changed.
 
 ## Agentic coding
 ~~~text
