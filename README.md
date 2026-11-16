@@ -79,7 +79,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /session save NAME | Save the current conversation |
 | /session load NAME | Restore a saved conversation |
 | /session list | List saved conversations |
-| /scroll up, down, bottom | Scroll the TUI transcript |
+| /scroll up, down, top, bottom | Scroll the TUI transcript |
 | /clear | Clear conversation |
 | /exit | Quit |
 
