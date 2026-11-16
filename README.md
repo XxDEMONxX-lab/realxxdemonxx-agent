@@ -1,4 +1,4 @@
-# Demon Agent 2.4 ⚡
+# Demon Agent 2.5 ⚡
 
 Node.js-first animated full-screen terminal UI (TUI) coding agent with streamed model output, project search, reusable skills, code review and MCP tool support for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
 
@@ -81,12 +81,12 @@ Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and 
 Use `/mcp tools ID` to discover tools, `/mcp list` to inspect configured servers, and `/mcp remove ID` to disconnect. Model-proposed MCP calls display their arguments and require per-call approval. Server output is treated as untrusted. Only the MCP `tools/list` and `tools/call` methods are currently supported. MCP servers execute external code with your Android user's permissions; only configure servers you trust.
 
 ## Streaming and skills
-OpenAI-compatible providers stream response tokens into the TUI. Other provider adapters currently use non-streaming responses. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
+OpenAI-compatible, Anthropic, Gemini and Ollama providers stream response tokens into the TUI. The command palette (`/palette`) searches commands by name or description and lets you select one interactively. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
 
 GitHub commands require the official `gh` CLI to be installed and authenticated. The supported commands are read-only; changes still require explicit approval through normal coding actions.
 
 ## TUI
-Responsive provider sidebar, wrapped transcript, live animated activity indicator, terminal-resize handling, and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
+Responsive provider sidebar, wrapped transcript, live animated activity indicator, terminal-resize handling, searchable command palette (`/palette`), and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
 
 ## Tests
 ~~~sh
