@@ -81,12 +81,12 @@ Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and 
 Use `/mcp tools ID` to discover tools, `/mcp list` to inspect configured servers, and `/mcp remove ID` to disconnect. Model-proposed MCP calls display their arguments and require per-call approval. Server output is treated as untrusted. Only the MCP `tools/list` and `tools/call` methods are currently supported. MCP servers execute external code with your Android user's permissions; only configure servers you trust.
 
 ## Streaming and skills
-OpenAI-compatible providers stream response tokens into the TUI. Other provider adapters currently use non-streaming responses. from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
+OpenAI-compatible providers, Anthropic, Gemini and Ollama stream response tokens into the TUI. SSE and Ollama NDJSON events are parsed incrementally with bounded event buffering and request timeouts. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
 
 GitHub commands require the official `gh` CLI to be installed and authenticated. The supported commands are read-only; changes still require explicit approval through normal coding actions.
 
 ## TUI
-Responsive provider sidebar, wrapped transcript, live animated activity indicator, terminal-resize handling, and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
+Responsive provider sidebar, wrapped transcript, live activity indicator, terminal-resize handling, searchable command palette (`Ctrl+K` or `/palette`), and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
 
 ## Tests
 ~~~sh
