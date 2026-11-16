@@ -96,7 +96,27 @@ class Agent{
  case "search":{const r=searchProject(ROOT,arg);console.log(r.results.map(x=>x.path+":"+x.line+": "+x.text).join("\n")||"No matches");if(r.truncated)console.log("Search output truncated");break;}
  case "skills":console.log(this.skills.map(x=>x.name+(x.name===this.activeSkill?"  [active]":"")).join("\n")||"No skills found. Add .demon/skills/NAME/SKILL.md");break;
  case "skill":if(!arg){this.activeSkill="";console.log("Skill disabled");}else{const x=this.skills.find(v=>v.name===arg);if(!x)throw Error("Unknown skill; use /skills");this.activeSkill=x.name;console.log("Active skill: "+x.name);}break;
- case "mcp":{const [action,id]=arg.split(/\\s+/,2);if(action==="add"){if(!id)throw Error("Use /mcp add ID");const command=await this.ask("Executable (e.g. npx): "),raw=await this.ask("Arguments as JSON array (e.g. [\\"-y\\",\\"package\\"]): ");let args;try{args=JSON.parse(raw);}catch{throw Error("Arguments must be valid JSON");}this.c.mcpServers[id]=validateServer(id,{command,args});save(this.c);console.log("MCP server saved: "+id);}else if(action==="remove"){if(!id||!this.c.mcpServers[id])throw Error("Unknown MCP server");delete this.c.mcpServers[id];delete this.mcpTools[id];save(this.c);console.log("MCP server removed");}else if(action==="list"){console.log(Object.keys(this.c.mcpServers).join("\\n")||"(no MCP servers configured)");}else if(action==="tools"){if(!id||!this.c.mcpServers[id])throw Error("Use /mcp tools ID for a configured server");const client=new MCPClient(this.c.mcpServers[id]);try{await client.connect();this.mcpTools[id]=await client.listTools();console.log(this.mcpTools[id].map(x=>x.name+" — "+(x.description||"")).join("\\n")||"(server has no tools)");}finally{client.close();}}else throw Error("Use /mcp add|remove|list|tools ID");break;}
+ case "mcp":{
+  const [action,id]=arg.split(/\s+/,2);
+  if(action==="add"){
+   if(!id)throw Error("Use /mcp add ID");
+   const command=await this.ask("Executable (e.g. npx): ");
+   const raw=await this.ask('Arguments as JSON array (e.g. ["-y","package"]): ');
+   let args;try{args=JSON.parse(raw);}catch{throw Error("Arguments must be valid JSON");}
+   this.c.mcpServers[id]=validateServer(id,{command,args});save(this.c);console.log("MCP server saved: "+id);
+  }else if(action==="remove"){
+   if(!id||!this.c.mcpServers[id])throw Error("Unknown MCP server");
+   delete this.c.mcpServers[id];delete this.mcpTools[id];save(this.c);console.log("MCP server removed");
+  }else if(action==="list"){
+   console.log(Object.keys(this.c.mcpServers).join("\n")||"(no MCP servers configured)");
+  }else if(action==="tools"){
+   if(!id||!this.c.mcpServers[id])throw Error("Use /mcp tools ID for a configured server");
+   const client=new MCPClient(this.c.mcpServers[id]);
+   try{await client.connect();this.mcpTools[id]=await client.listTools();console.log(this.mcpTools[id].map(x=>x.name+" — "+(x.description||"")).join("\n")||"(server has no tools)");}
+   finally{client.close();}
+  }else throw Error("Use /mcp add|remove|list|tools ID");
+  break;
+ }
  case "plan":if(!arg)throw Error("Use /plan TASK");await this.askModel("Create a detailed implementation plan only. Do not propose or execute actions. Identify affected files, tests, risks, and verification steps. Task: "+arg,true,false);break;
  case "review":{const r=await run("git diff HEAD --no-ext-diff --unified=3");const status=await run("git status --short");const diff=(r.out+"\nGit status:\n"+status.out).slice(0,50000);if(!diff.trim())console.log("No working-tree diff to review");else await this.askModel("Review these uncommitted changes. Do not modify files. Report actionable findings ordered by severity, with file and line references. If no issues, say so.\n\n"+diff,false);break;}
  case "read":this.ctx.set(arg,readFile(arg));console.log("Loaded "+arg);break;
