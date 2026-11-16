@@ -73,7 +73,7 @@ class TUI {
   matches.forEach(([command,description],index)=>this.log(String(index+1).padStart(2," ")+". "+command+" — "+description));
   const answer=await this.agent.ask("Select command number (blank to cancel): ");
   if(!answer)return "";
-  if(!/^\\d+$/.test(answer)||Number(answer)<1||Number(answer)>matches.length){this.log("Invalid command selection");return "";}
+  if(!/^\d+$/.test(answer)||Number(answer)<1||Number(answer)>matches.length){this.log("Invalid command selection");return "";}
   const selected=matches[Number(answer)-1][0];
   if(selected.endsWith(" ")){
    const value=await this.agent.ask("Value for "+selected.trim()+": ");
