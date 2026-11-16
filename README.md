@@ -70,7 +70,9 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /exit | Quit |
 
 ## MCP tool servers
-Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and argument array as JSON. Environment variables are not inherited by default; explicitly allowlist only required variable names when prompted. Use `/mcp tools ID` to discover tools, `/mcp list` to inspect configured servers, and `/mcp remove ID` to disconnect. Model-proposed MCP calls display their arguments and require per-call approval. Server output is treated as untrusted. Only the MCP tools/list and tools/call methods are currently supported.
+Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and argument array as JSON, then optionally provide a JSON array of environment-variable names to allow through (for example, `["GITHUB_TOKEN"]`). Provider API keys and the rest of the Termux environment are not inherited by default. Values are read from the process environment and are not copied into the agent config.
+
+Use `/mcp tools ID` to discover tools, `/mcp list` to inspect configured servers, and `/mcp remove ID` to disconnect. Model-proposed MCP calls display their arguments and require per-call approval. Server output is treated as untrusted. Only the MCP `tools/list` and `tools/call` methods are currently supported. MCP servers execute external code with your Android user's permissions; only configure servers you trust.
 
 ## Streaming and skills
 OpenAI-compatible providers stream response tokens into the TUI. Other provider adapters currently use non-streaming responses. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
