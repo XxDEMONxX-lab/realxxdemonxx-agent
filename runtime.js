@@ -162,6 +162,22 @@ class Agent{
   }
   return results;
  }
+ async reviewChanges(parallel=false){
+  const diff=await run("git diff HEAD --no-ext-diff --unified=3");
+  const status=await run("git status --short");
+  const input=(diff.out+"\nGit status:\n"+status.out).slice(0,50000);
+  if(!input.trim()){console.log("No working-tree changes to review");return;}
+  const prompt="Review these changes for correctness, security, regressions and missing tests. Do not modify files. Return actionable findings ordered by severity, with file and line references. If none, say no findings.\n\n"+input;
+  if(!parallel){await this.askModel(prompt,false);return;}
+  const ids=[...new Set([this.c.provider,...(this.c.fallbacks||[])])].slice(0,3);
+  const reviews=await Promise.all(ids.map(async id=>{
+   const model=id===this.c.provider?this.c.model:this.c.fallbackModels[id];
+   if(!model)return {id,error:"No model configured"};
+   try{return {id,review:await completion(id,model,[{role:"system",content:"You are an independent senior code reviewer. Be precise, skeptical and concise."},{role:"user",content:prompt}],this.c)};}
+   catch(e){return {id,error:e.message};}
+  }));
+  for(const r of reviews){console.log("\n"+color("REVIEWER · "+r.id,"c"));console.log(r.review||("Unavailable: "+r.error));}
+ }
  async command(line){const i=line.indexOf(" "),cmd=(i<0?line:line.slice(0,i)).slice(1),arg=i<0?"":line.slice(i+1).trim();switch(cmd){
  case "help":console.log(HELP);break;
  case "providers":Object.entries(P).forEach(([id,p])=>console.log(id.padEnd(13)+p[0]));Object.entries(this.c.custom).forEach(([id,p])=>console.log(id.padEnd(13)+p.name+" custom"));break;
@@ -201,7 +217,7 @@ class Agent{
   break;
  }
  case "plan":if(!arg)throw Error("Use /plan TASK");await this.askModel("Create a detailed implementation plan only. Do not propose or execute actions. Identify affected files, tests, risks, and verification steps. Task: "+arg,true,false);break;
- case "review":{const r=await run("git diff HEAD --no-ext-diff --unified=3");const status=await run("git status --short");const diff=(r.out+"\nGit status:\n"+status.out).slice(0,50000);if(!diff.trim())console.log("No working-tree diff to review");else await this.askModel("Review these uncommitted changes. Do not modify files. Report actionable findings ordered by severity, with file and line references. If no issues, say so.\n\n"+diff,false);break;}
+ case "review":await this.reviewChanges(arg==="all");break;
  case "read":this.ctx.set(arg,readFile(arg));console.log("Loaded "+arg);break;
  case "write":{const a=[];console.log("Paste content; finish .done");while(true){const s=await this.ask("");if(s===".done")break;a.push(s);}console.log(diffPreview(arg,a.join("\n")+"\n"));if(await this.ask("Write "+arg+"? [y/N] ")==="y")writeFile(arg,a.join("\n")+"\n");break;}
  case "run":if(await this.ask("Execute "+arg+"? [y/N] ")==="y"){const r=await run(arg);console.log(r.out+"\nExit "+r.code);}break;
