@@ -28,7 +28,7 @@ class TUI {
  render(){
   const {w,h}=this.dimensions(),small=w<76,left=small?0:Math.max(22,Math.min(30,Math.floor(w*.27))),right=small?w:w-left-1;
   const out=[],top="╭"+"─".repeat(w-2)+"╮",mid="├"+"─".repeat(w-2)+"┤",bottom="╰"+"─".repeat(w-2)+"╯";
-  out.push(top,this.line(" ◈ DEMON AGENT 3.0 · NODE TUI ⚡",w),mid);
+  out.push(top,this.line(" ◈ DEMON AGENT 2.2 · NODE TUI ⚡",w),mid);
   const rows=Math.max(4,h-9),side=[];
   if(!small){
    side.push(" PROVIDERS");
@@ -42,7 +42,7 @@ class TUI {
   for(let i=0;i<rows;i++){
    const message=visible[i]||"";
    if(small)out.push(this.line(" "+message,w));
-   else out.push("│"+truncate(side[i]||"",left-2).padEnd(left-2)+"│ "+truncate(message,right-4).padEnd(right-4)+" │");
+   else out.push("│"+truncate(side[i]||"",left-2).padEnd(left-2)+"│ "+truncate(message,right-2).padEnd(right-2)+" │");
   }
   out.push(mid,this.line(" "+(this.busy?this.frames[this.frame%this.frames.length]+" WORKING":"● "+this.status)+"  │  "+this.agent.c.provider+" / "+(this.agent.c.model||"choose model")+"  │  "+(this.scroll?"SCROLL":"LIVE"),w));
   out.push(this.line(" Enter send · /scroll up|down · /commands · Ctrl+C exit",w),bottom);
@@ -73,7 +73,7 @@ class TUI {
     this.log("❯ "+input);this.busy=true;this.status="PROCESSING";animation=setInterval(redraw,100);
     try{
      if(input.startsWith("/agent "))await a.askModel(input.slice(7).trim(),true);
-     else if(input.startsWith("/"))live=await a.command(input);
+     else if(input==="/scroll up"){this.scroll=Math.min(this.logs.length-1,this.scroll+8);this.render();}else if(input==="/scroll down"){this.scroll=Math.max(0,this.scroll-8);this.render();}else if(input==="/scroll bottom"){this.scroll=0;this.render();}else if(input.startsWith("/"))live=await a.command(input);
      else await a.askModel(input,false);
     }catch(e){this.log("ERROR: "+(e?.message||String(e)));}
     finally{this.busy=false;if(animation){clearInterval(animation);animation=null;}this.render();}
