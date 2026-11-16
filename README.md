@@ -22,6 +22,20 @@ Node.js 18+ required. No Python or npm dependencies.
 ~~~
 API keys are stored in ~/.config/demon-agent/config.json with owner-only permissions where supported. Environment variables are supported. Never commit keys.
 
+## Chat modes
+~~~text
+/mode                 # choose normal or coding
+/mode set 1 openrouter MODEL_ID
+/mode set 2 groq MODEL_ID
+/mode set 3 deepseek MODEL_ID
+/mode set 4 openai MODEL_ID
+/mode set 5 ollama MODEL_ID
+/mode list
+/mode coding          # requires five distinct configured provider/model pairs
+/mode normal
+~~~
+Normal mode uses the selected primary model (with configured failover). Coding mode runs five configured models concurrently as planner, architect, implementation specialist, security reviewer and test engineer. All five must have distinct provider/model pairs and valid credentials before activation. If any call fails, the run is reported as incomplete and no combined response is saved. The five specialists provide independent reports; this chat workflow does not automatically apply file changes. Use `/agent TASK` for the existing approval-gated file-editing workflow.
+
 ## Agentic coding
 ~~~text
 /agent inspect this project, find a bug, fix it and run relevant tests
@@ -36,6 +50,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 ## Commands
 | Command | Purpose |
 |---|---|
+| /mode | Select normal or five-AI coding mode; `/mode set SLOT PROVIDER MODEL` configures a coding slot |
 | /providers | List providers |
 | /provider ID | Select provider |
 | /key | Save hidden API key |
