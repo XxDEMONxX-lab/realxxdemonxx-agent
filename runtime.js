@@ -276,6 +276,7 @@ class Agent{
   }else throw Error("Use /mcp add|remove|list|tools ID");
   break;
  }
+ case "agent":if(!arg)throw Error("Use /agent TASK");await this.askModel(arg,true);break;
  case "plan":if(!arg)throw Error("Use /plan TASK");await this.askModel("Create a detailed implementation plan only. Do not propose or execute actions. Identify affected files, tests, risks, and verification steps. Task: "+arg,true,false);break;
  case "review":await this.reviewChanges(arg==="all");break;
  case "read":this.rememberFile(arg,readFile(arg));console.log("Loaded "+arg);break;
