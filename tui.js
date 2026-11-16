@@ -70,9 +70,14 @@ class TUI {
   out.push(this.line(" Enter send · ↑/↓ history · PgUp/PgDn scroll · Ctrl+K palette · Ctrl+C exit",w),bottom);
   process.stdout.write("\x1b[?25l\x1b[H\x1b[2J"+out.join("\n")+"\n");
  }
+ beginStream(){
+  // Stream chunks belong to one response, even when a chunk ends with a newline.
+  this.streamOpen=false;
+ }
+ endStream(){this.streamOpen=false;}
  stream(chunk){
   const value=String(chunk);
-  // A streamed assistant response must never share the user prompt line.
+  // Create exactly one speaker header per response, not once per line or chunk.
   if(!this.streamOpen){
    if(this.logs.length&&this.logs[this.logs.length-1]!=="")this.logs.push("");
    this.logs.push("Demon Agent");this.logs.push("");this.streamOpen=true;
@@ -81,7 +86,6 @@ class TUI {
   if(!this.logs.length)this.logs.push("");
   this.logs[this.logs.length-1]+=parts.shift();
   for(const part of parts)this.logs.push(part);
-  if(value.endsWith("\n"))this.streamOpen=false;
   if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
  }
  log(...args){
@@ -171,14 +175,14 @@ class TUI {
     if(!input.trim())continue;
     this.addLog("❯ "+input);this.busy=true;this.status="THINKING";this.scroll=0;this.render();
     try{
-     if(input.startsWith("/agent "))await a.askModel(input.slice(7).trim(),true);
+     if(input.startsWith("/agent ")){this.beginStream();try{await a.askModel(input.slice(7).trim(),true);}finally{this.endStream();}}
      else if(input==="/scroll up"){this.scrollBy(8);}
      else if(input==="/scroll down"){this.scrollBy(-8);}
      else if(input==="/scroll top"){this.scroll=this.maxScroll;this.render();}
      else if(input==="/scroll bottom"){this.scrollToBottom();}
      else if(input==="/clear"){this.logs=["Conversation cleared."];this.scroll=0;}
      else if(input.startsWith("/")){this.status="RUNNING COMMAND";const keep=await a.command(input);if(!keep)this.exitRequested=true;}
-     else{this.status="GENERATING";await a.askModel(input,false);}
+     else{this.status="GENERATING";this.beginStream();try{await a.askModel(input,false);}finally{this.endStream();}}
     }catch(e){this.log("ERROR: "+(e?.message||String(e)));}
     finally{this.busy=false;this.status="READY";this.render();}
    }
