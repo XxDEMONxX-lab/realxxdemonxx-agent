@@ -1,6 +1,6 @@
 {
   "name": "demon-agent",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "private": true,
   "description": "Node.js-first animated multi-provider coding agent for Termux",
   "main": "runtime.js",
