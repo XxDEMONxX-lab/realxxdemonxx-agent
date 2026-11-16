@@ -273,7 +273,7 @@ class Agent{
  async command(line){const i=line.indexOf(" "),cmd=(i<0?line:line.slice(0,i)).slice(1),arg=i<0?"":line.slice(i+1).trim();switch(cmd){
  case "help":console.log(HELP);break;
  case "palette":{
-  const entries=["/providers","/status","/files","/search","/symbols","/diagnose","/skills","/review","/review all","/subagents","/plan","/agent","/git status","/git diff","/test","/github repo","/session list","/memory show","/help","/exit"];
+  const entries=["/providers","/status","/files","/search","/symbols","/diagnose","/skills","/review","/review all","/subagents","/plan","/agent","/git status","/git diff","/test","/github repo","/github ci","/github branch","/github commit","/github push","/github pr-create","/session list","/memory show","/help","/exit"];
   const filter=(await this.ask("Palette filter (blank = all): ")).toLowerCase();
   const matches=entries.filter(x=>x.slice(1).includes(filter));
   if(!matches.length){console.log("No matching commands");break;}
@@ -373,6 +373,6 @@ class Agent{
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
  async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
-const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /search QUERY /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
+const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /palette /files /search QUERY /symbols [QUERY] /diagnose /subagents TASK /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream,validateBranchName,validateCommitMessage,parsePullRequestInput,runProgram};
