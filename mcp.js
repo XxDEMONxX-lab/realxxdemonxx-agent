@@ -16,7 +16,7 @@ class MCPClient{
   this.child.stderr.on("data",chunk=>{this.stderr=(this.stderr+chunk.toString()).slice(-4000);});
   this.child.on("error",e=>this.failAll(e));
   this.child.on("close",code=>this.failAll(Error("MCP server exited ("+code+")"+(this.stderr?": "+this.stderr:""))));
-  const init=await this.request("initialize",{protocolVersion:"2024-11-05",capabilities:{},clientInfo:{name:"demon-agent",version:"2.3.0"}});
+  const init=await this.request("initialize",{protocolVersion:"2024-11-05",capabilities:{},clientInfo:{name:"demon-agent",version:"2.4.0"}});
   if(!init||typeof init.protocolVersion!=="string")throw Error("MCP initialize returned an invalid response");
   this.notify("notifications/initialized",{});
   return this;
