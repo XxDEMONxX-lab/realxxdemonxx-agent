@@ -136,7 +136,7 @@ class TUI {
    case "end":if(key?.ctrl){this.scrollToBottom();return;}this.cursor=this.input.length;break;
    case "up":
     if(key?.shift){this.scrollBy(Math.max(1,this.viewportRows-2));return;}
-    if(this.history.length{if(this.historyIndex===this.history.length)this.savedInput=this.input;this.historyIndex=Math.max(0,this.historyIndex-1);this.input=this.history[this.historyIndex];this.cursor=this.input.length;}break;
+    if(this.history.length){if(this.historyIndex===this.history.length)this.savedInput=this.input;this.historyIndex=Math.max(0,this.historyIndex-1);this.input=this.history[this.historyIndex];this.cursor=this.input.length;}break;
    case "down":
     if(key?.shift){this.scrollBy(-Math.max(1,this.viewportRows-2));return;}
     if(this.historyIndex<this.history.length-1){this.historyIndex++;this.input=this.history[this.historyIndex];}
