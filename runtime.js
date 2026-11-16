@@ -26,9 +26,69 @@ async function completion(id,model,msg,c){const p=provider(id,c),k=key(p,c);let 
  if(p.kind==="ollama"){d=await req(p.url+"/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({model,messages:msg,stream:false})});if(typeof d.message?.content!=="string")throw Error("Bad Ollama response");return d.message.content;}
  if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2})});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
 async function completionStream(id,model,msg,c,onToken){
- const p=provider(id,c),k=key(p,c);
- const {streamCompletion}=require("./streaming");
- return streamCompletion(p,k,model,msg,onToken);
+ const p=provider(id,c),k=key(p,c),ac=new AbortController(),tm=setTimeout(()=>ac.abort(),120000);
+ let responseText="";
+ const emit=text=>{if(typeof text==="string"&&text){responseText+=text;onToken(text);}};
+ const parseEvent=data=>{
+  if(!data||data==="[DONE]")return;
+  let event;try{event=JSON.parse(data);}catch{return;}
+  if(event.error)throw Error(event.error.message||"Provider stream error");
+  if(p.kind==="anthropic"){
+   if(event.type==="content_block_delta")emit(event.delta?.text);
+  }else if(p.kind==="gemini"){
+   for(const part of event.candidates?.[0]?.content?.parts||[])emit(part.text);
+  }else if(p.kind==="ollama"){
+   emit(event.message?.content||event.response||"");
+   if(event.error)throw Error(event.error);
+  }else{
+   const delta=event.choices?.[0]?.delta?.content;
+   if(typeof delta==="string")emit(delta);
+   else if(Array.isArray(delta))for(const part of delta)emit(part.text);
+  }
+ };
+ try{
+  let url,headers={"content-type":"application/json"},body;
+  if(p.kind==="anthropic"){
+   if(!k)throw Error("API key missing");
+   url=p.url+"/messages";headers={"content-type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","accept":"text/event-stream"};
+   const system=msg.filter(x=>x.role==="system").map(x=>x.content).join("\n");
+   body=JSON.stringify({model,max_tokens:4096,system,messages:msg.filter(x=>x.role!=="system"),temperature:.2,stream:true});
+  }else if(p.kind==="gemini"){
+   if(!k)throw Error("API key missing");
+   url=p.url+"/models/"+encodeURIComponent(model)+":streamGenerateContent?alt=sse&key="+encodeURIComponent(k);
+   const contents=msg.filter(x=>x.role!=="system").map(x=>({role:x.role==="assistant"?"model":"user",parts:[{text:x.content}]}));
+   const system=msg.filter(x=>x.role==="system").map(x=>x.content).join("\n");
+   body=JSON.stringify({contents,systemInstruction:{parts:[{text:system}]},generationConfig:{temperature:.2}});
+   headers.accept="text/event-stream";
+  }else if(p.kind==="ollama"){
+   url=p.url+"/chat";body=JSON.stringify({model,messages:msg,stream:true});
+   headers.accept="application/x-ndjson";
+  }else{
+   if(!k)throw Error("API key missing");
+   url=p.url+"/chat/completions";headers.Authorization="Bearer "+k;headers.accept="text/event-stream";
+   body=JSON.stringify({model,messages:msg,temperature:.2,stream:true});
+  }
+  const r=await fetch(url,{method:"POST",headers,body,signal:ac.signal});
+  if(!r.ok){const detail=await r.text();throw Error("HTTP "+r.status+": "+detail.slice(0,500));}
+  if(!r.body)throw Error("Streaming response body unavailable");
+  const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
+  const consumeLine=raw=>{
+   const line=raw.trim();if(!line)return;
+   if(p.kind==="ollama"){parseEvent(line);return;}
+   if(line.startsWith("data:"))parseEvent(line.slice(5).trim());
+  };
+  while(true){
+   const {value,done}=await reader.read();if(done)break;
+   buffer+=decoder.decode(value,{stream:true});
+   let cut;
+   while((cut=buffer.indexOf("\n"))>=0){consumeLine(buffer.slice(0,cut));buffer=buffer.slice(cut+1);}
+   if(buffer.length>1000000)throw Error("Provider stream event exceeded 1MB");
+  }
+  buffer+=decoder.decode();if(buffer.trim())consumeLine(buffer);
+  if(!responseText)throw Error("Streaming provider returned no text");
+  return responseText;
+ }catch(e){if(e.name==="AbortError")throw Error("Streaming request timed out");throw e;}
+ finally{clearTimeout(tm);}
 }
 function safe(raw){if(!raw)throw Error("Relative path required");const f=path.resolve(ROOT,raw),rel=path.relative(ROOT,f);if(rel===".."||rel.startsWith(".."+path.sep)||path.isAbsolute(rel))throw Error("Path outside project");let cur=ROOT;for(const x of rel.split(path.sep)){cur=path.join(cur,x);try{const r=path.relative(ROOT,fs.realpathSync(cur));if(r===".."||r.startsWith(".."+path.sep)||path.isAbsolute(r))throw Error("Symlink outside project");}catch(e){if(e.code!=="ENOENT")throw e;}}return f;}
 function readFile(p){const f=safe(p),s=fs.statSync(f);if(!s.isFile()||s.size>200000)throw Error("Not a file or over 200KB");return fs.readFileSync(f,"utf8");}
