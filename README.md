@@ -47,9 +47,14 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /fallbacks on or off | Toggle failover |
 | /status | Show configuration |
 | /files, /read PATH | Inspect project |
-| /search QUERY | Search tracked and unignored project files |\n| /symbols [QUERY] | Index and search source symbols across supported languages |\n| /diagnose | Run basic project manifest diagnostics |\n| /subagents TASK | Run planner, architect and tester analysis in parallel |\n| /palette | Open searchable command palette (Ctrl+K) |
+| /search QUERY | Search tracked and unignored project files |
+| /symbols [QUERY] | Index and search source symbols across supported languages |
+| /diagnose | Run basic project manifest diagnostics |
+| /subagents TASK | Run planner, architect and tester analysis in parallel |
+| /palette | Open searchable command palette (Ctrl+K) |
 | /skills, /skill NAME | Discover and activate reusable skills |
-| /review | Review changes with the active model |\n| /review all | Run up to three independent model reviewers in parallel |
+| /review | Review changes with the active model |
+| /review all | Run up to three independent model reviewers in parallel |
 | /write PATH | Preview and write with approval |
 | /undo PATH | Restore the latest pre-write backup |
 | /agent TASK | Execute approved coding actions |
