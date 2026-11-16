@@ -103,6 +103,34 @@ function saveSession(name,hist){const f=sessionFile(name),dir=path.dirname(f),da
 function loadSession(name){const x=JSON.parse(fs.readFileSync(sessionFile(name),"utf8"));if(x.version!==1||!Array.isArray(x.messages)||x.messages.length>32)throw Error("Invalid session file");for(const m of x.messages)if(!m||!["user","assistant"].includes(m.role)||typeof m.content!=="string"||m.content.length>200000)throw Error("Invalid session message");return x.messages;}
 function listSessions(){const d=path.join(DIR,"sessions");try{return fs.readdirSync(d).filter(x=>/^[a-zA-Z0-9_-]{1,40}\.json$/.test(x)).map(x=>x.slice(0,-5)).sort();}catch(e){if(e.code==="ENOENT")return [];throw e;}}
 function run(cmd){return new Promise((resolve,reject)=>{const grouped=process.platform!=="win32",p=spawn(cmd,{cwd:ROOT,shell:true,detached:grouped,stdio:["ignore","pipe","pipe"],env:process.env});let out="",timedOut=false,killTimer=null;const add=x=>{out+=x.toString();if(out.length>30000)out=out.slice(-30000);};const signal=s=>{try{if(grouped&&p.pid)process.kill(-p.pid,s);else p.kill(s);}catch{}};p.stdout.on("data",add);p.stderr.on("data",add);const tm=setTimeout(()=>{timedOut=true;signal("SIGTERM");killTimer=setTimeout(()=>signal("SIGKILL"),2000);},120000);tm.unref?.();p.on("error",e=>{clearTimeout(tm);if(killTimer)clearTimeout(killTimer);reject(e);});p.on("close",code=>{clearTimeout(tm);if(killTimer)clearTimeout(killTimer);resolve({code:code??128,out:out||"(no output)",timedOut});});});}
+
+function validateBranchName(name){
+ if(typeof name!=="string"||name.length>100||! /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(name)||name.includes("..")||name.includes("@{")||name.includes("//")||name.endsWith("/")||name.endsWith(".")||name.split("/").some(x=>x.endsWith(".lock")))throw Error("Invalid Git branch name");
+ return name;
+}
+function validateCommitMessage(message){
+ if(typeof message!=="string"||!message.trim()||message.length>200||/[\\0\\r\\n]/.test(message))throw Error("Commit message must be one nonempty line of at most 200 characters");
+ return message.trim();
+}
+function parsePullRequestInput(value){
+ if(typeof value!=="string"||!value.trim())throw Error("Use /github pr-create TITLE | BODY");
+ const parts=value.split(" | "),title=parts.shift().trim(),body=parts.join(" | ").trim();
+ if(!title||title.length>200||body.length>5000)throw Error("PR title must be 1-200 characters and body at most 5000 characters");
+ return {title,body};
+}
+function runProgram(command,args,timeout=120000){
+ return new Promise((resolve,reject)=>{
+  const grouped=process.platform!=="win32",child=spawn(command,args,{cwd:ROOT,shell:false,detached:grouped,stdio:["ignore","pipe","pipe"],env:process.env});
+  let output="",timedOut=false,killTimer=null;
+  const add=chunk=>{output+=chunk.toString();if(output.length>30000)output=output.slice(-30000);};
+  const signal=s=>{try{if(grouped&&child.pid)process.kill(-child.pid,s);else child.kill(s);}catch{}};
+  child.stdout.on("data",add);child.stderr.on("data",add);
+  const timer=setTimeout(()=>{timedOut=true;signal("SIGTERM");killTimer=setTimeout(()=>signal("SIGKILL"),2000);},timeout);timer.unref?.();
+  child.once("error",error=>{clearTimeout(timer);if(killTimer)clearTimeout(killTimer);reject(error);});
+  child.once("close",code=>{clearTimeout(timer);if(killTimer)clearTimeout(killTimer);resolve({code:code??128,out:output||"(no output)",timedOut});});
+ });
+}
+
 function parse(raw){if(typeof raw!=="string"||raw.length>2000000)throw Error("Invalid or oversized model response");const start=raw.indexOf("{");if(start<0)throw Error("Model did not return JSON actions");let depth=0,inString=false,escape=false,end=-1;for(let i=start;i<raw.length;i++){const ch=raw[i];if(inString){if(escape)escape=false;else if(ch==="\\")escape=true;else if(ch==='"')inString=false;continue;}if(ch==='"'){inString=true;continue;}if(ch==="{")depth++;else if(ch==="}"&&--depth===0){end=i+1;break;}}if(end<0)throw Error("Incomplete JSON action object");const x=JSON.parse(raw.slice(start,end));if(!x||typeof x.message!=="string"||!Array.isArray(x.actions)||x.actions.length>20)throw Error("Invalid action schema or more than 20 actions");return x;}
 class Spinner{constructor(s){this.s=s;this.i=0;this.f=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];}start(){if(stdout.isTTY&&!process.env.NO_COLOR&&!process.env.DEMON_TUI)this.t=setInterval(()=>stdout.write("\r"+color(this.f[this.i++%10],"c")+" "+this.s),90);}stop(s){if(this.t){clearInterval(this.t);stdout.write("\r\x1b[2K");}if(s)console.log(s);}}
 const SYSTEM='You are Demon Agent, a senior coding engineer. For /agent tasks output only JSON: {"message":"summary","plan":"ordered plan","actions":[...]}. Allowed actions: {"type":"list"}, {"type":"search","query":"literal text"}, {"type":"read","path":"relative"}, {"type":"write","path":"relative","content":"complete file"}, {"type":"run","command":"shell command"}, {"type":"mcp","server":"id","tool":"name","arguments":{}}. Use read/list before editing if context missing. Never claim actions happened before execution. Never access secrets, exfiltrate data, write outside project, or propose destructive commands. Shell writes forbidden; use write actions. Include tests when useful. Max 20 actions.';
@@ -313,7 +341,28 @@ class Agent{
  case "write":{const a=[];console.log("Paste content; finish .done");while(true){const s=await this.ask("");if(s===".done")break;a.push(s);}const content=a.join("\n")+"\n";console.log(diffPreview(arg,content));if(await this.ask("Write "+arg+"? [y/N] ")==="y"){const before=await this.invokeHook("before_write",{path:arg,bytes:Buffer.byteLength(content)});if(before.ok){writeFile(arg,content);await this.invokeHook("after_write",{path:arg});}else console.log("Write blocked by hook");}break;}
  case "run":if(await this.ask("Execute "+arg+"? [y/N] ")==="y"){const before=await this.invokeHook("before_run",{command:arg});if(before.ok){const r=await run(arg);console.log(r.out+"\nExit "+r.code);await this.invokeHook("after_run",{command:arg,exitCode:r.code,timedOut:r.timedOut});}else console.log("Command blocked by hook");}break;
  case "test":if(await this.ask("Run npm test? [y/N] ")==="y"){const r=await run("npm test");console.log(r.out+"\nExit "+r.code);}break;
- case "github":{const commands={"auth":"auth status","repo":"repo view","prs":"pr list","issues":"issue list","pr-status":"pr status"};const sub=commands[arg];if(!sub)throw Error("Use /github auth|repo|prs|issues|pr-status");const r=await run("gh "+sub);console.log(r.out+"\nExit "+r.code);}break;
+ case "github":{
+  const [action,...rest]=arg.split(/\\s+/),value=arg.slice(action.length).trim();
+  const readOnly={"auth":["auth","status"],"repo":["repo","view"],"prs":["pr","list"],"issues":["issue","list"],"pr-status":["pr","status"],"ci":["run","list","--limit","5"],"ci-failed":["run","view","--log-failed"]};
+  if(readOnly[action]){const r=await runProgram("gh",readOnly[action]);console.log(r.out+"\\nExit "+r.code+(r.timedOut?" (timed out)":""));break;}
+  if(action==="branch"){
+   const name=validateBranchName(value);console.log("Create branch: "+name);
+   if(await this.ask("Create branch? [y/N] ")==="y"){const r=await runProgram("git",["switch","-c",name]);console.log(r.out+"\\nExit "+r.code);}
+  }else if(action==="commit"){
+   const message=validateCommitMessage(value),staged=await runProgram("git",["diff","--cached","--quiet"]);
+   if(staged.code===0)throw Error("No staged changes. Stage only the files you intend to commit first.");
+   if(staged.code!==1)throw Error("Unable to inspect staged changes: "+staged.out);
+   const preview=await runProgram("git",["diff","--cached","--stat"]);console.log(preview.out+"\\nCommit message: "+message);
+   if(await this.ask("Commit staged changes only? [y/N] ")==="y"){const r=await runProgram("git",["commit","-m",message]);console.log(r.out+"\\nExit "+r.code);}
+  }else if(action==="push"){
+   console.log("Push current branch to origin");
+   if(await this.ask("Push? [y/N] ")==="y"){const r=await runProgram("git",["push","-u","origin","HEAD"]);console.log(r.out+"\\nExit "+r.code);}
+  }else if(action==="pr-create"){
+   const {title,body}=parsePullRequestInput(value);console.log("Create PR: "+title);
+   if(await this.ask("Create pull request? [y/N] ")==="y"){const r=await runProgram("gh",["pr","create","--title",title,"--body",body]);console.log(r.out+"\\nExit "+r.code);}
+  }else throw Error("Use /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch NAME|commit MESSAGE|push|pr-create TITLE | BODY");
+  break;
+ }
  case "git":if(!["status","diff","log --oneline -5","branch --show-current"].includes(arg||"status"))throw Error("Allowed git status/diff/log --oneline -5/branch --show-current");{const r=await run("git "+(arg||"status"));console.log(r.out);}break;
  case "memory":if(arg==="show")console.log(this.memory||"(empty)");else if(arg==="clear")await this.saveMemory("");else if(arg==="edit"){const a=[];while(true){const s=await this.ask("Note (.done to finish): ");if(s===".done")break;a.push(s);}await this.saveMemory(a.join("\n"));}else console.log("Use /memory show|edit|clear");break;
  case "undo":if(!arg)throw Error("Use /undo PATH");console.log("Restore latest backup for "+arg+"?");if(await this.ask("Restore? [y/N] ")==="y"){undoFile(arg);console.log("Backup restored");}break;
@@ -323,6 +372,6 @@ class Agent{
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
  async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
-const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /search QUERY /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
+const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /search QUERY /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
-module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream};
+module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream,validateBranchName,validateCommitMessage,parsePullRequestInput,runProgram};
