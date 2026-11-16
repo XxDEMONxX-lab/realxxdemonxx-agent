@@ -94,3 +94,18 @@ test("scrolling clamps at transcript start and live bottom",()=>{
  ui.scrollBy(-99);assert.equal(ui.scroll,0);
  ui.scroll=4;ui.scrollToBottom();assert.equal(ui.scroll,0);
 });
+
+test("Shift+Up and Shift+Down scroll by one page without changing input",async()=>{
+ const ui=makeTui();ui.maxScroll=20;ui.viewportRows=10;
+ const p=ui.readLine("MESSAGE");
+ ui.onKeypress("",{name:"up",shift:true});assert.equal(ui.scroll,8);assert.equal(ui.input,"");
+ ui.onKeypress("",{name:"down",shift:true});assert.equal(ui.scroll,0);
+ ui.finishInput("");await p;
+});
+test("Ctrl+Home and Ctrl+End jump to transcript extremes",async()=>{
+ const ui=makeTui();ui.maxScroll=25;
+ const p=ui.readLine("MESSAGE");
+ ui.onKeypress("",{name:"home",ctrl:true});assert.equal(ui.scroll,25);
+ ui.onKeypress("",{name:"end",ctrl:true});assert.equal(ui.scroll,0);
+ ui.finishInput("");await p;
+});
