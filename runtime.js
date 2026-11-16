@@ -105,7 +105,8 @@ function listSessions(){const d=path.join(DIR,"sessions");try{return fs.readdirS
 function run(cmd){return new Promise((resolve,reject)=>{const grouped=process.platform!=="win32",p=spawn(cmd,{cwd:ROOT,shell:true,detached:grouped,stdio:["ignore","pipe","pipe"],env:process.env});let out="",timedOut=false,killTimer=null;const add=x=>{out+=x.toString();if(out.length>30000)out=out.slice(-30000);};const signal=s=>{try{if(grouped&&p.pid)process.kill(-p.pid,s);else p.kill(s);}catch{}};p.stdout.on("data",add);p.stderr.on("data",add);const tm=setTimeout(()=>{timedOut=true;signal("SIGTERM");killTimer=setTimeout(()=>signal("SIGKILL"),2000);},120000);tm.unref?.();p.on("error",e=>{clearTimeout(tm);if(killTimer)clearTimeout(killTimer);reject(e);});p.on("close",code=>{clearTimeout(tm);if(killTimer)clearTimeout(killTimer);resolve({code:code??128,out:out||"(no output)",timedOut});});});}
 
 function validateBranchName(name){
- if(typeof name!=="string"||name.length>100||! /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(name)||name.includes("..")||name.includes("@{")||name.includes("//")||name.endsWith("/")||name.endsWith(".")||name.split("/").some(x=>x.endsWith(".lock")))throw Error("Invalid Git branch name");
+ const parts=typeof name==="string"?name.split("/"):[];
+ if(typeof name!=="string"||name.length>100||! /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(name)||name.includes("..")||name.includes("@{")||name.includes("//")||name.endsWith("/")||name.endsWith(".")||parts.some(x=>!x||x.startsWith(".")||x.endsWith(".")||x.endsWith(".lock")))throw Error("Invalid Git branch name");
  return name;
 }
 function validateCommitMessage(message){
