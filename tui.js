@@ -72,7 +72,7 @@ class TUI {
   // A streamed assistant response must never share the user prompt line.
   if(!this.streamOpen){
    if(this.logs.length&&this.logs[this.logs.length-1]!=="")this.logs.push("");
-   this.logs.push("DEMON");this.logs.push("");this.streamOpen=true;
+   this.logs.push("Demon Agent");this.logs.push("");this.streamOpen=true;
   }
   const parts=value.split("\n");
   if(!this.logs.length)this.logs.push("");
