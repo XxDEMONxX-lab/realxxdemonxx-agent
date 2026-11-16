@@ -1,6 +1,6 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
-const {parseObject,validateAssignments,validateWorkerChange,runCodingTeam}=require("../coding-team");
+test("parses JSON containing braces inside string values",()=>assert.equal(parseObject('prefix {"content":"a } { text","path":"x"} trailing',"worker").content,"a } { text"));
 test("parses JSON containing braces and escaped quotes",()=>assert.equal(parseObject('prefix {"content":"a } \\"b\\" {","path":"x"} trailing',"worker").content,'a } "b" {'));
 test("requires five unique safe file assignments",()=>{const files=Array.from({length:5},(_,i)=>({path:"src/file"+i+".js",goal:"change"}));assert.equal(validateAssignments({files}).length,5);assert.throws(()=>validateAssignments({files:files.slice(0,4)}),/exactly 5/);assert.throws(()=>validateAssignments({files:[...files.slice(0,4),files[0]]}),/share a file/);assert.throws(()=>validateAssignments({files:files.map((x,i)=>i===4?{path:"..\\/escape"}:x)}),/Invalid path/);});
 test("rejects worker output for another file or incomplete content",()=>{const assigned={path:"src/a.js"};assert.throws(()=>validateWorkerChange({path:"src/b.js",content:"x",summary:"ok"},assigned),/assigned/);assert.throws(()=>validateWorkerChange({path:"src/a.js",content:4,summary:"ok"},assigned),/complete file content/);});
