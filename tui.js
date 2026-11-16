@@ -48,7 +48,8 @@ class TUI {
   out.push(this.line(" Enter send · /scroll up|down · /commands · Ctrl+C exit",w),bottom);
   process.stdout.write("\x1b[?25l\x1b[2J\x1b[H"+out.join("\n")+"\n\x1b[?25h");
  }
- stream(chunk){const parts=String(chunk).split("\n");if(!this.logs.length)this.logs.push("");this.logs[this.logs.length-1]+=parts.shift();for(const part of parts)this.logs.push(part);if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);}\n log(...args){
+ stream(chunk){const parts=String(chunk).split("\n");if(!this.logs.length)this.logs.push("");this.logs[this.logs.length-1]+=parts.shift();for(const part of parts)this.logs.push(part);if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);}
+ log(...args){
   const s=args.map(x=>typeof x==="string"?x:(x instanceof Error?x.stack||x.message:JSON.stringify(x))).join(" ");
   this.logs.push(...s.split("\n"));
   if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
