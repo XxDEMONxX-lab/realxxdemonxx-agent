@@ -285,22 +285,22 @@ class Agent{
  case "github":{
   const [action,...rest]=arg.split(/\s+)/,value=arg.slice(action.length).trim();
   const readOnly={"auth":["auth","status"],"repo":["repo","view"],"prs":["pr","list"],"issues":["issue","list"],"pr-status":["pr","status"],"ci":["run","list","--limit","5"],"ci-failed":["run","view","--log-failed"]};
-  if(readOnly[action]){const r=await runProgram("gh",readOnly[action]);console.log(r.out+"\\nExit "+r.code+(r.timedOut?" (timed out)":""));break;}
+  if(readOnly[action]){const r=await runProgram("gh",readOnly[action]);console.log(r.out+"\nExit "+r.code+(r.timedOut?" (timed out)":""));break;}
   if(action==="branch"){
    const name=validateBranchName(value);console.log("Create branch: "+name);
-   if(await this.ask("Create branch? [y/N] ")==="y"){const r=await runProgram("git",["switch","-c",name]);console.log(r.out+"\\nExit "+r.code);}
+   if(await this.ask("Create branch? [y/N] ")==="y"){const r=await runProgram("git",["switch","-c",name]);console.log(r.out+"\nExit "+r.code);}
   }else if(action==="commit"){
    const message=validateCommitMessage(value),staged=await runProgram("git",["diff","--cached","--quiet"]);
    if(staged.code===0)throw Error("No staged changes. Stage only the files you intend to commit first.");
    if(staged.code!==1)throw Error("Unable to inspect staged changes: "+staged.out);
-   const preview=await runProgram("git",["diff","--cached","--stat"]);console.log(preview.out+"\\nCommit message: "+message);
-   if(await this.ask("Commit staged changes only? [y/N] ")==="y"){const r=await runProgram("git",["commit","-m",message]);console.log(r.out+"\\nExit "+r.code);}
+   const preview=await runProgram("git",["diff","--cached","--stat"]);console.log(preview.out+"\nCommit message: "+message);
+   if(await this.ask("Commit staged changes only? [y/N] ")==="y"){const r=await runProgram("git",["commit","-m",message]);console.log(r.out+"\nExit "+r.code);}
   }else if(action==="push"){
    console.log("Push current branch to origin");
-   if(await this.ask("Push? [y/N] ")==="y"){const r=await runProgram("git",["push","-u","origin","HEAD"]);console.log(r.out+"\\nExit "+r.code);}
+   if(await this.ask("Push? [y/N] ")==="y"){const r=await runProgram("git",["push","-u","origin","HEAD"]);console.log(r.out+"\nExit "+r.code);}
   }else if(action==="pr-create"){
    const {title,body}=parsePullRequestInput(value);console.log("Create PR: "+title);
-   if(await this.ask("Create pull request? [y/N] ")==="y"){const r=await runProgram("gh",["pr","create","--title",title,"--body",body]);console.log(r.out+"\\nExit "+r.code);}
+   if(await this.ask("Create pull request? [y/N] ")==="y"){const r=await runProgram("gh",["pr","create","--title",title,"--body",body]);console.log(r.out+"\nExit "+r.code);}
   }else throw Error("Use /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch NAME|commit MESSAGE|push|pr-create TITLE | BODY");
   break;
  }
