@@ -61,7 +61,7 @@ class Agent{
  case "exit":case "quit":return false;
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
- async start(){return require("./tui").start(this);}}
+ async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
 const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /read PATH /write PATH\n/agent TASK /run COMMAND /git status|diff /memory show|edit|clear /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={safe,parse,provider,writeFile};
