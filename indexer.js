@@ -17,7 +17,7 @@ function buildSymbolIndex(root,options={}){
   let st;try{st=fs.lstatSync(file);}catch{continue;}
   if(!st.isFile()||st.isSymbolicLink()||st.size>MAX_BYTES)continue;
   let source;try{source=fs.readFileSync(file,"utf8");}catch{continue;}
-  if(source.includes("\\0"))continue;
+  if(source.includes("\0"))continue;
   for(const [language,pattern] of PATTERNS){
    pattern.lastIndex=0;let match;
    while((match=pattern.exec(source))&&symbols.length<MAX_RESULTS){
