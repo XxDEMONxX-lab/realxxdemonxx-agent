@@ -53,7 +53,7 @@ class TUI {
   out.push(top,this.line(" ◈ DEMON AGENT 3.1  ⚡  FULL SCREEN  │  "+(this.busy?"WORKING":"READY"),w));
   out.push(this.line(" "+this.agent.c.provider+" / "+model+"  │  "+truncate(process.cwd(),Math.max(12,w-30)),w),mid);
   const matches=this.commandMatches(),menuStart=Math.max(0,Math.min(this.commandSelection-3,matches.length-7)),visibleMatches=matches.slice(menuStart,menuStart+7),menuRows=visibleMatches.length?visibleMatches.length+2:0;
-  const rows=Math.max(1,h-11-menuRows),chat=[];
+  const rows=Math.max(1,h-9-menuRows),chat=[];
   for(const log of this.logs)chat.push(...wrap(log,w-4));
   this.viewportRows=rows;this.maxScroll=Math.max(0,chat.length-rows);
   this.scroll=Math.max(0,Math.min(this.scroll,this.maxScroll));
