@@ -3,10 +3,11 @@
 const fs=require("node:fs"),path=require("node:path"),os=require("node:os"),crypto=require("node:crypto"),rlib=require("node:readline/promises"),{stdin,stdout}=require("node:process"),{spawn,spawnSync}=require("node:child_process");
 const {searchProject,loadSkills,skillPrompt}=require("./features");
 const {MCPClient,validateServer,toolsPrompt}=require("./mcp");
+const {EVENTS,validateHook,runHook}=require("./hooks");
 const ROOT=path.resolve(process.env.DEMON_PROJECT||process.cwd()),DIR=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),".config"),"demon-agent"),FILE=path.join(DIR,"config.json");
 const P={openai:["OpenAI","https://api.openai.com/v1","OPENAI_API_KEY"],openrouter:["OpenRouter","https://openrouter.ai/api/v1","OPENROUTER_API_KEY"],groq:["Groq","https://api.groq.com/openai/v1","GROQ_API_KEY"],together:["Together","https://api.together.xyz/v1","TOGETHER_API_KEY"],cerebras:["Cerebras","https://api.cerebras.ai/v1","CEREBRAS_API_KEY"],deepseek:["DeepSeek","https://api.deepseek.com/v1","DEEPSEEK_API_KEY"],mistral:["Mistral","https://api.mistral.ai/v1","MISTRAL_API_KEY"],fireworks:["Fireworks","https://api.fireworks.ai/inference/v1","FIREWORKS_API_KEY"],xai:["xAI","https://api.x.ai/v1","XAI_API_KEY"],sambanova:["SambaNova","https://api.sambanova.ai/v1","SAMBANOVA_API_KEY"],perplexity:["Perplexity","https://api.perplexity.ai","PERPLEXITY_API_KEY"],anthropic:["Anthropic","https://api.anthropic.com/v1","ANTHROPIC_API_KEY","anthropic"],gemini:["Gemini","https://generativelanguage.googleapis.com/v1beta","GEMINI_API_KEY","gemini"],ollama:["Ollama","http://127.0.0.1:11434/api","","ollama"]};
 const K={r:"\x1b[0m",c:"\x1b[36m",g:"\x1b[32m",y:"\x1b[33m",red:"\x1b[31m",b:"\x1b[1m",d:"\x1b[2m"};const color=(s,k)=>process.env.NO_COLOR?s:(K[k]||"")+s+K.r;
-const base=()=>({provider:"openrouter",model:"",keys:{},baseUrls:{},custom:{},fallbacks:[],fallbackModels:{},mcpServers:{},autoFallback:true});
+const base=()=>({provider:"openrouter",model:"",keys:{},baseUrls:{},custom:{},fallbacks:[],fallbackModels:{},mcpServers:{},hooks:{},autoFallback:true});
 function load(){try{return {...base(),...JSON.parse(fs.readFileSync(FILE,"utf8"))};}catch(e){if(e.code!=="ENOENT")console.error("Config warning: "+e.message);return base();}}
 function save(c){fs.mkdirSync(DIR,{recursive:true,mode:0o700});try{fs.chmodSync(DIR,0o700);}catch{}const t=FILE+"."+process.pid+".tmp",fd=fs.openSync(t,"w",0o600);try{fs.writeFileSync(fd,JSON.stringify(c,null,2));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(t,FILE);}
 function provider(id,c){const p=P[id];if(p)return {id,name:p[0],url:(c.baseUrls[id]||p[1]).replace(/\/+$/,""),env:p[2],kind:p[3]||"openai"};const x=c.custom[id];if(x)return {id,name:x.name,url:x.url,env:x.env,kind:"openai"};throw Error("Unknown provider "+id);}
@@ -70,7 +71,7 @@ function parse(raw){if(typeof raw!=="string"||raw.length>2000000)throw Error("In
 class Spinner{constructor(s){this.s=s;this.i=0;this.f=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];}start(){if(stdout.isTTY&&!process.env.NO_COLOR&&!process.env.DEMON_TUI)this.t=setInterval(()=>stdout.write("\r"+color(this.f[this.i++%10],"c")+" "+this.s),90);}stop(s){if(this.t){clearInterval(this.t);stdout.write("\r\x1b[2K");}if(s)console.log(s);}}
 const SYSTEM='You are Demon Agent, a senior coding engineer. For /agent tasks output only JSON: {"message":"summary","plan":"ordered plan","actions":[...]}. Allowed actions: {"type":"list"}, {"type":"search","query":"literal text"}, {"type":"read","path":"relative"}, {"type":"write","path":"relative","content":"complete file"}, {"type":"run","command":"shell command"}, {"type":"mcp","server":"id","tool":"name","arguments":{}}. Use read/list before editing if context missing. Never claim actions happened before execution. Never access secrets, exfiltrate data, write outside project, or propose destructive commands. Shell writes forbidden; use write actions. Include tests when useful. Max 20 actions.';
 class Agent{
- constructor(){this.c=load();this.rl=rlib.createInterface({input:stdin,output:stdout});this.hist=[];this.sessionName="";this.ctx=new Map();this.skills=loadSkills(ROOT,DIR);this.activeSkill="";this.c.mcpServers=this.c.mcpServers||{};this.mcpTools={};this.memfile=path.join(DIR,"memory",crypto.createHash("sha256").update(ROOT).digest("hex")+".md");this.memory="";try{this.memory=fs.readFileSync(this.memfile,"utf8");}catch{}}
+ constructor(){this.c=load();this.rl=rlib.createInterface({input:stdin,output:stdout});this.hist=[];this.sessionName="";this.ctx=new Map();this.skills=loadSkills(ROOT,DIR);this.activeSkill="";this.c.mcpServers=this.c.mcpServers||{};this.c.hooks=this.c.hooks||{};this.mcpTools={};this.memfile=path.join(DIR,"memory",crypto.createHash("sha256").update(ROOT).digest("hex")+".md");this.memory="";try{this.memory=fs.readFileSync(this.memfile,"utf8");}catch{}}
  ask(s){return this.rl.question(s).then(x=>x.trim());}
  async secret(){if(!stdin.isTTY)throw Error("Interactive terminal required");const {execSync}=require("node:child_process");stdout.write("API key (hidden): ");const old=execSync("stty -g",{stdio:["inherit","pipe","ignore"]}).toString().trim();try{execSync("stty -echo",{stdio:"inherit"});const v=await this.rl.question("");stdout.write("\n");return v.trim();}finally{execSync("stty "+old,{stdio:"inherit"});}}
  async fetchModels(id){const s=new Spinner("Fetching models · "+id);s.start();try{const m=await models(id,this.c);s.stop(color(m.length+" models found","g"));m.slice(0,200).forEach(x=>console.log("  "+x));if(id===this.c.provider&&m.length&&!this.c.model){this.c.model=m[0];save(this.c);console.log("Auto-selected "+m[0]);}}catch(e){s.stop(color(id+": "+e.message,"red"));}}
@@ -137,7 +138,7 @@ class Agent{
      if(typeof a.content!=="string")throw Error("Invalid content");
      safe(a.path);output=diffPreview(a.path,a.content);
      console.log(output);
-     if(await this.ask("Apply write? [y/N] ")==="y"){writeFile(a.path,a.content);output+="\nWrite applied";}
+     if(await this.ask("Apply write? [y/N] ")==="y"){const before=await this.invokeHook("before_write",{path:a.path,bytes:Buffer.byteLength(a.content)});if(!before.ok)output+="\nWrite blocked by before_write hook";else{writeFile(a.path,a.content);output+="\nWrite applied";const after=await this.invokeHook("after_write",{path:a.path});if(after.ran)output+="\nAfter-write hook: "+(after.ok?"ok":"failed");}}
      else output+="\nWrite denied by user";
     }else if(a.type==="mcp"){
      const available=this.mcpTools[a.server]||[],tool=available.find(x=>x.name===a.tool),server=this.c.mcpServers[a.server];
@@ -150,7 +151,7 @@ class Agent{
     }else if(a.type==="run"){
      if(typeof a.command!=="string"||a.command.length>5000)throw Error("Invalid or oversized command");
      console.log(color(a.command,"y"));
-     if(await this.ask("Execute? [y/N] ")==="y"){const r=await run(a.command);output=r.out+"\nExit "+r.code+(r.timedOut?" (timed out after 120s)":"");}
+     if(await this.ask("Execute? [y/N] ")==="y"){const before=await this.invokeHook("before_run",{command:a.command});if(!before.ok)output="Command blocked by before_run hook";else{const r=await run(a.command);output=r.out+"\nExit "+r.code+(r.timedOut?" (timed out after 120s)":"");const after=await this.invokeHook("after_run",{command:a.command,exitCode:r.code,timedOut:r.timedOut});if(after.ran)output+="\nAfter-run hook: "+(after.ok?"ok":"failed");}}
      else output="Command denied by user";
     }else output="Unsupported action skipped";
     console.log(output.slice(0,12000));
@@ -161,6 +162,15 @@ class Agent{
    }
   }
   return results;
+ }
+ async invokeHook(event,payload){
+  const config=this.c.hooks[event];if(!config)return {ok:true,ran:false};
+  if(await this.ask("Run "+event+" hook ("+config.command+")? [y/N] ")!=="y")return {ok:false,ran:false,denied:true};
+  try{
+   const result=await runHook(event,config,payload,ROOT);
+   console.log(result.output);
+   return {ok:result.code===0&&!result.timedOut,ran:true,output:result.output,code:result.code,timedOut:result.timedOut};
+  }catch(e){console.log(color("Hook failed: "+e.message,"red"));return {ok:false,ran:true,error:e.message};}
  }
  async reviewChanges(parallel=false){
   const diff=await run("git diff HEAD --no-ext-diff --unified=3");
@@ -194,6 +204,18 @@ class Agent{
  case "search":{const r=searchProject(ROOT,arg);console.log(r.results.map(x=>x.path+":"+x.line+": "+x.text).join("\n")||"No matches");if(r.truncated)console.log("Search output truncated");break;}
  case "skills":console.log(this.skills.map(x=>x.name+(x.name===this.activeSkill?"  [active]":"")).join("\n")||"No skills found. Add .demon/skills/NAME/SKILL.md");break;
  case "skill":if(!arg){this.activeSkill="";console.log("Skill disabled");}else{const x=this.skills.find(v=>v.name===arg);if(!x)throw Error("Unknown skill; use /skills");this.activeSkill=x.name;console.log("Active skill: "+x.name);}break;
+ case "hook":{
+  const [action,event]=arg.split(/\s+/,2);
+  if(action==="add"){
+   if(!EVENTS.includes(event))throw Error("Use /hook add "+EVENTS.join("|"));
+   const command=await this.ask("Executable: "),raw=await this.ask('Arguments as JSON array (e.g. ["hook.js"]): '),envRaw=await this.ask("Environment variable allowlist JSON array (optional): ");
+   let args,envAllow=[];try{args=JSON.parse(raw);if(envRaw)envAllow=JSON.parse(envRaw);}catch{throw Error("Hook arguments and env allowlist must be valid JSON");}
+   this.c.hooks[event]=validateHook(event,{command,args,envAllow});save(this.c);console.log("Hook configured: "+event);
+  }else if(action==="remove"){if(!event||!this.c.hooks[event])throw Error("Unknown hook event");delete this.c.hooks[event];save(this.c);console.log("Hook removed: "+event);}
+  else if(action==="list"){for(const name of EVENTS)if(this.c.hooks[name])console.log(name+" → "+this.c.hooks[name].command);else console.log(name+" → (not configured)");}
+  else throw Error("Use /hook add|remove|list EVENT");
+  break;
+ }
  case "mcp":{
   const [action,id]=arg.split(/\s+/,2);
   if(action==="add"){
@@ -232,6 +254,6 @@ class Agent{
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
  async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
-const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /search QUERY /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
+const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /search QUERY /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream};
