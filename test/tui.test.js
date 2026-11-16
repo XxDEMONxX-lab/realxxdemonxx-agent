@@ -132,3 +132,19 @@ test("Escape closes slash command suggestions",async()=>{
  assert.equal(ui.input,"");assert.equal(ui.commandMatches().length,0);
  ui.finishInput("");await p;
 });
+
+test("Enter executes the highlighted slash command",async()=>{
+ const ui=makeTui(),p=ui.readLine("MESSAGE");
+ ui.onKeypress("/",{name:"/"});
+ ui.onKeypress("s",{name:"s"});
+ ui.onKeypress("",{name:"down"});
+ ui.onKeypress("",{name:"enter"});
+ assert.equal(await p,"/symbols");
+ assert.equal(ui.input,"");
+});
+test("Enter executes the first slash suggestion without requiring Tab",async()=>{
+ const ui=makeTui(),p=ui.readLine("MESSAGE");
+ ui.onKeypress("/",{name:"/"});
+ ui.onKeypress("",{name:"return"});
+ assert.equal(await p,"/help");
+});
