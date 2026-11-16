@@ -18,7 +18,7 @@ const wrap=(value,width)=>{
  return out;
 };
 const COMMANDS=[
- ["/help","Show every command"],["/mode","Switch normal or 5-AI coding mode"],["/palette","Open command search"],["/providers","List AI providers"],["/provider","Select provider"],["/key","Configure API key"],["/models","Discover available models"],["/model","Select model"],["/base","Set provider base URL"],["/custom","Add custom provider"],["/fallback","Configure provider fallback"],["/fallbacks","Toggle provider fallback"],["/status","Show agent configuration"],["/files","List project files"],["/search","Search project source"],["/symbols","Find code symbols"],["/diagnose","Diagnose project"],["/verify","Check syntax and tests"],["/subagents","Run parallel analysis"],["/skills","List installed skills"],["/skill","Activate a skill"],["/review","Review project changes"],["/read","Read a project file"],["/write","Write a project file"],["/run","Run command with approval"],["/test","Run test suite"],["/agent","Run a coding task"],["/plan","Plan a coding task"],["/hook","Manage lifecycle hooks"],["/mcp","Manage MCP servers"],["/github","GitHub operations"],["/git","Inspect Git state"],["/memory","Manage project memory"],["/session","Manage sessions"],["/undo","Restore a file backup"],["/scroll","Scroll conversation"],["/clear","Clear conversation"],["/exit","Exit Demon Agent"],["/quit","Exit Demon Agent"]
+ ["/help","Show every command"],["/mode","Switch normal or 5-AI coding mode"],["/palette","Open command search"],["/providers","List AI providers"],["/provider","Select provider"],["/key","Configure API key"],["/models","Discover available models"],["/model","Select model"],["/base","Set provider base URL"],["/custom","Add custom provider"],["/fallback","Configure provider fallback"],["/fallbacks","Toggle provider fallback"],["/search","Search project source"],["/symbols","Find code symbols"],["/status","Show agent configuration"],["/files","List project files"],["/diagnose","Diagnose project"],["/verify","Check syntax and tests"],["/subagents","Run parallel analysis"],["/skills","List installed skills"],["/skill","Activate a skill"],["/review","Review project changes"],["/read","Read a project file"],["/write","Write a project file"],["/run","Run command with approval"],["/test","Run test suite"],["/agent","Run a coding task"],["/plan","Plan a coding task"],["/hook","Manage lifecycle hooks"],["/mcp","Manage MCP servers"],["/github","GitHub operations"],["/git","Inspect Git state"],["/memory","Manage project memory"],["/session","Manage sessions"],["/undo","Restore a file backup"],["/scroll","Scroll conversation"],["/clear","Clear conversation"],["/exit","Exit Demon Agent"],["/quit","Exit Demon Agent"]
 ];
 const SPIN=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
 const BAR=["▰▱▱▱▱▱▱▱","▰▰▱▱▱▱▱▱","▰▰▰▱▱▱▱▱","▰▰▰▰▱▱▱▱","▰▰▰▰▰▱▱▱","▰▰▰▰▰▰▱▱","▰▰▰▰▰▰▰▱","▰▰▰▰▰▰▰▰","▱▰▰▰▰▰▰▰","▱▱▰▰▰▰▰▰","▱▱▱▰▰▰▰▰","▱▱▱▱▰▰▰▰","▱▱▱▱▱▰▰▰","▱▱▱▱▱▱▰▰","▱▱▱▱▱▱▱▰","▱▱▱▱▱▱▱▱"];
@@ -127,6 +127,8 @@ class TUI {
    if(key.name==="k"){this.input="/palette";this.cursor=this.input.length;this.render();return;}
    if(key.name==="up"){this.scrollBy(3);return;}
    if(key.name==="down"){this.scrollBy(-3);return;}
+   if(key.name==="home"){this.scroll=this.maxScroll;this.render();return;}
+   if(key.name==="end"){this.scrollToBottom();return;}
    if(key.name==="a"){this.cursor=0;this.render();return;}
    if(key.name==="e"){this.cursor=this.input.length;this.render();return;}
    if(key.name==="u"){this.input=this.input.slice(this.cursor);this.cursor=0;this.render();return;}
