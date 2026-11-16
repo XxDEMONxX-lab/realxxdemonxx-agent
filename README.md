@@ -48,6 +48,10 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /status | Show configuration |
 | /files, /read PATH | Inspect project |
 | /search QUERY | Search tracked and unignored project files |
+| /symbols [QUERY] | Index and search source symbols |
+| /diagnose | Run basic project diagnostics |
+| /subagents TASK | Parallel planner, architect and tester analysis |
+| /palette | Search commands (also Ctrl+K) |
 | /symbols [QUERY] | Index and search source symbols across supported languages |
 | /diagnose | Run basic project manifest diagnostics |
 | /subagents TASK | Run planner, architect and tester analysis in parallel |
@@ -66,7 +70,11 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /mcp list or remove ID | Manage configured MCP servers |
 | /hook add EVENT | Configure a lifecycle hook |
 | /hook list or remove EVENT | Manage lifecycle hooks |
-| /github auth, repo, prs, issues, pr-status | Read-only GitHub CLI queries |
+| /github auth, repo, prs, issues, pr-status, ci | Read-only GitHub and CI queries |
+| /github branch NAME | Create a validated branch after confirmation |
+| /github commit MESSAGE | Commit already-staged changes after confirmation |
+| /github push | Push current branch after confirmation |
+| /github pr-create TITLE \| BODY | Create a pull request after confirmation |
 | /git status or /git diff | Git inspection |
 | /memory show, edit, clear | Persistent project notes |
 | /session save NAME | Save the current conversation |
@@ -88,7 +96,7 @@ Use `/mcp tools ID` to discover tools, `/mcp list` to inspect configured servers
 ## Streaming and skills
 OpenAI-compatible providers, Anthropic, Gemini and Ollama stream response tokens into the TUI. SSE and Ollama NDJSON events are parsed incrementally with bounded event buffering and request timeouts. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
 
-GitHub commands require the official `gh` CLI to be installed and authenticated. The supported commands are read-only; changes still require explicit approval through normal coding actions.
+GitHub read operations and CI inspection require the official `gh` CLI to be installed and authenticated. Write operations are explicit: `/github branch NAME`, `/github commit MESSAGE` (commits only files already staged by you), `/github push`, and `/github pr-create TITLE | BODY`. Each operation asks for confirmation. No command stages all files automatically. Review staged diffs before committing.
 
 ## TUI
 Responsive provider sidebar, wrapped transcript, live activity indicator, terminal-resize handling, searchable command palette (`Ctrl+K` or `/palette`), and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
