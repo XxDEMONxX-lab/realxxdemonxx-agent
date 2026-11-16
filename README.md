@@ -1,6 +1,6 @@
-# Demon Agent 2.5 ⚡
+# Demon Agent 3.0 ⚡
 
-Node.js-first multi-provider coding agent with a keyboard-driven full-screen TUI, streaming adapters for OpenAI-compatible APIs, Anthropic, Gemini and Ollama, project symbol indexing, parallel analysis subagents, reusable skills, code review, MCP tools and approval-gated coding actions. Supports Termux, Linux, macOS and Windows.
+Production-oriented Node.js multi-provider coding agent with a keyboard-driven full-screen TUI, native provider streaming, project symbol indexing, parallel analysis subagents, reusable skills, MCP tools, lifecycle hooks and transactional file edits. Supports Termux, Linux, macOS and Windows.
 
 ## Termux install
 ~~~sh
@@ -26,7 +26,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 ~~~text
 /agent inspect this project, find a bug, fix it and run relevant tests
 ~~~
-The agent runs a bounded multi-round tool loop: it can list/read/search files, inspect Git, call configured MCP tools, propose writes or shell commands, receive tool results, and continue up to six rounds. Every write, shell command, and MCP call requires approval. Proposed writes show a Git-based diff preview. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Use `/plan TASK` for a plan without execution, `/agent TASK` to execute approved steps, and `/review` to inspect the working-tree diff. This is not an OS-level sandbox.
+The agent runs a bounded multi-round tool loop: it can list/read/search files, inspect Git, call configured MCP tools, propose writes or shell commands, receive tool results, and continue up to six rounds. Every write, shell command, and MCP call requires approval. Proposed writes show a Git-based diff preview. Agent writes require the SHA-256 hash returned by a recent read, and are rejected if the file changed before approval or commit. Writes use same-directory temporary files, fsync and atomic rename; existing permissions are preserved. Exact-context patches reject stale hashes and ambiguous matches. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Use `/plan TASK` for a plan without execution, `/agent TASK` to execute approved steps, and `/review` to inspect the working-tree diff. This is not an OS-level sandbox.
 
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
@@ -59,7 +59,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /skills, /skill NAME | Discover and activate reusable skills |
 | /review | Review changes with the active model |
 | /review all | Run up to three independent model reviewers in parallel |
-| /write PATH | Preview and write with approval |
+| /write PATH | Preview and write with approval |\n| /patch PATH | Model-proposed exact-context patches use SHA-256 compare-and-swap |
 | /undo PATH | Restore the latest pre-write backup |
 | /agent TASK | Execute approved coding actions |
 | /plan TASK | Show a plan without executing actions |
@@ -84,7 +84,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /clear | Clear conversation |
 | /exit | Quit |
 
-## Lifecycle hooks
+## Transactional editing (3.0)\n\nAgent write actions must include `expectedHash` from the latest read; use `null` only when creating a new file. The runtime checks the hash again at commit time, then writes through an fsynced temporary file and atomic rename. Patch actions require a matching SHA-256 and one unique exact-text context. This prevents an agent from silently overwriting edits made by you or another process while it was reasoning. Each edit still requires approval and runs the configured lifecycle hooks.\n\n## Lifecycle hooks
 
 Optional hooks run before or after file writes and shell commands: `before_write`, `after_write`, `before_run`, and `after_run`. Configure them with `/hook add EVENT`; each hook uses an executable plus a JSON argument array and an optional environment-variable allowlist. Every hook invocation requires its own approval. A failed or denied `before_*` hook blocks the operation; an `after_*` hook reports its result after the operation. Hooks run without a shell and do not inherit provider API keys by default.
 
