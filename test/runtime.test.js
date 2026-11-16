@@ -8,7 +8,7 @@ test("rejects malformed schema",()=>assert.throws(()=>parse('{"message":"bad"}')
 test("limits actions",()=>assert.throws(()=>parse(JSON.stringify({message:"x",actions:Array(21).fill({type:"list"})})),/20 actions/));
 test("rejects unknown providers",()=>assert.throws(()=>provider("unknown",{custom:{}}),/Unknown provider/));
 
-const {TUI,wrap,truncate,strip}=require("../tui");
+const {TUI,wrap,truncate,strip,filterCommands}=require("../tui");
 test("exports the TUI launcher class",()=>assert.equal(typeof TUI.prototype.start,"function"));
 test("wraps terminal text at requested width",()=>assert.deepEqual(wrap("alpha beta gamma",8),["alpha","beta","gamma"]));
 test("splits oversized words",()=>assert.deepEqual(wrap("abcdefgh",4),["abcd","efgh"]));
@@ -25,3 +25,12 @@ test("streams OpenAI-compatible server-sent events",async()=>{const oldFetch=glo
 test("streams Anthropic message delta events",async()=>{const oldFetch=global.fetch,oldKey=process.env.ANTHROPIC_API_KEY;process.env.ANTHROPIC_API_KEY="test-key";global.fetch=async(url)=>{assert.match(url,/\/messages$/);return new Response('event: content_block_delta\\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"anthropic"}}\\n\\nevent: message_stop\\ndata: {"type":"message_stop"}\\n\\n',{status:200});};try{const chunks=[],answer=await completionStream("anthropic","claude-test",[],{baseUrls:{},keys:{},custom:{}},x=>chunks.push(x));assert.equal(answer,"anthropic");assert.deepEqual(chunks,["anthropic"]);}finally{global.fetch=oldFetch;if(oldKey===undefined)delete process.env.ANTHROPIC_API_KEY;else process.env.ANTHROPIC_API_KEY=oldKey;}});
 test("streams Gemini SSE candidate parts",async()=>{const oldFetch=global.fetch,oldKey=process.env.GEMINI_API_KEY;process.env.GEMINI_API_KEY="test-key";global.fetch=async(url)=>{assert.match(url,/streamGenerateContent/);return new Response('data: {"candidates":[{"content":{"parts":[{"text":"gemini"}]}}]}\\n\\n',{status:200});};try{const answer=await completionStream("gemini","gemini-test",[],{baseUrls:{},keys:{},custom:{}},()=>{});assert.equal(answer,"gemini");}finally{global.fetch=oldFetch;if(oldKey===undefined)delete process.env.GEMINI_API_KEY;else process.env.GEMINI_API_KEY=oldKey;}});
 test("streams Ollama newline-delimited JSON",async()=>{const oldFetch=global.fetch;global.fetch=async()=>new Response('{"message":{"content":"ollama"}}\\n{"done":true}\\n',{status:200});try{const answer=await completionStream("ollama","local-model",[],{baseUrls:{},keys:{},custom:{}},()=>{});assert.equal(answer,"ollama");}finally{global.fetch=oldFetch;}});
+
+test("command palette filters by command and description",()=>{
+ const matches=filterCommands("parallel");
+ assert.ok(matches.some(x=>x[0]==="/review all"));
+ assert.ok(filterCommands("not-a-command").length===0);
+});
+test("command palette lists all commands for an empty query",()=>{
+ assert.ok(filterCommands("").length>=10);
+});
