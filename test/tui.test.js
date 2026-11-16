@@ -71,3 +71,26 @@ test("rejects concurrent input prompts",async()=>{
  await assert.rejects(ui.readLine("second"),/already pending/);
  ui.finishInput("ok");assert.equal(await pending,"ok");
 });
+
+test("PageUp and PageDown scroll the transcript without changing the input",async()=>{
+ const ui=makeTui();ui.maxScroll=30;ui.viewportRows=10;
+ const p=ui.readLine("MESSAGE");
+ ui.onKeypress("",{name:"pageup"});
+ assert.equal(ui.scroll,8);assert.equal(ui.input,"");
+ ui.onKeypress("",{name:"pagedown"});
+ assert.equal(ui.scroll,0);
+ ui.finishInput("");await p;
+});
+test("Ctrl+Up and Ctrl+Down scroll by three lines",async()=>{
+ const ui=makeTui();ui.maxScroll=12;
+ const p=ui.readLine("MESSAGE");
+ ui.onKeypress("",{name:"up",ctrl:true});assert.equal(ui.scroll,3);
+ ui.onKeypress("",{name:"down",ctrl:true});assert.equal(ui.scroll,0);
+ ui.finishInput("");await p;
+});
+test("scrolling clamps at transcript start and live bottom",()=>{
+ const ui=makeTui();ui.maxScroll=5;
+ ui.scrollBy(99);assert.equal(ui.scroll,5);
+ ui.scrollBy(-99);assert.equal(ui.scroll,0);
+ ui.scroll=4;ui.scrollToBottom();assert.equal(ui.scroll,0);
+});
