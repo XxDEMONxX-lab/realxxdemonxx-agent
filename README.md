@@ -1,4 +1,4 @@
-# Demon Agent 2.0 ⚡
+# Demon Agent 2.2 ⚡
 
 Node.js-first animated full-screen terminal UI (TUI) coding agent for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
 
@@ -52,11 +52,15 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /run COMMAND | Execute with approval |
 | /git status or /git diff | Git inspection |
 | /memory show, edit, clear | Persistent project notes |
+| /session save NAME | Save the current conversation |
+| /session load NAME | Restore a saved conversation |
+| /session list | List saved conversations |
+| /scroll up, down, bottom | Scroll the TUI transcript |
 | /clear | Clear conversation |
 | /exit | Quit |
 
-## Animation
-Animated startup banner and terminal spinners during model discovery and responses. Set NO_COLOR=1 to disable color and animation.
+## TUI
+Responsive provider sidebar, wrapped transcript, live animated activity indicator, terminal-resize handling, and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
 
 ## Tests
 ~~~sh
@@ -64,4 +68,4 @@ npm test
 ~~~
 
 ## Security
-Paths are confined to the project root and escaping symlinks are rejected. Model-proposed writes and shell commands require explicit approval. Shell execution is powerful; inspect commands before approving. No OS-level sandbox is provided; use a disposable workspace for untrusted repositories. Project memory is stored outside the repo under ~/.config/demon-agent/memory/. Treat model output and repository content as untrusted.
+Paths are confined to the project root and escaping symlinks are rejected. Model-proposed writes and shell commands require explicit approval. Shell execution is powerful; inspect commands before approving. No OS-level sandbox is provided; use a disposable workspace for untrusted repositories. Project memory is stored outside the repo under ~/.config/demon-agent/memory/. Saved sessions are stored under ~/.config/demon-agent/sessions/ with owner-only file permissions where supported; conversation content is plaintext, so do not save secrets in sessions. Treat model output and repository content as untrusted.
