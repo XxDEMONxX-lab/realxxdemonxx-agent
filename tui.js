@@ -63,7 +63,9 @@ class TUI {
   let animation=null;
   const redraw=()=>{if(this.busy){this.frame++;this.render();}};
   const onResize=()=>this.render();
-  const sig=()=>{this.status="STOPPING";this.render();a.rl.close();process.exitCode=130;};\n  const onKeypress=(str,key)=>{if(key?.ctrl&&key.name==="k"&&!this.busy){a.rl.write("",{ctrl:true,name:"u"});a.rl.write("/palette");a.rl.write("",{name:"return"});}};\n  require("node:readline").emitKeypressEvents(process.stdin);process.stdin.on("keypress",onKeypress);
+  const sig=()=>{this.status="STOPPING";this.render();a.rl.close();process.exitCode=130;};
+  const onKeypress=(str,key)=>{if(key?.ctrl&&key.name==="k"&&!this.busy){a.rl.write("",{ctrl:true,name:"u"});a.rl.write("/palette");a.rl.write("",{name:"return"});}};
+  require("node:readline").emitKeypressEvents(process.stdin);process.stdin.on("keypress",onKeypress);
   process.once("SIGINT",sig);process.stdout.on("resize",onResize);
   try{
    let live=true;
