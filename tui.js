@@ -132,11 +132,13 @@ class TUI {
    case "delete":this.input=this.input.slice(0,this.cursor)+this.input.slice(this.cursor+1);break;
    case "left":this.cursor=Math.max(0,this.cursor-1);break;
    case "right":this.cursor=Math.min(this.input.length,this.cursor+1);break;
-   case "home":this.cursor=0;break;
-   case "end":this.cursor=this.input.length;break;
+   case "home":if(key?.ctrl){this.scroll=this.maxScroll;this.render();return;}this.cursor=0;break;
+   case "end":if(key?.ctrl){this.scrollToBottom();return;}this.cursor=this.input.length;break;
    case "up":
-    if(this.history.length){if(this.historyIndex===this.history.length)this.savedInput=this.input;this.historyIndex=Math.max(0,this.historyIndex-1);this.input=this.history[this.historyIndex];this.cursor=this.input.length;}break;
+    if(key?.shift){this.scrollBy(Math.max(1,this.viewportRows-2));return;}
+    if(this.history.length{if(this.historyIndex===this.history.length)this.savedInput=this.input;this.historyIndex=Math.max(0,this.historyIndex-1);this.input=this.history[this.historyIndex];this.cursor=this.input.length;}break;
    case "down":
+    if(key?.shift){this.scrollBy(-Math.max(1,this.viewportRows-2));return;}
     if(this.historyIndex<this.history.length-1){this.historyIndex++;this.input=this.history[this.historyIndex];}
     else if(this.historyIndex===this.history.length-1){this.historyIndex=this.history.length;this.input=this.savedInput;}
     this.cursor=this.input.length;break;
@@ -172,6 +174,7 @@ class TUI {
      if(input.startsWith("/agent "))await a.askModel(input.slice(7).trim(),true);
      else if(input==="/scroll up"){this.scrollBy(8);}
      else if(input==="/scroll down"){this.scrollBy(-8);}
+     else if(input==="/scroll top"){this.scroll=this.maxScroll;this.render();}
      else if(input==="/scroll bottom"){this.scrollToBottom();}
      else if(input==="/clear"){this.logs=["Conversation cleared."];this.scroll=0;}
      else if(input.startsWith("/")){this.status="RUNNING COMMAND";const keep=await a.command(input);if(!keep)this.exitRequested=true;}
