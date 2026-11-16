@@ -39,7 +39,7 @@ class TUI {
  commandMatches(){
   if(!this.input.startsWith("/")||this.input.includes(" "))return [];
   const query=this.input.slice(1).toLowerCase();
-  return COMMANDS.filter(([name])=>name.slice(1).startsWith(query)).slice(0,7);
+  return COMMANDS.filter(([name])=>name.slice(1).startsWith(query));
  }
  completeCommand(){
   const matches=this.commandMatches();if(!matches.length)return false;
@@ -52,7 +52,7 @@ class TUI {
   const model=truncate(this.agent.c.model||"choose model",Math.max(12,w-38));
   out.push(top,this.line(" ◈ DEMON AGENT 3.1  ⚡  FULL SCREEN  │  "+(this.busy?"WORKING":"READY"),w));
   out.push(this.line(" "+this.agent.c.provider+" / "+model+"  │  "+truncate(process.cwd(),Math.max(12,w-30)),w),mid);
-  const matches=this.commandMatches(),menuRows=matches.length?matches.length+2:0;
+  const matches=this.commandMatches(),menuStart=Math.max(0,Math.min(this.commandSelection-3,matches.length-7)),visibleMatches=matches.slice(menuStart,menuStart+7),menuRows=visibleMatches.length?visibleMatches.length+2:0;
   const rows=Math.max(1,h-11-menuRows),chat=[];
   for(const log of this.logs)chat.push(...wrap(log,w-4));
   this.viewportRows=rows;this.maxScroll=Math.max(0,chat.length-rows);
@@ -61,7 +61,7 @@ class TUI {
   for(let i=0;i<rows;i++)out.push(this.line(" "+(visible[i]||""),w));
   if(matches.length){
    out.push(mid,this.line(" COMMANDS  ·  ↑/↓ select  ·  Tab complete  ·  Esc close",w));
-   matches.forEach(([name,desc],i)=>out.push(this.line((i===this.commandSelection?" ❯ ":"   ")+name.padEnd(19)+" "+desc,w)));
+   visibleMatches.forEach(([name,desc],i)=>{const selected=menuStart+i===this.commandSelection;out.push(this.line((selected?" ❯ ":"   ")+name.padEnd(19)+" "+desc,w));});
   }
   out.push(mid);
   const activity=this.busy?SPIN[this.frame%SPIN.length]+" "+this.status:"● "+this.status;
