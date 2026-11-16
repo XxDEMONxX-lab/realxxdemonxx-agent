@@ -24,7 +24,8 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 
 ## Chat modes
 ~~~text
-/mode                 # choose normal or coding
+/mode                 # choose normal, main-model routing, or coding
+/mode main model      # main model routes coding tasks to five workers; other requests get a normal answer
 /mode set 1 openrouter MODEL_ID
 /mode set 2 groq MODEL_ID
 /mode set 3 deepseek MODEL_ID
@@ -34,7 +35,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 /mode coding          # requires five distinct configured provider/model pairs
 /mode normal
 ~~~
-Normal mode uses the selected primary model (with configured failover). Coding mode uses five configured, distinct provider/model pairs. One model assigns exactly five different project files, then all five models implement one file each in parallel. Each worker returns a complete file. Demon Agent checks file ownership, previews every diff, verifies file hashes, asks for approval, creates backups, and applies changes with rollback on an apply failure. It then offers `/verify` and asks you to test the project and report bugs. If planning or any worker fails, no files are changed.
+Normal mode uses the selected primary model (with configured failover). Main-model mode uses the selected primary model as a task router: concrete project coding requests are delegated to the five configured, distinct provider/model pairs; ordinary questions are answered normally with a reminder to provide a coding task. If classification fails, the request safely falls back to normal chat. Coding mode always uses five configured, distinct provider/model pairs. One model assigns exactly five different project files, then all five models implement one file each in parallel. Each worker returns a complete file. Demon Agent checks file ownership, previews every diff, verifies file hashes, asks for approval, creates backups, and applies changes with rollback on an apply failure. It then offers `/verify` and asks you to test the project and report bugs. If planning or any worker fails, no files are changed.
 
 ## Agentic coding
 ~~~text
@@ -51,6 +52,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | Command | Purpose |
 |---|---|
 | /mode | Select normal or five-AI coding mode; `/mode set SLOT PROVIDER MODEL` configures a coding slot |
+| /mode main model | Use the selected primary model to classify each request; coding tasks go to five workers, other requests receive a normal answer and a coding-task reminder |
 | /providers | List providers |
 | /provider ID | Select provider |
 | /key | Save hidden API key |
