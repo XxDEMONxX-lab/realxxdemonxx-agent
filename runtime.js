@@ -158,8 +158,10 @@ class Agent{
      const target=safe(a.path);
      if(typeof a.expectedHash!=="string"||typeof a.oldText!=="string"||typeof a.newText!=="string")throw Error("Patch requires expectedHash, oldText and newText");
      const currentHash=hashFile(target);if(currentHash!==a.expectedHash)throw Error("File changed since it was read; reread before patching");
-     const preview=readFile(a.path).replace(a.oldText,a.newText);
-     if(preview===readFile(a.path))throw Error("Patch context not found");
+     const original=readFile(a.path),first=original.indexOf(a.oldText);
+     if(first<0)throw Error("Patch context not found");
+     if(original.indexOf(a.oldText,first+a.oldText.length)>=0)throw Error("Patch context is ambiguous; include more surrounding text");
+     const preview=original.slice(0,first)+a.newText+original.slice(first+a.oldText.length);
      output=diffPreview(a.path,preview);console.log(output);
      if(await this.ask("Apply exact-context patch? [y/N] ")==="y"){
       const before=await this.invokeHook("before_write",{path:a.path,bytes:Buffer.byteLength(preview),patch:true});
