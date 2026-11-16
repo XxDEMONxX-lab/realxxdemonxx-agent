@@ -2,6 +2,15 @@
 
 const ANSI=/\x1b\[[0-?]*[ -/]*[@-~]/g;
 const strip=s=>String(s).replace(ANSI,"");
+const COMMANDS=[
+ ["/agent ","Run an approved multi-step coding task"],["/plan ","Create a plan without executing changes"],
+ ["/review","Review current Git changes"],["/review all","Run independent parallel reviews"],
+ ["/files","List project files"],["/search ","Search project source"],["/skills","List reusable skills"],
+ ["/status","Show provider and project status"],["/models","Discover provider models"],
+ ["/git status","Show Git working-tree status"],["/git diff","Show current diff"],["/test","Run tests with approval"],
+ ["/session save ","Save this conversation"],["/memory show","Show project memory"],["/help","Show all commands"],["/exit","Exit Demon Agent"]
+];
+const filterCommands=(query="")=>{const q=String(query).trim().toLowerCase();return COMMANDS.filter(([c,d])=>!q||(c+" "+d).toLowerCase().includes(q));};
 const truncate=(s,n)=>{s=strip(s);return s.length>n?s.slice(0,Math.max(0,n-1))+"…":s;};
 const wrap=(value,width)=>{
  const out=[],limit=Math.max(1,width|0);
@@ -34,7 +43,7 @@ class TUI {
    side.push(" PROVIDERS");
    const ids=["openai","openrouter","groq","together","cerebras","deepseek","mistral","fireworks","xai","sambanova","perplexity","anthropic","gemini","ollama",...Object.keys(this.agent.c.custom||{})];
    for(const id of ids){const active=id===this.agent.c.provider;side.push((active?" ❯ ":"   ")+id+(active?"  ●":""));}
-   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ input history","Ctrl+K command palette","/help commands","/search code","/skills select skill","/review changes","/agent coding task");
+   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ input history","Ctrl+K command palette","/palette search commands","/search code","/skills select skill","/review changes","/agent coding task");
   }
   const chat=[];
   for(const log of this.logs)chat.push(...wrap(log,small?w-4:right-4));
@@ -55,6 +64,18 @@ class TUI {
   if(this.logs.length>this.maxLogs)this.logs.splice(0,this.logs.length-this.maxLogs);
   if(!this.scroll)this.scroll=0;
  }
+
+ async commandPalette(){
+  const query=await this.agent.ask("Command search (type to filter, blank for all): ");
+  const matches=filterCommands(query);
+  if(!matches.length){this.log("No commands match: "+query);return "";}
+  this.log("COMMAND PALETTE");
+  matches.forEach(([command,description],index)=>this.log(String(index+1).padStart(2," ")+". "+command+" — "+description));
+  const answer=await this.agent.ask("Select command number (blank to cancel): ");
+  if(!answer)return "";
+  if(!/^\\d+$/.test(answer)||Number(answer)<1||Number(answer)>matches.length){this.log("Invalid command selection");return "";}
+  return matches[Number(answer)-1][0];
+ }
  async start(){
   const a=this.agent,originalLog=console.log,originalError=console.error,originalStream=a.onStream,oldDemonTui=process.env.DEMON_TUI;
   if(!process.stdin.isTTY||!process.stdout.isTTY){originalLog("Demon Agent TUI needs an interactive terminal. Launch it directly in Termux.");a.rl.close();return;}
@@ -69,8 +90,9 @@ class TUI {
    let live=true;
    while(live){
     this.busy=false;this.status="READY";this.render();
-    const input=await a.ask("\x1b[36m❯\x1b[0m ");
+    let input=await a.ask("\x1b[36m❯\x1b[0m ");
     if(!input)continue;
+    if(input==="/palette"){input=await this.commandPalette();if(!input)continue;}
     this.log("❯ "+input);this.busy=true;this.status="PROCESSING";animation=setInterval(redraw,100);
     try{
      if(input.startsWith("/agent "))await a.askModel(input.slice(7).trim(),true);
@@ -89,4 +111,4 @@ class TUI {
   }
  }
 }
-module.exports={TUI,wrap,truncate,strip};
+module.exports={TUI,wrap,truncate,strip,filterCommands};
