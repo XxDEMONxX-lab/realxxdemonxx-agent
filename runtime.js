@@ -61,7 +61,7 @@ class Agent{
  case "exit":case "quit":return false;
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
- async start(){console.log(color("╭──────────────────────────────────────────────╮","c"));console.log(color("│  ◈ DEMON AGENT 2.0 · TERMUX CODING SYSTEM   │","b"));console.log(color("╰──────────────────────────────────────────────╯","c"));console.log("Project: "+ROOT+"\nProvider: "+this.c.provider+" · Model: "+(this.c.model||"not selected"));console.log(color("/help · /agent <task> · animated provider spinners","d"));let live=true;while(live){try{const s=(await this.ask("\n"+color("demon","g")+" ❯ ")).trim();if(!s)continue;if(s.startsWith("/agent "))await this.askModel(s.slice(7),true);else if(s.startsWith("/"))live=await this.command(s);else await this.askModel(s,false);}catch(e){console.log(color("Error: "+e.message,"red"));}}this.rl.close();}}
+ async start(){return require("./tui").start(this);}}
 const HELP="/providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /files /read PATH /write PATH\n/agent TASK /run COMMAND /git status|diff /memory show|edit|clear /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={safe,parse,provider,writeFile};
