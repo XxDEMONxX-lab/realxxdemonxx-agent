@@ -1,6 +1,6 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),path=require("node:path"),fs=require("node:fs");
-const {safe,parse,provider,sessionFile,writeFile,undoFile,diffPreview}=require("../runtime");
+const {safe,parse,provider,sessionFile,writeFile,undoFile,diffPreview,completionStream}=require("../runtime");
 test("blocks traversal",()=>assert.throws(()=>safe("../outside"),/outside project/));
 test("allows relative paths",()=>assert.equal(safe("src/a.js"),path.join(process.cwd(),"src/a.js")));
 test("parses agent JSON",()=>assert.equal(parse('{"message":"ok","actions":[{"type":"list"}]}').actions.length,1));
@@ -20,3 +20,4 @@ test("parses braces and escaped quotes inside JSON strings",()=>{const x=parse('
 test("rejects path-like session names",()=>assert.throws(()=>sessionFile("../escape"),/Session name/));
 test("backs up overwritten files and restores the previous version",()=>{const file=".demon-undo-test-"+process.pid+".txt";try{fs.writeFileSync(file,"before");writeFile(file,"after");assert.equal(fs.readFileSync(file,"utf8"),"after");undoFile(file);assert.equal(fs.readFileSync(file,"utf8"),"before");}finally{try{fs.unlinkSync(file);}catch{}}});
 test("previews proposed file changes without modifying the source",()=>{const file=".demon-diff-test-"+process.pid+".txt";try{fs.writeFileSync(file,"before\n");const diff=diffPreview(file,"after\n");assert.match(diff,/after/);assert.equal(fs.readFileSync(file,"utf8"),"before\n");}finally{try{fs.unlinkSync(file);}catch{}}});
+test("streams OpenAI-compatible server-sent events",async()=>{const oldFetch=global.fetch,oldKey=process.env.OPENROUTER_API_KEY;process.env.OPENROUTER_API_KEY="test-key";global.fetch=async()=>new Response('data: {"choices":[{"delta":{"content":"hello"}}]}\\n\\ndata: {"choices":[{"delta":{"content":" world"}}]}\\n\\ndata: [DONE]\\n\\n',{status:200,headers:{"content-type":"text/event-stream"}});try{const chunks=[],answer=await completionStream("openrouter","test-model",[],{baseUrls:{},keys:{},custom:{}},x=>chunks.push(x));assert.equal(answer,"hello world");assert.deepEqual(chunks,["hello"," world"]);}finally{global.fetch=oldFetch;if(oldKey===undefined)delete process.env.OPENROUTER_API_KEY;else process.env.OPENROUTER_API_KEY=oldKey;}});
