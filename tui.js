@@ -52,8 +52,8 @@ class TUI {
   const model=truncate(this.agent.c.model||"choose model",Math.max(12,w-38));
   out.push(top,this.line(" ◈ DEMON AGENT 3.1  ⚡  FULL SCREEN  │  "+(this.busy?"WORKING":"READY"),w));
   out.push(this.line(" "+this.agent.c.provider+" / "+model+"  │  "+truncate(process.cwd(),Math.max(12,w-30)),w),mid);
-  const matches=this.commandMatches(),menuRows=matches.length?matches.length+1:0;
-  const rows=Math.max(2,h-7-menuRows),chat=[];
+  const matches=this.commandMatches(),menuRows=matches.length?matches.length+2:0;
+  const rows=Math.max(1,h-11-menuRows),chat=[];
   for(const log of this.logs)chat.push(...wrap(log,w-4));
   this.viewportRows=rows;this.maxScroll=Math.max(0,chat.length-rows);
   this.scroll=Math.max(0,Math.min(this.scroll,this.maxScroll));
@@ -69,9 +69,9 @@ class TUI {
   const prompt=truncate(this.prompt||"MESSAGE",8),available=Math.max(1,w-14);
   let value=this.input,cursor=this.cursor;
   if(value.length>available){const offset=Math.max(0,Math.min(value.length-available,cursor-available+1));value=value.slice(offset,offset+available);cursor-=offset;}
-  out.push(this.line(" "+prompt+" ❯ "+value.slice(0,cursor)+"\\x1b[7m"+(value[cursor]||" ")+"\\x1b[0m"+value.slice(cursor+1),w));
+  out.push(this.line(" "+prompt+" ❯ "+value.slice(0,cursor)+"\x1b[7m"+(value[cursor]||" ")+"\x1b[0m"+value.slice(cursor+1),w));
   out.push(this.line(" Enter send/run  ·  ↑/↓ history  ·  PgUp/PgDn scroll  ·  Ctrl+C exit",w),bottom);
-  process.stdout.write("\\x1b[?25l\\x1b[H\\x1b[2J"+out.join("\\n")+"\\n");
+  process.stdout.write("\x1b[?25l\x1b[H\x1b[2J"+out.join("\n")+"\n");
  }
  beginStream(){
   // Stream chunks belong to one response, even when a chunk ends with a newline.
