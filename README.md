@@ -26,7 +26,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 ~~~text
 /agent inspect this project, find a bug, fix it and run relevant tests
 ~~~
-The agent runs a bounded multi-round tool loop: it can list/read/search files, inspect Git, call configured MCP tools, propose writes or shell commands, receive tool results, and continue up to six rounds. Every write, shell command, and MCP call requires approval. Proposed writes show a Git-based diff preview. Agent writes require the SHA-256 hash returned by a recent read, and are rejected if the file changed before approval or commit. Writes use same-directory temporary files, fsync and atomic rename; existing permissions are preserved. Exact-context patches reject stale hashes and ambiguous matches. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Use `/plan TASK` for a plan without execution, `/agent TASK` to execute approved steps, and `/review` to inspect the working-tree diff. This is not an OS-level sandbox.
+The agent runs a bounded multi-round tool loop: it can list/read/search files, inspect Git, call configured MCP tools, propose writes or shell commands, receive tool results, and continue up to six rounds. Every write, shell command, and MCP call requires approval. Proposed writes show a Git-based diff preview. Agent writes require the SHA-256 hash returned by a recent read, and are rejected if the file changed before approval or commit. Use `/verify` to syntax-check project JavaScript and optionally run the full test suite. Writes use same-directory temporary files, fsync and atomic rename; existing permissions are preserved. Exact-context patches reject stale hashes and ambiguous matches. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Use `/plan TASK` for a plan without execution, `/agent TASK` to execute approved steps, and `/review` to inspect the working-tree diff. This is not an OS-level sandbox.
 
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
@@ -64,7 +64,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /agent TASK | Execute approved coding actions |
 | /plan TASK | Show a plan without executing actions |
 | /run COMMAND | Execute a shell command with approval |
-| /test | Run npm test with approval |
+| /test | Run npm test with approval |\n| /verify | Check JavaScript syntax, then optionally run the full test suite |
 | /mcp add ID | Configure an MCP stdio server |
 | /mcp tools ID | Discover its tools |
 | /mcp list or remove ID | Manage configured MCP servers |
