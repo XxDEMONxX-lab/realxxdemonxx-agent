@@ -9,4 +9,4 @@ test("speaks MCP Content-Length stdio protocol and calls a tool",async()=>{const
  finally{client.close();}
 });
 
-test("parses a fragmented MCP Content-Length frame",async()=>{const client=new MCPClient({}, {timeout:1000});client.child={stdin:{write(){}},kill(){}};const pending=client.request("tools/list");const body=Buffer.from(JSON.stringify({jsonrpc:"2.0",id:1,result:{tools:[]}}));const frame=Buffer.concat([Buffer.from("Content-Length: "+body.length+"\\r\\n\\r\\n"),body]);client.onData(frame.subarray(0,9));client.onData(frame.subarray(9));assert.deepEqual(await pending,{tools:[]});client.close();});
+test("parses a fragmented MCP Content-Length frame",async()=>{const client=new MCPClient({}, {timeout:1000});client.child={stdin:{write(){}},kill(){}};const pending=client.request("tools/list");const body=Buffer.from(JSON.stringify({jsonrpc:"2.0",id:1,result:{tools:[]}}));const frame=Buffer.concat([Buffer.from("Content-Length: "+body.length+String.fromCharCode(13,10,13,10)),body]);client.onData(frame.subarray(0,9));client.onData(frame.subarray(9));assert.deepEqual(await pending,{tools:[]});client.close();});
