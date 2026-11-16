@@ -7,7 +7,12 @@ const PATTERNS=[
  ["javascript",/\b(?:export\s+)?(?:async\s+)?function\s+([\w$]+)|\bclass\s+([\w$]+)|\b(?:const|let|var)\s+([\w$]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[\w$]+)\s*=>/g],
  ["python",/^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)|^\s*class\s+([A-Za-z_]\w*)/gm],
  ["lua",/^\s*function\s+([\w.:]+)|^\s*(?:local\s+)?([\w_]+)\s*=\s*function/gm],
- ["java-cpp",/\b(?:class|struct|interface|enum)\s+([A-Za-z_]\w*)/g]
+ ["java-cpp",/\b(?:class|struct|interface|enum)\s+([A-Za-z_]\w*)/g],
+ ["go",/^\s*func\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)|^\s*type\s+([A-Za-z_]\w*)\s+(?:struct|interface)/gm],
+ ["rust",/^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z_]\w*)|^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait)\s+([A-Za-z_]\w*)/gm],
+ ["php",/^\s*(?:(?:public|protected|private|static|final|abstract)\s+)*function\s+([A-Za-z_]\w*)|^\s*class\s+([A-Za-z_]\w*)/gm],
+ ["ruby",/^\s*def\s+([A-Za-z_]\w*[!?=]?)|^\s*(?:class|module)\s+([A-Za-z_]\w*)/gm],
+ ["shell",/^\s*([A-Za-z_]\w*)\s*\(\s*\)\s*\{|^\s*function\s+([A-Za-z_]\w*)/gm]
 ];
 function buildSymbolIndex(root,options={}){
  const files=projectFiles(root).filter(x=>EXT.test(x)).slice(0,MAX_FILES),symbols=[];
