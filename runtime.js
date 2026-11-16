@@ -78,6 +78,7 @@ function runProgram(command,args,timeout=120000){
 
 function parse(raw){if(typeof raw!=="string"||raw.length>2000000)throw Error("Invalid or oversized model response");const start=raw.indexOf("{");if(start<0)throw Error("Model did not return JSON actions");let depth=0,inString=false,escape=false,end=-1;for(let i=start;i<raw.length;i++){const ch=raw[i];if(inString){if(escape)escape=false;else if(ch==="\\")escape=true;else if(ch==='"')inString=false;continue;}if(ch==='"'){inString=true;continue;}if(ch==="{")depth++;else if(ch==="}"&&--depth===0){end=i+1;break;}}if(end<0)throw Error("Incomplete JSON action object");const x=JSON.parse(raw.slice(start,end));if(!x||typeof x.message!=="string"||!Array.isArray(x.actions)||x.actions.length>20)throw Error("Invalid action schema or more than 20 actions");return x;}
 class Spinner{constructor(s){this.s=s;this.i=0;this.f=["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];}start(){if(stdout.isTTY&&!process.env.NO_COLOR&&!process.env.DEMON_TUI)this.t=setInterval(()=>stdout.write("\r"+color(this.f[this.i++%10],"c")+" "+this.s),90);}stop(s){if(this.t){clearInterval(this.t);stdout.write("\r\x1b[2K");}if(s)console.log(s);}}
+const CHAT_SYSTEM='You are Demon Agent, a senior coding engineer. Help the user conversationally. Answer in clear plain text or Markdown. Do not emit JSON action envelopes, internal plans, tool schemas, or debug payloads unless the user explicitly asks for them. If the user asks you to modify the project, explain the intended steps and ask for any essential missing detail.';
 const SYSTEM='You are Demon Agent, a senior coding engineer. For /agent tasks output only JSON: {"message":"summary","plan":"ordered plan","actions":[...]}. Allowed actions: {"type":"list"}, {"type":"search","query":"literal text"}, {"type":"read","path":"relative"} (returns SHA-256), {"type":"write","path":"relative","expectedHash":"SHA-256 or null for a new file","content":"complete file"}, {"type":"patch","path":"relative","expectedHash":"SHA-256","oldText":"unique exact context","newText":"replacement"}, {"type":"run","command":"shell command"}, {"type":"mcp","server":"id","tool":"name","arguments":{}}. Use read/list before editing if context missing. Never claim actions happened before execution. Never access secrets, exfiltrate data, write outside project, or propose destructive commands. Shell writes forbidden; use write actions. Include tests when useful. Max 20 actions.';
 class Agent{
  constructor(){this.c=load();this.rl=rlib.createInterface({input:stdin,output:stdout});this.hist=[];this.sessionName="";this.ctx=new Map();this.skills=loadSkills(ROOT,DIR);this.activeSkill="";this.c.mcpServers=this.c.mcpServers||{};this.c.hooks=this.c.hooks||{};this.mcpTools={};this.memfile=path.join(DIR,"memory",crypto.createHash("sha256").update(ROOT).digest("hex")+".md");this.memory="";try{this.memory=fs.readFileSync(this.memfile,"utf8");}catch{}}
@@ -89,11 +90,11 @@ class Agent{
   if(typeof prompt!=="string"||prompt.length>50000)throw Error("Prompt must be 1-50000 characters");
   if(!this.c.model){console.log("Select model first: /models");return;}
   const loaded=contextSnapshot(this.ctx),history=boundedHistory(this.hist);
-  const sys=SYSTEM+skillPrompt(this.skills.filter(x=>x.name===this.activeSkill))+toolsPrompt(this.mcpTools)+(this.memory?"\nProject memory:\n"+this.memory:"")+(loaded?"\nLoaded files:\n"+loaded:"");
+  const sys=(agent?SYSTEM:CHAT_SYSTEM)+skillPrompt(this.skills.filter(x=>x.name===this.activeSkill))+toolsPrompt(this.mcpTools)+(this.memory?"\nProject memory:\n"+this.memory:"")+(loaded?"\nLoaded files:\n"+loaded:"");
   const messages=[{role:"system",content:sys},...history,{role:"user",content:prompt}];
   const ids=[...new Set([this.c.provider,...(this.c.autoFallback?this.c.fallbacks:[])])];
   const maxRounds=agent&&execute?6:1;
-  let finalAnswer,finalUsed;
+  let finalAnswer,finalUsed,historyAnswer;
   for(let round=0;round<maxRounds;round++){
    let answer,used;
    for(const id of ids){
@@ -105,16 +106,17 @@ class Agent{
      answer=!agent
       ?await completionStream(id,model,messages,this.c,chunk=>{if(this.onStream)this.onStream(chunk);else stdout.write(chunk);})
       :await completion(id,model,messages,this.c);
-     if(!this.onStream&&!agent)stdout.write("\n");
+     if(!agent){if(this.onStream)this.onStream("\n");else stdout.write("\n");}
      used=id;sp.stop(color("Response ready · "+id,"g"));break;
     }catch(e){sp.stop(color(id+" failed: "+e.message,"y"));}
    }
    if(answer===undefined){console.log(color("All providers failed","red"));break;}
-   finalAnswer=answer;finalUsed=used;
+   finalAnswer=answer;finalUsed=used;if(!agent)historyAnswer=answer;
    if(used!==this.c.provider)console.log("Fallback used: "+used);
-   if(!agent){console.log("\n"+answer);break;}
+   if(!agent)break;
    let parsed;
-   try{parsed=parse(answer);}catch(e){console.log(e.message+"\n"+answer);break;}
+   try{parsed=parse(answer);}catch(e){console.log(color("Agent response format error: "+e.message,"red"));historyAnswer="I could not interpret the agent response. Please retry or choose another model.";break;}
+   historyAnswer=parsed.message;
    console.log("\n"+color(parsed.message,"c"));
    if(parsed.plan)console.log("\n"+(Array.isArray(parsed.plan)?parsed.plan.map((v,i)=>(i+1)+". "+v).join("\n"):parsed.plan));
    if(!execute){if(parsed.actions.length)console.log(color("Plan-only mode: proposed actions were not executed.","y"));break;}
@@ -126,7 +128,7 @@ class Agent{
    if(round===maxRounds-1)console.log(color("Reached the 6-round agent limit; inspect the remaining task and run /agent again if needed.","y"));
   }
   if(finalAnswer!==undefined){
-   this.hist.push({role:"user",content:prompt},{role:"assistant",content:finalAnswer});
+   this.hist.push({role:"user",content:prompt},{role:"assistant",content:historyAnswer||"I could not complete that response."});
    this.hist=this.hist.slice(-32);if(this.sessionName)saveSession(this.sessionName,this.hist);
   }
  }
