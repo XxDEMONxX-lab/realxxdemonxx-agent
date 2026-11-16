@@ -7,6 +7,7 @@ const {EVENTS,validateHook,runHook}=require("./hooks");
 const {findSymbols,diagnoseProject}=require("./indexer");
 const {runSubagents}=require("./subagents");
 const {runCodingTeam}=require("./coding-team");
+const {classifyTask}=require("./task-router");
 const {hashFile,atomicWrite,applyTextPatch}=require("./transactions");
 const ROOT=path.resolve(process.env.DEMON_PROJECT||process.cwd()),DIR=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),".config"),"demon-agent"),FILE=path.join(DIR,"config.json");
 const P={openai:["OpenAI","https://api.openai.com/v1","OPENAI_API_KEY"],openrouter:["OpenRouter","https://openrouter.ai/api/v1","OPENROUTER_API_KEY"],groq:["Groq","https://api.groq.com/openai/v1","GROQ_API_KEY"],together:["Together","https://api.together.xyz/v1","TOGETHER_API_KEY"],cerebras:["Cerebras","https://api.cerebras.ai/v1","CEREBRAS_API_KEY"],deepseek:["DeepSeek","https://api.deepseek.com/v1","DEEPSEEK_API_KEY"],mistral:["Mistral","https://api.mistral.ai/v1","MISTRAL_API_KEY"],fireworks:["Fireworks","https://api.fireworks.ai/inference/v1","FIREWORKS_API_KEY"],xai:["xAI","https://api.x.ai/v1","XAI_API_KEY"],sambanova:["SambaNova","https://api.sambanova.ai/v1","SAMBANOVA_API_KEY"],perplexity:["Perplexity","https://api.perplexity.ai","PERPLEXITY_API_KEY"],anthropic:["Anthropic","https://api.anthropic.com/v1","ANTHROPIC_API_KEY","anthropic"],gemini:["Gemini","https://generativelanguage.googleapis.com/v1beta","GEMINI_API_KEY","gemini"],ollama:["Ollama","http://127.0.0.1:11434/api","","ollama"]};
@@ -110,6 +111,7 @@ class Agent{
  async fetchModels(id){const s=new Spinner("Fetching models · "+id);s.start();try{const m=await models(id,this.c);s.stop(color(m.length+" models found","g"));m.slice(0,200).forEach(x=>console.log("  "+x));if(id===this.c.provider&&m.length&&!this.c.model){this.c.model=m[0];save(this.c);console.log("Auto-selected "+m[0]);}}catch(e){s.stop(color(id+": "+e.message,"red"));}}
  async askModel(prompt,agent,execute=true){
   if(typeof prompt!=="string"||prompt.length>50000)throw Error("Prompt must be 1-50000 characters");
+  if(!agent&&this.c.mode==="main"){await this.askMainModel(prompt);return;}
   if(!agent&&this.c.mode==="coding"){await this.askCodingModels(prompt);return;}
   if(!this.c.model){console.log("Select model first: /models");return;}
   const loaded=contextSnapshot(this.ctx),history=boundedHistory(this.hist);
@@ -154,6 +156,21 @@ class Agent{
    this.hist.push({role:"user",content:prompt},{role:"assistant",content:historyAnswer||"I could not complete that response."});
    this.hist=this.hist.slice(-32);if(this.sessionName)saveSession(this.sessionName,this.hist);
   }
+ }
+ async askMainModel(prompt){
+  if(!this.c.model){console.log("Select the main model first: /models then /model MODEL_ID");return;}
+  const selected=provider(this.c.provider,this.c);
+  if(selected.kind!=="ollama"&&!key(selected,this.c)){console.log("Main model API key missing. Configure it with /provider "+this.c.provider+" then /key.");return;}
+  const messages=[{role:"system",content:"You are Demon Agent task router. Classify the latest user request. Return ONLY JSON: {\\"type\\":\\"coding\\"} or {\\"type\\":\\"chat\\"}. Use coding ONLY when the user asks to create, modify, debug, refactor, test, or otherwise perform a concrete change to source code or a software project. Questions, explanations, brainstorming, general knowledge, greetings, and requests for coding advice are chat, not coding. Never execute or propose actions."},{role:"user",content:"Task:\\n"+prompt}];
+  let type="chat";
+  try{type=classifyTask(await completion(this.c.provider,this.c.model,messages,this.c));}
+  catch(error){console.log(color("Task classification unavailable; safely treating this as normal chat: "+error.message,"y"));}
+  if(type==="coding"){console.log(color("CODING TASK DETECTED · delegating to five AI workers","c"));await this.askCodingModels(prompt);return;}
+  console.log(color("CHAT TASK DETECTED · answering with the main model","c"));
+  const mode=this.c.mode;this.c.mode="normal";
+  try{await this.askModel(prompt,false);}
+  finally{this.c.mode=mode;}
+  console.log(color("\\nReminder: Give me a concrete coding task when you want the five-AI coding team to work on your project.","y"));
  }
  async askCodingModels(prompt){
   const selected=validateCodingModels(this.c.codingModels,this.c),manifest=listFiles();
@@ -291,6 +308,7 @@ class Agent{
   if(!input)input=await this.ask("Choose mode: normal or coding: ");
   const [action,...parts]=input.trim().split(/\s+/);
   if(action==="normal"){this.c.mode="normal";save(this.c);console.log("Normal mode enabled · one AI handles chat.");}
+  else if(action==="main"&&parts[0]==="model"){if(!this.c.model)throw Error("Select the main model first with /models and /model MODEL_ID.");const selected=provider(this.c.provider,this.c);if(selected.kind!=="ollama"&&!key(selected,this.c))throw Error("Main model API key missing. Configure /provider "+this.c.provider+" then /key.");this.c.mode="main";save(this.c);console.log("Main-model routing enabled · the main model classifies every task; coding tasks go to five workers, other tasks receive a normal answer and a coding-task reminder.");}
   else if(action==="coding"){
    const configured=validateCodingModels(this.c.codingModels,this.c);
    this.c.mode="coding";save(this.c);console.log("Coding mode enabled · 5 AI specialists will work in parallel.");
@@ -308,7 +326,7 @@ class Agent{
   }else if(action==="list"){
    console.log("Current mode: "+(this.c.mode||"normal"));
    for(let n=0;n<5;n++){const x=this.c.codingModels?.[n];console.log((n+1)+". "+(x?x.provider+" / "+x.model:"(not configured)"));}
-  }else throw Error("Use /mode [normal|coding|set SLOT PROVIDER MODEL|list]");
+  }else throw Error("Use /mode [normal|main model|coding|set SLOT PROVIDER MODEL|list]");
   break;
  }
  case "help":console.log(HELP);break;
@@ -428,6 +446,6 @@ class Agent{
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
  async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
-const HELP="/mode [normal|coding|set SLOT PROVIDER MODEL|list] /providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /palette /files /search QUERY /symbols [QUERY] /diagnose /verify /subagents TASK /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
+const HELP="/mode [normal|main model|coding|set SLOT PROVIDER MODEL|list] /providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /palette /files /search QUERY /symbols [QUERY] /diagnose /verify /subagents TASK /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream,validateBranchName,validateCommitMessage,parsePullRequestInput,runProgram,validateCodingModels,CODING_ROLES};
