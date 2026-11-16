@@ -8,8 +8,11 @@ test("rejects malformed schema",()=>assert.throws(()=>parse('{"message":"bad"}')
 test("limits actions",()=>assert.throws(()=>parse(JSON.stringify({message:"x",actions:Array(21).fill({type:"list"})})),/20 actions/));
 test("rejects unknown providers",()=>assert.throws(()=>provider("unknown",{custom:{}}),/Unknown provider/));
 
-const {TUI,wrap,truncate}=require("../tui");
+const {TUI,wrap,truncate,strip}=require("../tui");
 test("exports the TUI launcher class",()=>assert.equal(typeof TUI.prototype.start,"function"));
 test("wraps terminal text at requested width",()=>assert.deepEqual(wrap("alpha beta gamma",8),["alpha","beta","gamma"]));
 test("splits oversized words",()=>assert.deepEqual(wrap("abcdefgh",4),["abcd","efgh"]));
 test("truncates labels to terminal width",()=>assert.equal(truncate("abcdefgh",5),"abcd…"));
+test("strips ANSI before measuring terminal text",()=>assert.equal(strip("\x1b[31mred\x1b[0m"),"red"));
+test("wraps ANSI-styled text without leaking escape codes",()=>assert.deepEqual(wrap("\x1b[32malpha beta\x1b[0m",5),["alpha","beta"]));
+test("truncates ANSI-styled text by visible width",()=>assert.equal(truncate("\x1b[31mabcdef\x1b[0m",4),"abc…"));
