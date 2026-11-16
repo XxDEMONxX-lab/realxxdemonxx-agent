@@ -136,7 +136,7 @@ class TUI {
   switch(key?.name){
    case "pageup":this.scrollBy(Math.max(1,this.viewportRows-2));return;
    case "pagedown":this.scrollBy(-Math.max(1,this.viewportRows-2));return;
-   case "return":case "enter":this.finishInput(this.input);return;
+   case "return":case "enter":{const matches=this.commandMatches();if(matches.length){const selected=matches[Math.min(this.commandSelection,matches.length-1)][0];this.finishInput(selected);return;}this.finishInput(this.input);return;}
    case "backspace":if(this.cursor){this.input=this.input.slice(0,this.cursor-1)+this.input.slice(this.cursor);this.cursor--;}break;
    case "delete":this.input=this.input.slice(0,this.cursor)+this.input.slice(this.cursor+1);break;
    case "left":this.cursor=Math.max(0,this.cursor-1);break;
