@@ -1,6 +1,6 @@
-# Demon Agent 2.2 ⚡
+# Demon Agent 2.3 ⚡
 
-Node.js-first animated full-screen terminal UI (TUI) coding agent for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
+Node.js-first animated full-screen terminal UI (TUI) coding agent with streamed model output, project search, reusable skills and code review for Termux, Linux, macOS and Windows. Live multi-provider model discovery, automatic provider failover, project-aware coding actions, Git inspection, persistent project memory and approval-gated changes.
 
 ## Termux install
 ~~~sh
@@ -46,7 +46,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /fallback ID MODEL | Configure failover |
 | /fallbacks on or off | Toggle failover |
 | /status | Configuration |
-| /files, /read PATH | Inspect project |
+| /files, /read PATH | Inspect project |\n| /search QUERY | Search tracked and unignored project files |\n| /skills, /skill NAME | Discover and activate reusable skills |\n| /review | Ask the model to review uncommitted Git changes |\n| /test | Run npm test with approval |\n| /github auth, repo, prs, issues, pr-status | Use GitHub CLI (optional `gh`) |
 | /write PATH | Preview and write with approval |
 | /undo PATH | Restore the latest pre-write backup |
 | /agent TASK | Coding workflow |
