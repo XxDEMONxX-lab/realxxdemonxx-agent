@@ -25,34 +25,8 @@ async function completion(id,model,msg,c){const p=provider(id,c),k=key(p,c);let 
  if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2})});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
 async function completionStream(id,model,msg,c,onToken){
  const p=provider(id,c),k=key(p,c);
- if(p.kind!=="openai")throw Error("Streaming is currently supported for OpenAI-compatible providers");
- if(!k)throw Error("API key missing");
- const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),120000);
- let responseText="";
- try{
-  const r=await fetch(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k,Accept:"text/event-stream"},body:JSON.stringify({model,messages:msg,temperature:.2,stream:true}),signal:ac.signal});
-  if(!r.ok){const body=await r.text();throw Error("HTTP "+r.status+": "+body.slice(0,500));}
-  if(!r.body)throw Error("Streaming response body unavailable");
-  const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
-  while(true){
-   const {value,done}=await reader.read();if(done)break;
-   buffer+=decoder.decode(value,{stream:true});
-   let cut;
-   while((cut=buffer.indexOf("\n"))>=0){
-    const line=buffer.slice(0,cut).trim();buffer=buffer.slice(cut+1);
-    if(!line.startsWith("data:"))continue;
-    const data=line.slice(5).trim();if(!data||data==="[DONE]")continue;
-    let event;try{event=JSON.parse(data);}catch{continue;}
-    const delta=event.choices?.[0]?.delta?.content;
-    if(typeof delta==="string"&&delta){responseText+=delta;onToken(delta);}
-    else if(Array.isArray(delta)){for(const part of delta)if(typeof part.text==="string"){responseText+=part.text;onToken(part.text);}}
-   }
-  }
-  buffer+=decoder.decode();
-  if(!responseText)throw Error("Streaming provider returned no text");
-  return responseText;
- }catch(e){if(e.name==="AbortError")throw Error("Streaming request timed out");throw e;}
- finally{clearTimeout(tm);}
+ const {streamCompletion}=require("./streaming");
+ return streamCompletion(p,k,model,msg,onToken);
 }
 function safe(raw){if(!raw)throw Error("Relative path required");const f=path.resolve(ROOT,raw),rel=path.relative(ROOT,f);if(rel===".."||rel.startsWith(".."+path.sep)||path.isAbsolute(rel))throw Error("Path outside project");let cur=ROOT;for(const x of rel.split(path.sep)){cur=path.join(cur,x);try{const r=path.relative(ROOT,fs.realpathSync(cur));if(r===".."||r.startsWith(".."+path.sep)||path.isAbsolute(r))throw Error("Symlink outside project");}catch(e){if(e.code!=="ENOENT")throw e;}}return f;}
 function readFile(p){const f=safe(p),s=fs.statSync(f);if(!s.isFile()||s.size>200000)throw Error("Not a file or over 200KB");return fs.readFileSync(f,"utf8");}
@@ -93,10 +67,10 @@ class Agent{
     try{
      if(!model)throw Error("Fallback model not configured");
      const selected=provider(id,this.c);
-     answer=selected.kind==="openai"&&!agent
+     answer=!agent
       ?await completionStream(id,model,messages,this.c,chunk=>{if(this.onStream)this.onStream(chunk);else stdout.write(chunk);})
       :await completion(id,model,messages,this.c);
-     if(selected.kind==="openai"&&!this.onStream&&!agent)stdout.write("\n");
+     if(!this.onStream&&!agent)stdout.write("\n");
      used=id;sp.stop(color("Response ready · "+id,"g"));break;
     }catch(e){sp.stop(color(id+" failed: "+e.message,"y"));}
    }
