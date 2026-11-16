@@ -26,7 +26,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 ~~~text
 /agent inspect this project, find a bug, fix it and run relevant tests
 ~~~
-The model can list/read/search files, inspect Git, and propose writes or shell commands. Every write and command requires approval. Proposed writes show a Git-based diff preview. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Use `/plan TASK` for a plan without execution, `/agent TASK` to execute approved steps, and `/review` to inspect the working-tree diff. This is not an OS-level sandbox.
+The agent runs a bounded multi-round tool loop: it can list/read/search files, inspect Git, call configured MCP tools, propose writes or shell commands, receive tool results, and continue up to six rounds. Every write, shell command, and MCP call requires approval. Proposed writes show a Git-based diff preview. Existing files receive up to 10 local backups; use `/undo PATH` to restore the latest backup. Use `/plan TASK` for a plan without execution, `/agent TASK` to execute approved steps, and `/review` to inspect the working-tree diff. This is not an OS-level sandbox.
 
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
@@ -56,6 +56,9 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /plan TASK | Show a plan without executing actions |
 | /run COMMAND | Execute a shell command with approval |
 | /test | Run npm test with approval |
+| /mcp add ID | Configure an MCP stdio server |
+| /mcp tools ID | Discover its tools |
+| /mcp list or remove ID | Manage configured MCP servers |
 | /github auth, repo, prs, issues, pr-status | Read-only GitHub CLI queries |
 | /git status or /git diff | Git inspection |
 | /memory show, edit, clear | Persistent project notes |
@@ -73,6 +76,12 @@ Configure a local MCP stdio server with `/mcp add ID`. Enter its executable and 
 OpenAI-compatible providers stream response tokens into the TUI. Other provider adapters currently use non-streaming responses. Reusable Markdown skills are discovered from `.demon/skills/NAME/SKILL.md` in the project and `~/.config/demon-agent/skills/NAME/SKILL.md` in the user config directory. Activate one with `/skill NAME`; disable with `/skill`. Treat skill files as untrusted project instructions.
 
 GitHub commands require the official `gh` CLI to be installed and authenticated. The supported commands are read-only; changes still require explicit approval through normal coding actions.
+
+## MCP integrations
+
+Demon Agent supports MCP servers over the standard stdio transport. Configure one with `/mcp add ID`, entering an executable and a JSON argument array; then use `/mcp tools ID` to discover tools. The model can propose MCP calls, but each call displays its arguments and requires your approval. Tool output is treated as untrusted data.
+
+MCP processes do not inherit provider API keys or the full environment. During setup, you may optionally provide a JSON array of environment-variable names to allow through (for example, `["GITHUB_TOKEN"]`). The values are read from the Termux process environment and are not copied into the agent config. Only configure servers and environment variables you trust; MCP servers execute external code with your Android user's permissions.
 
 ## TUI
 Responsive provider sidebar, wrapped transcript, live animated activity indicator, terminal-resize handling, and transcript scrolling with `/scroll up`, `/scroll down`, and `/scroll bottom`. Readline provides input history with the up/down arrow keys. `NO_COLOR=1` disables prompt colors; terminal cursor and screen control sequences remain enabled.
