@@ -28,13 +28,13 @@ class TUI {
  render(){
   const {w,h}=this.dimensions(),small=w<76,left=small?0:Math.max(22,Math.min(30,Math.floor(w*.27))),right=small?w:w-left-1;
   const out=[],top="╭"+"─".repeat(w-2)+"╮",mid="├"+"─".repeat(w-2)+"┤",bottom="╰"+"─".repeat(w-2)+"╯";
-  out.push(top,this.line(" ◈ DEMON AGENT 2.4 · NODE TUI ⚡",w),mid);
+  out.push(top,this.line(" ◈ DEMON AGENT 2.5 · NODE TUI ⚡",w),mid);
   const rows=Math.max(4,h-9),side=[];
   if(!small){
    side.push(" PROVIDERS");
    const ids=["openai","openrouter","groq","together","cerebras","deepseek","mistral","fireworks","xai","sambanova","perplexity","anthropic","gemini","ollama",...Object.keys(this.agent.c.custom||{})];
    for(const id of ids){const active=id===this.agent.c.provider;side.push((active?" ❯ ":"   ")+id+(active?"  ●":""));}
-   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ input history","/help commands","/search code","/skills select skill","/review changes","/agent coding task");
+   side.push(""," MODEL",this.agent.c.model||"not selected",""," PROJECT",truncate(process.cwd(),left-4),""," SHORTCUTS","↑/↓ input history","Ctrl+K command palette","/help commands","/search code","/skills select skill","/review changes","/agent coding task");
   }
   const chat=[];
   for(const log of this.logs)chat.push(...wrap(log,small?w-4:right-4));
@@ -63,7 +63,7 @@ class TUI {
   let animation=null;
   const redraw=()=>{if(this.busy){this.frame++;this.render();}};
   const onResize=()=>this.render();
-  const sig=()=>{this.status="STOPPING";this.render();a.rl.close();process.exitCode=130;};
+  const sig=()=>{this.status="STOPPING";this.render();a.rl.close();process.exitCode=130;};\n  const onKeypress=(str,key)=>{if(key?.ctrl&&key.name==="k"&&!this.busy){a.rl.write(null,{ctrl:true,name:"u"});a.rl.write("/palette");a.rl.write(null,{name:"return"});}};\n  require("node:readline").emitKeypressEvents(process.stdin);process.stdin.on("keypress",onKeypress);
   process.once("SIGINT",sig);process.stdout.on("resize",onResize);
   try{
    let live=true;
@@ -82,7 +82,7 @@ class TUI {
   }finally{
    if(animation)clearInterval(animation);
    console.log=originalLog;console.error=originalError;a.onStream=originalStream;
-   process.removeListener("SIGINT",sig);process.stdout.removeListener("resize",onResize);
+   process.removeListener("SIGINT",sig);process.stdout.removeListener("resize",onResize);process.stdin.removeListener("keypress",onKeypress);
    if(oldDemonTui===undefined)delete process.env.DEMON_TUI;else process.env.DEMON_TUI=oldDemonTui;
    if(!a.rl.closed)a.rl.close();
    process.stdout.write("\x1b[0m\x1b[?25h\n");originalLog("Demon Agent closed.");
