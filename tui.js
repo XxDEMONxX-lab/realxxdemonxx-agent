@@ -74,7 +74,13 @@ class TUI {
   const answer=await this.agent.ask("Select command number (blank to cancel): ");
   if(!answer)return "";
   if(!/^\\d+$/.test(answer)||Number(answer)<1||Number(answer)>matches.length){this.log("Invalid command selection");return "";}
-  return matches[Number(answer)-1][0];
+  const selected=matches[Number(answer)-1][0];
+  if(selected.endsWith(" ")){
+   const value=await this.agent.ask("Value for "+selected.trim()+": ");
+   if(!value.trim())return "";
+   return selected+value.trim();
+  }
+  return selected;
  }
  async start(){
   const a=this.agent,originalLog=console.log,originalError=console.error,originalStream=a.onStream,oldDemonTui=process.env.DEMON_TUI;
