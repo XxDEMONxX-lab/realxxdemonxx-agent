@@ -1,6 +1,6 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict"),path=require("node:path");
-const {safe,parse,provider}=require("../runtime");
+const {safe,parse,provider,sessionFile}=require("../runtime");
 test("blocks traversal",()=>assert.throws(()=>safe("../outside"),/outside project/));
 test("allows relative paths",()=>assert.equal(safe("src/a.js"),path.join(process.cwd(),"src/a.js")));
 test("parses agent JSON",()=>assert.equal(parse('{"message":"ok","actions":[{"type":"list"}]}').actions.length,1));
@@ -16,3 +16,5 @@ test("truncates labels to terminal width",()=>assert.equal(truncate("abcdefgh",5
 test("strips ANSI before measuring terminal text",()=>assert.equal(strip("\x1b[31mred\x1b[0m"),"red"));
 test("wraps ANSI-styled text without leaking escape codes",()=>assert.deepEqual(wrap("\x1b[32malpha beta\x1b[0m",5),["alpha","beta"]));
 test("truncates ANSI-styled text by visible width",()=>assert.equal(truncate("\x1b[31mabcdef\x1b[0m",4),"abc…"));
+test("parses braces and escaped quotes inside JSON strings",()=>{const x=parse('prefix {"message":"literal } and \\"quote\\" {","actions":[]} trailing');assert.equal(x.message,'literal } and "quote" {');});
+test("rejects path-like session names",()=>assert.throws(()=>sessionFile("../escape"),/Session name/));
