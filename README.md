@@ -36,34 +36,36 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 ## Commands
 | Command | Purpose |
 |---|---|
-| /providers | List providers |
+| /providers | List configured providers |
 | /provider ID | Select provider |
-| /key | Save hidden API key |
+| /key | Save API key without echoing it |
 | /models [all] | Discover models |
 | /model ID | Select model |
-| /base URL | Override endpoint |
-| /custom | Add compatible provider |
-| /fallback ID MODEL | Configure failover |
+| /base URL | Override current provider endpoint |
+| /custom | Add an OpenAI-compatible provider |
+| /fallback ID MODEL | Configure provider failover |
 | /fallbacks on or off | Toggle failover |
-| /status | Configuration |
-| /files, /read PATH | Inspect project |\n| /search QUERY | Search tracked and unignored project files |\n| /skills, /skill NAME | Discover and activate reusable skills |\n| /review | Ask the model to review uncommitted Git changes |\n| /test | Run npm test with approval |\n| /github auth, repo, prs, issues, pr-status | Use GitHub CLI (optional `gh`) |
+| /status | Show active configuration |
+| /files | List project files |
+| /search QUERY | Search tracked and unignored project files |
+| /read PATH | Load a file into context |
 | /write PATH | Preview and write with approval |
 | /undo PATH | Restore the latest pre-write backup |
-| /agent TASK | Coding workflow |
-| /plan TASK | Plan only; does not execute changes |
-| /review | Review uncommitted changes |
-| /search QUERY | Search tracked and untracked project files |
-| /skills, /skill NAME | List or activate a reusable skill |
+| /agent TASK | Execute a coding task with approval gates |
+| /plan TASK | Create a plan without executing changes |
+| /review | Ask the model to review uncommitted Git changes |
+| /run COMMAND | Execute a shell command with approval |
 | /test | Run npm test with approval |
-| /github auth\|repo\|prs\|issues\|pr-status | Read-only GitHub CLI status and listings |
-| /run COMMAND | Execute with approval |
-| /git status or /git diff | Git inspection |
-| /memory show, edit, clear | Persistent project notes |
+| /git status, diff, log --oneline -5, branch --show-current | Inspect Git state |
+| /skills | List discovered skills |
+| /skill NAME | Activate a reusable skill; bare /skill disables it |
+| /github auth, repo, prs, issues, pr-status | Read-only GitHub CLI operations (requires gh) |
+| /memory show, edit, clear | Manage persistent project notes |
 | /session save NAME | Save the current conversation |
 | /session load NAME | Restore a saved conversation |
 | /session list | List saved conversations |
 | /scroll up, down, bottom | Scroll the TUI transcript |
-| /clear | Clear conversation |
+| /clear | Clear conversation context |
 | /exit | Quit |
 
 ## Streaming and skills
