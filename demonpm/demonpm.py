@@ -258,10 +258,21 @@ class Manager:
             cmd = q.get("command")
             if not isinstance(q.get("env", {}), dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in q.get("env", {}).items()):
                 raise ValueError("env must be a string-to-string object")
-            if not isinstance(cmd, list) or not cmd or not all(isinstance(x, str) for x in cmd):
+            if not isinstance(cmd, list) or not cmd or not all(isinstance(x, str) and x for x in cmd):
                 raise ValueError("command must be a non-empty argument array")
+            max_restarts=int(q.get("max_restarts",20))
+            if max_restarts < -1: raise ValueError("max_restarts must be -1 or non-negative")
+            if int(q.get("restart_every",0)) < 0: raise ValueError("restart_every must be non-negative")
+            if int(q.get("cpu_percent",0)) < 0 or int(q.get("hard_memory_mb",0)) < 0:
+                raise ValueError("resource limits must be non-negative")
+            if q.get("health_url"):
+                from urllib.parse import urlparse
+                if urlparse(q["health_url"]).scheme not in ("http","https"):
+                    raise ValueError("health_url must use HTTP or HTTPS")
+            if not isinstance(q.get("watch",[]),list) or not all(isinstance(x,str) for x in q.get("watch",[])):
+                raise ValueError("watch must be an array of paths")
             self.apps[name] = {"command": cmd, "cwd": q.get("cwd"), "env": q.get("env", {}),
-                "autorestart": q.get("autorestart", True), "max_restarts": q.get("max_restarts", 20),
+                "autorestart": q.get("autorestart", True), "max_restarts": max_restarts,
                 "health_url": q.get("health_url"), "restarts": 0, "status": "stopped", "pid": None,
                 "watch": q.get("watch", []), "restart_every": q.get("restart_every", 0),
                 "max_memory_mb": q.get("max_memory_mb", 0), "discord_webhook": q.get("discord_webhook"),
@@ -279,18 +290,28 @@ class Manager:
             if not 1 <= count <= 32: raise ValueError("replicas must be between 1 and 32")
             if not 1 <= base_port <= 65535 or base_port + count - 1 > 65535:
                 raise ValueError("base_port must leave room for all replicas")
-            created=[]
             source=self.apps[name]
-            for index in range(1,count+1):
-                replica="%s-%d" % (name,index)
-                if replica in self.apps: raise ValueError("replica already exists: " + replica)
-                cfg=copy.deepcopy(source)
-                cfg["env"]=dict(cfg.get("env",{}), PORT=str(base_port+index-1))
-                cfg["cluster"]=name
-                cfg["status"]="stopped"; cfg["pid"]=None; cfg["restarts"]=0
-                self.apps[replica]=cfg
+            replicas=["%s-%d" % (name,index) for index in range(1,count+1)]
+            conflict=next((replica for replica in replicas if replica in self.apps),None)
+            if conflict: raise ValueError("replica already exists: " + conflict)
+            created=[]
+            try:
+                for index,replica in enumerate(replicas,1):
+                    cfg=copy.deepcopy(source)
+                    cfg["env"]=dict(cfg.get("env",{}), PORT=str(base_port+index-1))
+                    cfg["cluster"]=name
+                    cfg["status"]="stopped"; cfg["pid"]=None; cfg["restarts"]=0
+                    self.apps[replica]=cfg
+                    self.save()
+                    created.append(self.start(replica))
+            except Exception:
+                for replica in replicas:
+                    if replica in self.apps:
+                        try: self.stop(replica)
+                        except Exception: pass
+                        self.apps.pop(replica,None)
                 self.save()
-                created.append(self.start(replica))
+                raise
             return {"cluster":name,"replicas":created}
         if act == "list": return {"processes": [self.describe(n) for n in sorted(self.apps)]}
         if act == "stop": return self.stop(name)
