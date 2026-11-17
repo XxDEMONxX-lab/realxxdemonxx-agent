@@ -29,9 +29,13 @@ async function runCodingTeam(task,models,invokePlanner,invokeWorker,options={}){
  if(typeof task!=="string"||!task.trim()||task.length>50000)throw Error("Coding task must be 1-50000 characters");
  if(!Array.isArray(models)||models.length!==5||models.some(x=>!x||!x.provider||!x.model))throw Error("Coding mode requires five configured provider/model pairs");
  if(typeof invokePlanner!=="function"||typeof invokeWorker!=="function")throw Error("Coding team callbacks are required");
+ const signal=options.signal,checkCancelled=()=>{if(signal?.aborted){const error=Error("Coding team cancelled");error.name="AbortError";throw error;}};
+ checkCancelled();
  const manifest=Array.isArray(options.files)?options.files.slice(0,250):[];
  const assignments=validateAssignments(await invokePlanner(models[0],task,manifest),5);
- const results=await Promise.all(assignments.map(async(assignment,index)=>{const model=models[index];try{const source=await options.readFile(assignment.path);const response=await invokeWorker(model,assignment,task,source,manifest);const raw=response&&typeof response==="object"&&Object.prototype.hasOwnProperty.call(response,"raw")?response.raw:response;const change=validateWorkerChange(raw,assignment);return {index:index+1,provider:response?.provider||model.provider,model:response?.model||model.model,ok:true,...change};}catch(error){return {index:index+1,provider:model.provider,model:model.model,path:assignment.path,ok:false,error:error.message};}}));
+ checkCancelled();
+ const results=await Promise.all(assignments.map(async(assignment,index)=>{const model=models[index];try{checkCancelled();const source=await options.readFile(assignment.path);checkCancelled();const response=await invokeWorker(model,assignment,task,source,manifest);checkCancelled();const raw=response&&typeof response==="object"&&Object.prototype.hasOwnProperty.call(response,"raw")?response.raw:response;const change=validateWorkerChange(raw,assignment);return {index:index+1,provider:response?.provider||model.provider,model:response?.model||model.model,ok:true,...change};}catch(error){if(signal?.aborted||error.name==="AbortError")throw error;return {index:index+1,provider:model.provider,model:model.model,path:assignment.path,ok:false,error:error.message};}}));
+ checkCancelled();
  const failures=results.filter(x=>!x.ok);if(failures.length){const error=new Error("Coding team stopped: "+failures.length+" of 5 file workers failed. No files were changed.");error.results=results;throw error;}return results;
 }
 module.exports={parseObject,validateAssignments,validateWorkerChange,runCodingTeam};
