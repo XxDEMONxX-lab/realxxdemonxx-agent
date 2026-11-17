@@ -72,8 +72,12 @@ def main():
             supplied=self.headers.get("Authorization","")
             if not supplied.startswith("Bearer "): return None
             digest=hashlib.sha256(supplied[7:].encode()).hexdigest()
-            for key,role in tokens.items():
-                if hmac.compare_digest(key,digest): return role
+            try:
+                current=json.loads(token_file.read_text(encoding="utf-8"))
+            except (OSError,ValueError):
+                return None
+            for key,role in current.items():
+                if role in ("viewer","operator","admin") and hmac.compare_digest(key,digest): return role
             return None
         def send(self,status,obj,ctype="application/json"):
             body=obj if isinstance(obj,bytes) else json.dumps(obj).encode()
