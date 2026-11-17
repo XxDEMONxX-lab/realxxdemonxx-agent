@@ -343,6 +343,14 @@ class Manager:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.bind(str(SOCK)); os.chmod(SOCK, 0o600); s.listen(32); s.settimeout(1)
         threading.Thread(target=self.monitor, daemon=True).start()
+        # Recover saved applications on every clean daemon startup; stale PIDs were cleared in __init__.
+        saved=load(SAVED,{})
+        for app_name,config in saved.items():
+            if app_name not in self.apps: self.apps[app_name]=config
+            self.apps[app_name]["autorestart"]=True
+            try: self.start(app_name)
+            except Exception as exc: self.log(app_name,"startup recovery failed: "+str(exc))
+        self.save()
         while self.alive:
             try: c, _ = s.accept()
             except socket.timeout: continue
@@ -415,7 +423,7 @@ def main():
     for a in ("stop", "restart", "delete", "logs"):
         x = sp.add_parser(a); x.add_argument("name")
         if a == "logs": x.add_argument("-n", "--lines", type=int, default=100)
-    for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "monit", "start-config", "deploy", "api"): sp.add_parser(a)
+    for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "daemon-foreground", "monit", "start-config", "deploy", "api"): sp.add_parser(a)
     x=sp.add_parser("scale"); x.add_argument("name"); x.add_argument("--replicas",type=int,required=True); x.add_argument("--base-port",type=int,required=True)
     x=sp.add_parser("proxy-sync"); x.add_argument("cluster"); x.add_argument("--upstream-file",required=True); x.add_argument("--upstream-name",required=True); x.add_argument("--nginx",default="nginx")
     x=sp.add_parser("bluegreen"); x.add_argument("old"); x.add_argument("new"); x.add_argument("--upstream-file",required=True); x.add_argument("--upstream-name",required=True); x.add_argument("--server",required=True); x.add_argument("--health-url",required=True); x.add_argument("--nginx",default="nginx")
@@ -428,7 +436,8 @@ def main():
     sp.choices["deploy"].add_argument("name")
     sp.choices["deploy"].add_argument("--branch")
     a = p.parse_args()
-    if a.action == "_daemon": Manager().serve(); return 0
+    if a.action == "daemon-foreground":
+        Manager().serve(); return 0
     if a.action == "daemon-stop": request({"action": "shutdown"}); return 0
     q = {"action": a.action}
     if a.action == "start":
