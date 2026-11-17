@@ -7,7 +7,7 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--host",default="127.0.0.1")
     p.add_argument("--port",type=int,default=8765)
-    p.add_argument("--home",default=str(Path.home()/".demonpm"))
+    p.add_argument("--home",default=os.environ.get("DEMONPM_HOME",str(Path.home()/".demonpm")))
     a=p.parse_args()
     if a.host not in ("127.0.0.1","localhost"):
         p.error("API is deliberately restricted to loopback; use an SSH tunnel for remote access")
