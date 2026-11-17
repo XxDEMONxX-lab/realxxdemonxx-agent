@@ -25,7 +25,8 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 ## Chat modes
 ~~~text
 /mode                 # choose normal or coding
-/mode coding          # main model routes chat vs coding; coding tasks go to five workers
+/mode coding          # main model routes chat vs coding and orchestrates five workers
+/orchestrator 4       # cap autonomous review/reassignment rounds (1-8)
 /mode set 1 openrouter MODEL_ID
 /mode set 2 groq MODEL_ID
 /mode set 3 deepseek MODEL_ID
@@ -35,7 +36,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 /mode coding          # requires five distinct configured provider/model pairs
 /mode normal
 ~~~
-Normal mode uses the selected primary model (with configured failover). Coding mode also uses that selected primary model as the orchestrator on every message: it classifies the request first, answers greetings/questions/conversation directly, and delegates only concrete software changes to the five configured, distinct worker models. The main model creates the file plan; workers implement separate files in parallel. Classification failures safely fall back to a normal answer instead of launching workers. Each worker returns a complete file. Demon Agent checks file ownership, previews every diff, verifies file hashes, asks for approval, creates backups, and applies changes with rollback on an apply failure. It then offers `/verify` and asks you to test the project and report bugs. If planning or any worker fails, no files are changed.
+Normal mode uses the selected primary model (with configured failover). Coding mode uses the selected primary model as the main orchestrator on every message: it classifies the request, answers ordinary chat directly, and delegates concrete software changes to five configured workers. After each worker round, the main model reviews staged results and assigns another round when work remains. The loop is bounded (default 4, configurable from 1-8 with `/orchestrator`) to control API cost and prevent runaway execution. All rounds remain staged until one approval; the runtime previews final diffs, verifies hashes, creates backups, and applies changes transactionally with rollback. If planning, a worker, or review fails, no project files are changed. Reaching the round limit is reported explicitly; it is not presented as completion.
 
 ## Agentic coding
 ~~~text
@@ -52,7 +53,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | Command | Purpose |
 |---|---|
 | /mode | Select normal or five-AI coding mode; `/mode set SLOT PROVIDER MODEL` configures a coding slot |
-| /mode coding | Main model routes each message; ordinary chat is answered by the main model and coding tasks are delegated to five workers |
+| /mode coding | Main model routes each message and iteratively orchestrates five workers until complete or the round limit |\n| /orchestrator [1-8] | Configure the maximum planner/worker/review rounds (default 4) |
 | /providers | List providers |
 | /provider ID | Select provider |
 | /key | Save hidden API key |
