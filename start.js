@@ -54,6 +54,7 @@ function loadState() {
     ).map(app => ({
       ...app,
       autoRestart: app.autoRestart !== false,
+      desiredRunning: typeof app.desiredRunning === 'boolean' ? app.desiredRunning : Number.isInteger(app.pid),
       restartDelayMs: Number.isInteger(app.restartDelayMs) ? Math.max(500, Math.min(app.restartDelayMs, 30000)) : 1000
     }));
   } catch (error) {
@@ -134,6 +135,7 @@ function startApp(app) {
   });
   if (!supervisor.pid) throw new Error('Could not start the application supervisor.');
   app.pid = supervisor.pid;
+  app.desiredRunning = true;
   app.procStartTicks = null;
   app.startedAt = new Date().toISOString();
   app.node = NODE;
@@ -228,6 +230,7 @@ async function stopApp(app, gracefulMs = 250) {
   const groupAlive = isProcessGroupAlive(app);
   if (!leaderAlive && !groupAlive) {
     app.pid = null;
+    app.desiredRunning = false;
     app.procStartTicks = null;
     saveState();
     return;
@@ -270,6 +273,7 @@ async function stopApp(app, gracefulMs = 250) {
   }
 
   app.pid = null;
+  app.desiredRunning = false;
   app.procStartTicks = null;
   app.stoppedAt = new Date().toISOString();
   saveState();
@@ -431,7 +435,7 @@ async function addApp() {
   if (!entry.toLowerCase().endsWith('.js') && !entry.toLowerCase().endsWith('.cjs') && !entry.toLowerCase().endsWith('.mjs')) {
     throw new Error('Only JavaScript entry files (.js, .cjs, .mjs) are supported.');
   }
-  const app = { id: safeId(), name, cwd, entry, args: parts, env: {}, autoRestart: true, restartDelayMs: 1000, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
+  const app = { id: safeId(), name, cwd, entry, args: parts, env: {}, autoRestart: true, desiredRunning: false, restartDelayMs: 1000, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
   const resolved = path.resolve(cwd, entry);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error('Entry file not found: ' + resolved);
   state.apps.push(app);
@@ -538,7 +542,7 @@ async function main() {
   loadState();
   // Recover apps configured for automatic restart when the manager is opened again.
   for (const app of state.apps) {
-    if (app.autoRestart && !isAlive(app)) {
+    if (app.autoRestart && app.desiredRunning && !isAlive(app)) {
       try {
         startApp(app);
         writeLog(app, 'Startup recovery: supervisor relaunched by DEMONPM.');
