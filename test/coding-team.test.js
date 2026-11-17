@@ -7,3 +7,13 @@ test("rejects worker output for another file or incomplete content",()=>{const a
 test("runs five workers for five distinct files",async()=>{const models=Array.from({length:5},(_,i)=>({provider:"p"+i,model:"m"+i})),assignments={files:models.map((_,i)=>({path:"src/"+i+".js",goal:"work"}))},invoked=[];const results=await runCodingTeam("implement feature",models,async()=>assignments,async(model,assignment)=>{invoked.push(assignment.path);return {path:assignment.path,content:"new "+assignment.path,summary:"updated"};},{files:[],readFile:async()=>"old"});assert.equal(results.length,5);assert.equal(invoked.length,5);assert.equal(new Set(invoked).size,5);});
 test("fails the whole staged run when any worker fails",async()=>{const models=Array.from({length:5},(_,i)=>({provider:"p"+i,model:"m"+i}));await assert.rejects(()=>runCodingTeam("task",models,async()=>({files:models.map((_,i)=>"f"+i)}),async(model,assignment)=>{if(assignment.path==="f3")throw Error("offline");return {path:assignment.path,content:"x",summary:"ok"};},{readFile:async()=>"old"}),/No files were changed/);});
 test("rejects duplicate paths before workers start",async()=>{const models=Array.from({length:5},(_,i)=>({provider:"p"+i,model:"m"+i}));let called=0;await assert.rejects(()=>runCodingTeam("task",models,async()=>({files:["a","b","c","d","a"]}),async()=>{called++;},{readFile:async()=>"old"}),/share a file/);assert.equal(called,0);});
+
+test("records the actual fallback provider used by a worker",async()=>{
+ const models=Array.from({length:5},(_,i)=>({provider:"primary"+i,model:"model"+i}));
+ const results=await runCodingTeam("task",models,async()=>({files:models.map((_,i)=>"file"+i)}),async(model,assignment)=>({
+  raw:JSON.stringify({path:assignment.path,content:"ok",summary:"updated"}),
+  provider:"fallback-provider",model:"fallback-model"
+ }),{readFile:async()=>"old"});
+ assert.equal(results[0].provider,"fallback-provider");
+ assert.equal(results[0].model,"fallback-model");
+});

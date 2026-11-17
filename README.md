@@ -25,7 +25,8 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 ## Chat modes
 ~~~text
 /mode                 # choose normal or coding
-/mode coding          # main model routes chat vs coding; coding tasks go to five workers
+/mode coding          # main model routes chat vs coding and orchestrates five workers
+/orchestrator 4       # cap autonomous review/reassignment rounds (1-8)
 /mode set 1 openrouter MODEL_ID
 /mode set 2 groq MODEL_ID
 /mode set 3 deepseek MODEL_ID
@@ -35,7 +36,7 @@ API keys are stored in ~/.config/demon-agent/config.json with owner-only permiss
 /mode coding          # requires five distinct configured provider/model pairs
 /mode normal
 ~~~
-Normal mode uses the selected primary model (with configured failover). Coding mode also uses that selected primary model as the orchestrator on every message: it classifies the request first, answers greetings/questions/conversation directly, and delegates only concrete software changes to the five configured, distinct worker models. The main model creates the file plan; workers implement separate files in parallel. Classification failures safely fall back to a normal answer instead of launching workers. Each worker returns a complete file. Demon Agent checks file ownership, previews every diff, verifies file hashes, asks for approval, creates backups, and applies changes with rollback on an apply failure. It then offers `/verify` and asks you to test the project and report bugs. If planning or any worker fails, no files are changed.
+Normal mode uses the selected primary model (with configured failover). Coding mode uses the selected primary model as the main orchestrator on every message: it classifies the request, answers ordinary chat directly, and delegates concrete software changes to five configured workers. After each worker round, the main model reviews staged results and assigns another round when work remains. The loop is bounded (default 4, configurable from 1-8 with `/orchestrator`) to control API cost and prevent runaway execution. All rounds remain staged until one approval; the runtime previews final diffs, verifies hashes, creates backups, and applies changes transactionally with rollback. If planning, a worker, or review fails, no project files are changed. Reaching the round limit is reported explicitly; it is not presented as completion.
 
 ## Agentic coding
 ~~~text
@@ -46,13 +47,16 @@ The agent runs a bounded multi-round tool loop: it can list/read/search files, i
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
 Use /models to discover current models and /models all to query the registry.
-Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable it. Each fallback needs a model and credentials.
+Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MODEL_ID`; each fallback needs credentials. Automatic failover is limited to rate limits, transient server errors, and network timeouts. `/keys` reports which providers have credentials without exposing secrets.
+
+OpenRouter free models can be discovered with `/free auto openrouter`; this stores up to six zero-priced models (ranked by advertised context length) as a fallback pool. Use `/free set PROVIDER MODEL1,MODEL2,...` to explicitly mark up to six models as free for another provider, `/free list` to inspect pools, and `/free clear PROVIDER` to remove one. Free-tier status is not exposed consistently by every provider, so the agent never guesses that an arbitrary model is free or silently adds a paid model. On Termux, keep worker slots on remote APIs: the default Ollama endpoint is localhost and would run inference on the phone. Only use Ollama after changing its base URL to a remote server.
 
 ## Commands
 | Command | Purpose |
 |---|---|
 | /mode | Select normal or five-AI coding mode; `/mode set SLOT PROVIDER MODEL` configures a coding slot |
-| /mode coding | Main model routes each message; ordinary chat is answered by the main model and coding tasks are delegated to five workers |
+| /mode coding | Main model routes each message and iteratively orchestrates five workers until complete or the round limit |
+| /orchestrator [1-8] | Configure the maximum planner/worker/review rounds (default 4) |
 | /providers | List providers |
 | /provider ID | Select provider |
 | /key | Save hidden API key |
@@ -62,6 +66,9 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /custom | Add compatible provider |
 | /fallback ID MODEL | Configure failover |
 | /fallbacks on or off | Toggle failover |
+| /failover [on or off or PROVIDER MODEL] | Configure provider failover |
+| /free auto or set or list or clear | Manage explicitly free model pools |
+| /keys | Show API-key configuration status (never the key values) |
 | /status | Show configuration |
 | /files, /read PATH | Inspect project |
 | /search QUERY | Search tracked and unignored project files |
@@ -80,7 +87,8 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /agent TASK | Execute approved coding actions |
 | /plan TASK | Show a plan without executing actions |
 | /run COMMAND | Execute a shell command with approval |
-| /test | Run npm test with approval |\n| /verify | Check JavaScript syntax, then optionally run the full test suite |
+| /test | Run npm test with approval |
+| /verify | Check JavaScript syntax, then optionally run the full test suite |
 | /mcp add ID | Configure an MCP stdio server |
 | /mcp tools ID | Discover its tools |
 | /mcp list or remove ID | Manage configured MCP servers |
@@ -100,7 +108,11 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /clear | Clear conversation |
 | /exit | Quit |
 
-## Transactional editing (3.0)\n\nAgent write actions must include `expectedHash` from the latest read; use `null` only when creating a new file. The runtime checks the hash again at commit time, then writes through an fsynced temporary file and atomic rename. Patch actions require a matching SHA-256 and one unique exact-text context. This prevents an agent from silently overwriting edits made by you or another process while it was reasoning. Each edit still requires approval and runs the configured lifecycle hooks.\n\n## Lifecycle hooks
+## Transactional editing (3.0)
+
+Agent write actions must include `expectedHash` from the latest read; use `null` only when creating a new file. The runtime checks the hash again at commit time, then writes through an fsynced temporary file and atomic rename. Patch actions require a matching SHA-256 and one unique exact-text context. This prevents an agent from silently overwriting edits made by you or another process while it was reasoning. Each edit still requires approval and runs the configured lifecycle hooks.
+
+## Lifecycle hooks
 
 Optional hooks run before or after file writes and shell commands: `before_write`, `after_write`, `before_run`, and `after_run`. Configure them with `/hook add EVENT`; each hook uses an executable plus a JSON argument array and an optional environment-variable allowlist. Every hook invocation requires its own approval. A failed or denied `before_*` hook blocks the operation; an `after_*` hook reports its result after the operation. Hooks run without a shell and do not inherit provider API keys by default.
 
@@ -117,7 +129,9 @@ GitHub read operations and CI inspection require the official `gh` CLI to be ins
 ## TUI
 Full-screen alternate-screen interface with a continuously animated activity spinner, live streamed tokens, full-width wrapped transcript and live slash-command suggestions, and terminal-resize redraws. Input is handled in raw terminal mode with cursor editing, Home/End, Delete/Backspace, command history (Up/Down), Ctrl+A/E/U/W editing shortcuts, live `/` command menu with prefix filtering, Up/Down selection, Tab completion and Escape dismissal, Ctrl+K command palette, and Ctrl+C exit. Approval prompts use the same in-screen input editor; no readline prompt is drawn outside the UI. Transcript scrolling supports PageUp/PageDown, Ctrl+Up/Ctrl+Down (three-line steps), and `/scroll up`, `/scroll down`, `/scroll bottom`; the scroll offset is clamped to the available transcript and the status bar shows the current offset. Terminal state (raw mode, cursor visibility, alternate screen, signal handlers) is restored on shutdown. `NO_COLOR=1` disables prompt colors; terminal control sequences remain enabled.
 
-Typing `/` opens the command menu immediately; continue typing to filter commands. Use Up/Down to navigate all matches, Tab to complete the selected command, or Escape to dismiss suggestions. The chat transcript spans the terminal width and expands to use the available terminal height.\n\n## Tests
+Typing `/` opens the command menu immediately; continue typing to filter commands. Use Up/Down to navigate all matches, Tab to complete the selected command, or Escape to dismiss suggestions. The chat transcript spans the terminal width and expands to use the available terminal height.
+
+## Tests
 ~~~sh
 npm test
 ~~~
