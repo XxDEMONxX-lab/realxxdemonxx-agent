@@ -4,7 +4,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 BIN="$HOME/.local/bin"
 LIB="$HOME/.local/lib/demonpm"
 mkdir -p "$BIN" "$LIB"
-for module in demonpm.py api.py config.py deploy.py tui.py __init__.py; do
+for module in demonpm.py api.py config.py deploy.py tui.py limits.py proxy.py plugins.py __init__.py; do
     install -m 644 "$ROOT/$module" "$LIB/$module"
 done
 cat > "$BIN/demonpm" <<'WRAPPER'
