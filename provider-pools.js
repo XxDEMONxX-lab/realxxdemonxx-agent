@@ -28,10 +28,15 @@ function buildProviderCandidates(provider,model,fallbacks,fallbackModels,pools,e
  return out;
 }
 
+function isProviderQuotaError(error){
+ const message=String(error?.message||error||"");
+ return /HTTP\s+429\b/i.test(message)||/rate.?limit|quota (?:exceeded|exhausted)|resource.?exhausted|too many requests/i.test(message);
+}
+
 function isRetryableProviderError(error){
  const message=String(error?.message||error||"");
- return /HTTP\s+(?:408|409|425|429|500|502|503|504)\b/i.test(message)||
+ return isProviderQuotaError(message)||/HTTP\s+(?:408|409|425|500|502|503|504)\b/i.test(message)||
   /request timeout|timed out|fetch failed|network error|ECONN(?:RESET|REFUSED|TIMEOUT)|EAI_AGAIN|socket hang up|temporarily unavailable|overloaded/i.test(message);
 }
 
-module.exports={normalizeFreePool,buildProviderCandidates,isRetryableProviderError};
+module.exports={normalizeFreePool,buildProviderCandidates,isRetryableProviderError,isProviderQuotaError};
