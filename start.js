@@ -143,17 +143,39 @@ function startApp(app) {
   writeLog(app, 'Started: ' + [NODE, entryPath, ...app.args].join(' '));
 }
 
-async function stopApp(app, timeoutMs = 8000) {
-  if (!isAlive(app)) {
+function isProcessGroupAlive(app) {
+  if (process.platform === 'win32' || !Number.isInteger(app.pid) || app.pid <= 1) {
+    return isAlive(app);
+  }
+  try {
+    process.kill(-app.pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+async function stopApp(app, timeoutMs = 1500) {
+  const leaderAlive = isAlive(app);
+  const groupAlive = isProcessGroupAlive(app);
+  if (!leaderAlive && !groupAlive) {
     app.pid = null;
     app.procStartTicks = null;
     saveState();
     return;
   }
+
+  // Never signal a reused PID if Linux can identify that the original leader changed.
+  if (leaderAlive && app.procStartTicks && process.platform === 'linux') {
+    const actualTicks = procStartTicks(app.pid);
+    if (actualTicks && actualTicks !== app.procStartTicks) {
+      throw new Error('Process ID was reused; refusing to stop an unrelated process.');
+    }
+  }
+
   const pid = app.pid;
   const signalGroup = signal => {
     try {
-      // detached=true creates a process group on POSIX; use PID fallback elsewhere.
       if (process.platform !== 'win32') process.kill(-pid, signal);
       else process.kill(pid, signal);
     } catch (error) {
@@ -164,13 +186,20 @@ async function stopApp(app, timeoutMs = 8000) {
       }
     }
   };
+
   signalGroup('SIGTERM');
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline && isAlive(app)) await sleep(150);
-  if (isAlive(app)) signalGroup('SIGKILL');
-  const killDeadline = Date.now() + 2000;
-  while (Date.now() < killDeadline && isAlive(app)) await sleep(100);
-  if (isAlive(app)) throw new Error('Process did not stop; it may be protected by the host.');
+  while (Date.now() < deadline && isProcessGroupAlive(app)) await sleep(50);
+
+  // Escalate quickly, but still allow applications a short graceful-shutdown window.
+  if (isProcessGroupAlive(app)) signalGroup('SIGKILL');
+  const killDeadline = Date.now() + 1000;
+  while (Date.now() < killDeadline && isProcessGroupAlive(app)) await sleep(50);
+
+  if (isProcessGroupAlive(app)) {
+    throw new Error('Process group did not stop; the host may be preventing termination.');
+  }
+
   app.pid = null;
   app.procStartTicks = null;
   app.stoppedAt = new Date().toISOString();
