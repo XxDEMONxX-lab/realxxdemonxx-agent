@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """demonpm 4.0: dependency-free Linux/Termux process supervisor."""
-import argparse, json, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
+import argparse, copy, gzip, hashlib, json, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
 from pathlib import Path
 
 VERSION = "5.0.0"
@@ -31,9 +31,11 @@ def rotate(path):
 
 def stats(pid):
     try:
-        s = Path("/proc/%d/stat" % pid).read_text().split()
-        return {"rss_mb": round(int(s[23]) * os.sysconf("SC_PAGE_SIZE") / 1048576, 1),
-                "ticks": int(s[13]) + int(s[14])}
+        raw = Path("/proc/%d/stat" % pid).read_text()
+        # comm is parenthesized and may contain whitespace or closing parentheses.
+        fields = raw[raw.rfind(")") + 2:].split()
+        return {"rss_mb": round(int(fields[21]) * os.sysconf("SC_PAGE_SIZE") / 1048576, 1),
+                "ticks": int(fields[11]) + int(fields[12])}
     except (OSError, ValueError, IndexError): return {"rss_mb": None, "ticks": None}
 
 class Manager:
@@ -77,7 +79,6 @@ class Manager:
 
     def log(self, name, message):
         path = LOGS / (name + ".log")
-        rotate(path)
         with path.open("a", encoding="utf-8") as f:
             f.write(time.strftime("[%Y-%m-%d %H:%M:%S] ") + message + "\n")
 
@@ -95,7 +96,9 @@ class Manager:
         return {"name": name, "status": a.get("status", "stopped"), "pid": pid,
                 "uptime": int(time.time() - a["started"]) if a.get("status") == "online" else 0,
                 "restarts": a.get("restarts", 0), "cpu_percent": cpu,
-                "rss_mb": st["rss_mb"], "command": a["command"], "cwd": a.get("cwd")}
+                "rss_mb": st["rss_mb"], "command": a["command"], "cwd": a.get("cwd"),
+                "health_url": a.get("health_url"), "port": a.get("env", {}).get("PORT"),
+                "cluster": a.get("cluster")}
 
     def start(self, name, stack=None):
         stack = tuple(stack or ())
@@ -113,14 +116,28 @@ class Manager:
             env.update(a.get("env", {}))
             path = LOGS / (name + ".log")
             rotate(path)
+            from plugins import run_hooks
+            run_hooks(HOME / "plugins", "pre-start", name)
             with path.open("a", encoding="utf-8") as out:
                 p = subprocess.Popen(a["command"], cwd=a.get("cwd") or None, env=env,
                     stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
                     start_new_session=True, close_fds=True)
+            try:
+                if a.get("cpu_percent") or a.get("hard_memory_mb"):
+                    from limits import attach
+                    a["cgroup"] = attach(p.pid, name, a.get("cpu_percent", 0),
+                        a.get("hard_memory_mb", 0), a.get("cgroup_root", "/sys/fs/cgroup"))
+            except Exception:
+                try: os.killpg(p.pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+                p.wait()
+                raise
             self.children[name] = p
             a.update(status="online", pid=p.pid, started=time.time(), next_restart=0)
             self.log(name, "started pid=%d" % p.pid)
             self.notify(a, "started", "pid %d" % p.pid)
+            try: run_hooks(HOME / "plugins", "post-start", name)
+            except Exception as exc: self.log(name, "post-start plugin failed: " + str(exc))
             if a.get("watch"):
                 self.watch_state[name] = self.snapshot(a["watch"])
             self.save()
@@ -130,6 +147,9 @@ class Manager:
         with self.lock:
             if name not in self.apps: raise ValueError("unknown process: " + name)
             a, p = self.apps[name], self.children.get(name)
+            from plugins import run_hooks
+            try: run_hooks(HOME / "plugins", "pre-stop", name)
+            except Exception as exc: self.log(name, "pre-stop plugin failed: " + str(exc))
             a["autorestart"] = False
             pid = p.pid if p and p.poll() is None else a.get("pid")
             if pid:
@@ -143,6 +163,13 @@ class Manager:
                     p.wait()
             self.children.pop(name, None)
             a.update(status="stopped", pid=None, next_restart=0)
+            if a.get("cgroup"):
+                try:
+                    from limits import detach
+                    detach(a.pop("cgroup", None))
+                except Exception: pass
+            try: run_hooks(HOME / "plugins", "post-stop", name)
+            except Exception as exc: self.log(name, "post-stop plugin failed: " + str(exc))
             self.log(name, "stopped")
             self.save()
             return self.describe(name)
@@ -226,12 +253,33 @@ class Manager:
                 "health_url": q.get("health_url"), "restarts": 0, "status": "stopped", "pid": None,
                 "watch": q.get("watch", []), "restart_every": q.get("restart_every", 0),
                 "max_memory_mb": q.get("max_memory_mb", 0), "discord_webhook": q.get("discord_webhook"),
-                "requires": q.get("requires", [])}
+                "requires": q.get("requires", []), "cluster": q.get("cluster"),
+                "cpu_percent": q.get("cpu_percent", 0), "hard_memory_mb": q.get("hard_memory_mb", 0),
+                "cgroup_root": q.get("cgroup_root", "/sys/fs/cgroup")}
             self.save()
             return self.start(name)
         if act == "describe":
             if name not in self.apps: raise ValueError("unknown process: " + str(name))
             return self.describe(name)
+        if act == "scale":
+            if name not in self.apps: raise ValueError("unknown base process: " + str(name))
+            count, base_port = int(q.get("replicas", 1)), int(q.get("base_port", 0))
+            if not 1 <= count <= 32: raise ValueError("replicas must be between 1 and 32")
+            if not 1 <= base_port <= 65535 or base_port + count - 1 > 65535:
+                raise ValueError("base_port must leave room for all replicas")
+            created=[]
+            source=self.apps[name]
+            for index in range(1,count+1):
+                replica="%s-%d" % (name,index)
+                if replica in self.apps: raise ValueError("replica already exists: " + replica)
+                cfg=copy.deepcopy(source)
+                cfg["env"]=dict(cfg.get("env",{}), PORT=str(base_port+index-1))
+                cfg["cluster"]=name
+                cfg["status"]="stopped"; cfg["pid"]=None; cfg["restarts"]=0
+                self.apps[replica]=cfg
+                self.save()
+                created.append(self.start(replica))
+            return {"cluster":name,"replicas":created}
         if act == "list": return {"processes": [self.describe(n) for n in sorted(self.apps)]}
         if act == "stop": return self.stop(name)
         if act == "restart":
@@ -267,8 +315,14 @@ class Manager:
             except socket.timeout: continue
             with c:
                 try:
-                    q = json.loads(c.recv(1024 * 1024).decode())
-                    out = {"ok": True, "result": self.dispatch(q)}
+                    data=b""
+                    while b"\n" not in data:
+                        part=c.recv(65536)
+                        if not part: break
+                        data+=part
+                        if len(data)>1024*1024: raise ValueError("request too large")
+                    q = json.loads(data.split(b"\n",1)[0].decode())
+                    out = {"ok": True, "result": self.dispatch(q)
                 except Exception as e: out = {"ok": False, "error": str(e)}
                 c.sendall((json.dumps(out) + "\n").encode())
         s.close(); SOCK.unlink(missing_ok=True)
@@ -280,7 +334,7 @@ class Manager:
 def alive():
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(1); s.connect(str(SOCK)); s.sendall(b'{"action":"ping"}')
+            s.settimeout(1); s.connect(str(SOCK)); s.sendall(b'{"action":"ping"}\n')
             return json.loads(s.recv(4096)).get("ok", False)
     except (OSError, ValueError): return False
 
@@ -300,7 +354,7 @@ def ensure():
 def request(q):
     ensure()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-        s.settimeout(30); s.connect(str(SOCK)); s.sendall(json.dumps(q).encode())
+        s.settimeout(30); s.connect(str(SOCK)); s.sendall(json.dumps(q).encode() + b"\n")
         data = b""
         while b"\n" not in data:
             part = s.recv(65536)
@@ -322,12 +376,20 @@ def main():
     x.add_argument("--max-memory-mb", type=int, default=0)
     x.add_argument("--discord-webhook")
     x.add_argument("--requires", action="append", default=[])
+    x.add_argument("--cpu-percent",type=int,default=0)
+    x.add_argument("--hard-memory-mb",type=int,default=0)
     x.add_argument("command", nargs=argparse.REMAINDER)
     for a in ("stop", "restart", "delete", "logs"):
         x = sp.add_parser(a); x.add_argument("name")
         if a == "logs": x.add_argument("-n", "--lines", type=int, default=100)
     for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "monit", "start-config", "deploy", "api"): sp.add_parser(a)
+    x=sp.add_parser("scale"); x.add_argument("name"); x.add_argument("--replicas",type=int,required=True); x.add_argument("--base-port",type=int,required=True)
+    x=sp.add_parser("proxy-sync"); x.add_argument("cluster"); x.add_argument("--upstream-file",required=True); x.add_argument("--upstream-name",required=True); x.add_argument("--nginx",default="nginx")
+    x=sp.add_parser("bluegreen"); x.add_argument("old"); x.add_argument("new"); x.add_argument("--upstream-file",required=True); x.add_argument("--upstream-name",required=True); x.add_argument("--server",required=True); x.add_argument("--health-url",required=True); x.add_argument("--nginx",default="nginx")
     sp.choices["api"].add_argument("--port", type=int, default=8765)
+    sp.choices["api"].add_argument("--host",default="127.0.0.1")
+    sp.choices["api"].add_argument("--tls-cert")
+    sp.choices["api"].add_argument("--tls-key")
     sp.choices["start-config"].add_argument("file")
     sp.choices["deploy"].add_argument("name")
     sp.choices["deploy"].add_argument("--branch")
@@ -344,14 +406,40 @@ def main():
             k, v = item.split("=", 1); env[k] = v
         q.update(name=a.name, command=cmd, cwd=a.cwd, env=env,
                  autorestart=not a.no_autorestart, max_restarts=a.max_restarts, health_url=a.health_url, watch=a.watch, restart_every=max(0,a.restart_every),
-                 max_memory_mb=max(0,a.max_memory_mb), discord_webhook=a.discord_webhook, requires=a.requires)
+                 max_memory_mb=max(0,a.max_memory_mb), discord_webhook=a.discord_webhook, requires=a.requires,
+                 cpu_percent=a.cpu_percent, hard_memory_mb=a.hard_memory_mb)
     elif a.action in ("stop", "restart", "delete", "logs"):
         q["name"] = a.name
         if a.action == "logs": q["lines"] = a.lines
+    if a.action == "scale":
+        result=request({"action":"scale","name":a.name,"replicas":a.replicas,"base_port":a.base_port})
+        print(json.dumps(result,indent=2)); return 0
+    if a.action == "proxy-sync":
+        rows=request({"action":"list"})["processes"]
+        from proxy import switch_upstream, healthy
+        servers=[]
+        for row in rows:
+            if row.get("cluster")==a.cluster and row.get("status")=="online" and row.get("port"):
+                if row.get("health_url") and not healthy(row["health_url"]): continue
+                servers.append("127.0.0.1:"+str(int(row["port"])))
+        if not servers: p.error("no healthy online replicas found")
+        print(json.dumps(switch_upstream(a.upstream_file,a.upstream_name,servers,a.nginx),indent=2)); return 0
+    if a.action == "bluegreen":
+        rows=request({"action":"list"})["processes"]
+        old=next((x for x in rows if x["name"]==a.old),None)
+        new=next((x for x in rows if x["name"]==a.new),None)
+        if not old or not new or new["status"]!="online": p.error("old and new must exist; new must be online")
+        from proxy import blue_green
+        result=blue_green(a.old,a.new,a.health_url,a.upstream_file,a.upstream_name,a.server,a.nginx,
+            stop_old=lambda n: request({"action":"stop","name":n}))
+        print(json.dumps(result,indent=2)); return 0
     if a.action == "api":
         request({"action":"list"})
         from api import main as api_main
-        sys.argv = [sys.argv[0], "--port", str(a.port)]
+        args=[sys.argv[0],"--port",str(a.port),"--host",a.host]
+        if a.tls_cert: args += ["--tls-cert",a.tls_cert]
+        if a.tls_key: args += ["--tls-key",a.tls_key]
+        sys.argv=args
         api_main(); return 0
     if a.action == "monit":
         from tui import main as tui_main
