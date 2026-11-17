@@ -300,6 +300,11 @@ def main():
     x = sp.add_parser("start"); x.add_argument("name"); x.add_argument("--cwd")
     x.add_argument("--env", action="append", default=[]); x.add_argument("--no-autorestart", action="store_true")
     x.add_argument("--max-restarts", type=int, default=20); x.add_argument("--health-url")
+    x.add_argument("--watch", action="append", default=[])
+    x.add_argument("--restart-every", type=int, default=0)
+    x.add_argument("--max-memory-mb", type=int, default=0)
+    x.add_argument("--discord-webhook")
+    x.add_argument("--requires", action="append", default=[])
     x.add_argument("command", nargs=argparse.REMAINDER)
     for a in ("stop", "restart", "delete", "logs"):
         x = sp.add_parser(a); x.add_argument("name")
@@ -321,7 +326,8 @@ def main():
             if "=" not in item: p.error("--env expects KEY=VALUE")
             k, v = item.split("=", 1); env[k] = v
         q.update(name=a.name, command=cmd, cwd=a.cwd, env=env,
-                 autorestart=not a.no_autorestart, max_restarts=a.max_restarts, health_url=a.health_url)
+                 autorestart=not a.no_autorestart, max_restarts=a.max_restarts, health_url=a.health_url, watch=a.watch, restart_every=max(0,a.restart_every),
+                 max_memory_mb=max(0,a.max_memory_mb), discord_webhook=a.discord_webhook, requires=a.requires)
     elif a.action in ("stop", "restart", "delete", "logs"):
         q["name"] = a.name
         if a.action == "logs": q["lines"] = a.lines
