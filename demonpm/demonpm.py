@@ -69,6 +69,7 @@ class Manager:
             app.update(status="stopped", pid=None, next_restart=0)
         self.lock, self.alive = threading.RLock(), True
         self.watch_state = {}
+        self.log_locks, self.log_threads = {}, {}
 
     def save(self):
         with self.lock: atomic(STATE, self.apps)
@@ -138,24 +139,28 @@ class Manager:
             env = os.environ.copy()
             env.update(a.get("env", {}))
             path = LOGS / (name + ".log")
-            rotate(path)
+            log_lock = self.log_locks.setdefault(name, threading.RLock())
+            with log_lock: rotate(path)
             from plugins import run_hooks
             run_hooks(HOME / "plugins", "pre-start", name)
-            with path.open("a", encoding="utf-8") as out:
-                p = subprocess.Popen(a["command"], cwd=a.get("cwd") or None, env=env,
-                    stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-                    start_new_session=True, close_fds=True)
+            p = subprocess.Popen(a["command"], cwd=a.get("cwd") or None, env=env,
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                start_new_session=True, close_fds=True)
+            self.children[name] = p
+            reader = threading.Thread(target=self.capture_output, args=(name,p), daemon=True)
+            self.log_threads[name] = reader
+            reader.start()
             try:
                 if a.get("cpu_percent") or a.get("hard_memory_mb"):
                     from limits import attach
                     a["cgroup"] = attach(p.pid, name, a.get("cpu_percent", 0),
                         a.get("hard_memory_mb", 0), a.get("cgroup_root", "/sys/fs/cgroup"))
             except Exception:
-                try: os.killpg(p.pid, signal.SIGKILL)
-                except ProcessLookupError: pass
-                p.wait()
+                terminate_group(p.pid,1)
+                if p.poll() is None: p.wait()
+                self.join_log_thread(name)
+                self.children.pop(name,None)
                 raise
-            self.children[name] = p
             a.update(status="online", pid=p.pid, started=time.time(), next_restart=0)
             self.log(name, "started pid=%d" % p.pid)
             self.notify(a, "started", "pid %d" % p.pid)
@@ -177,6 +182,7 @@ class Manager:
             if p:
                 terminate_group(p.pid,8)
                 if p.poll() is None: p.wait()
+                self.join_log_thread(name)
             self.children.pop(name, None)
             a.update(status="stopped", pid=None, next_restart=0)
             if a.get("cgroup"):
@@ -207,6 +213,7 @@ class Manager:
                     code = p.returncode
                     # A child may have forked workers that outlive its parent.
                     terminate_group(p.pid,1)
+                    self.join_log_thread(name)
                     self.children.pop(name, None)
                     a.update(status="stopped", pid=None, last_exit=code)
                     self.log(name, "exited code=%s" % code)
