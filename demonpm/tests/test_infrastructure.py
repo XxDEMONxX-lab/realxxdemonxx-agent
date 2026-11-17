@@ -56,7 +56,8 @@ class InfrastructureTests(unittest.TestCase):
                 reader.join(timeout=5)
                 self.assertFalse(reader.is_alive())
                 with gzip.open(logs/"test.log.1.gz","rb") as archive:
-                    self.assertEqual(len(archive.read()),LIMIT+32)
+                    self.assertEqual(len(archive.read()),LIMIT)
+                self.assertEqual((logs/"test.log").stat().st_size,32)
 
     def test_proc_stats_parse_current_process(self):
         import os
