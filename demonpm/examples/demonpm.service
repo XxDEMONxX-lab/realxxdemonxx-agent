@@ -1,0 +1,16 @@
+[Unit]
+Description=demonpm process supervisor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/demonpm daemon-foreground
+Restart=on-failure
+RestartSec=2
+UMask=0077
+Delegate=yes
+KillMode=mixed
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target
