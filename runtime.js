@@ -8,12 +8,13 @@ const {findSymbols,diagnoseProject}=require("./indexer");
 const {runSubagents}=require("./subagents");
 const {runCodingTeam}=require("./coding-team");
 const {runOrchestrationLoop}=require("./orchestrator");
+const {normalizeFreePool,buildProviderCandidates,isRetryableProviderError}=require("./provider-pools");
 const {classifyTask}=require("./task-router");
 const {hashFile,atomicWrite,applyTextPatch}=require("./transactions");
 const ROOT=path.resolve(process.env.DEMON_PROJECT||process.cwd()),DIR=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),".config"),"demon-agent"),FILE=path.join(DIR,"config.json");
 const P={openai:["OpenAI","https://api.openai.com/v1","OPENAI_API_KEY"],openrouter:["OpenRouter","https://openrouter.ai/api/v1","OPENROUTER_API_KEY"],groq:["Groq","https://api.groq.com/openai/v1","GROQ_API_KEY"],together:["Together","https://api.together.xyz/v1","TOGETHER_API_KEY"],cerebras:["Cerebras","https://api.cerebras.ai/v1","CEREBRAS_API_KEY"],deepseek:["DeepSeek","https://api.deepseek.com/v1","DEEPSEEK_API_KEY"],mistral:["Mistral","https://api.mistral.ai/v1","MISTRAL_API_KEY"],fireworks:["Fireworks","https://api.fireworks.ai/inference/v1","FIREWORKS_API_KEY"],xai:["xAI","https://api.x.ai/v1","XAI_API_KEY"],sambanova:["SambaNova","https://api.sambanova.ai/v1","SAMBANOVA_API_KEY"],perplexity:["Perplexity","https://api.perplexity.ai","PERPLEXITY_API_KEY"],anthropic:["Anthropic","https://api.anthropic.com/v1","ANTHROPIC_API_KEY","anthropic"],gemini:["Gemini","https://generativelanguage.googleapis.com/v1beta","GEMINI_API_KEY","gemini"],ollama:["Ollama","http://127.0.0.1:11434/api","","ollama"]};
 const K={r:"\x1b[0m",c:"\x1b[36m",g:"\x1b[32m",y:"\x1b[33m",red:"\x1b[31m",b:"\x1b[1m",d:"\x1b[2m"};const color=(s,k)=>process.env.NO_COLOR?s:(K[k]||"")+s+K.r;
-const base=()=>({provider:"openrouter",model:"",mode:"normal",codingModels:[],keys:{},baseUrls:{},custom:{},fallbacks:[],fallbackModels:{},mcpServers:{},hooks:{},autoFallback:true});
+const base=()=>({provider:"openrouter",model:"",mode:"normal",codingModels:[],keys:{},baseUrls:{},custom:{},fallbacks:[],fallbackModels:{},mcpServers:{},hooks:{},autoFallback:true,freeModelPools:{}});
 function load(){try{const c={...base(),...JSON.parse(fs.readFileSync(FILE,"utf8"))};if(c.mode==="main")c.mode="coding";return c;}catch(e){if(e.code!=="ENOENT")console.error("Config warning: "+e.message);return base();}}
 function save(c){fs.mkdirSync(DIR,{recursive:true,mode:0o700});try{fs.chmodSync(DIR,0o700);}catch{}const t=FILE+"."+process.pid+".tmp",fd=fs.openSync(t,"w",0o600);try{fs.writeFileSync(fd,JSON.stringify(c,null,2));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(t,FILE);}
 function provider(id,c){const p=P[id];if(p)return {id,name:p[0],url:(c.baseUrls[id]||p[1]).replace(/\/+$/,""),env:p[2],kind:p[3]||"openai"};const x=c.custom[id];if(x)return {id,name:x.name,url:x.url,env:x.env,kind:"openai"};throw Error("Unknown provider "+id);}
@@ -30,9 +31,18 @@ async function completion(id,model,msg,c){const p=provider(id,c),k=key(p,c);let 
  if(p.kind==="ollama"){d=await req(p.url+"/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({model,messages:msg,stream:false})});if(typeof d.message?.content!=="string")throw Error("Bad Ollama response");return d.message.content;}
  if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2})});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
 async function completeWithFallback(id,model,msg,c){
- const candidates=[{id,model},...(c.autoFallback?(c.fallbacks||[]).map(providerId=>({id:providerId,model:c.fallbackModels?.[providerId]})):[])],failures=[];
- for(const candidate of candidates){const spinner=new Spinner("Thinking · "+candidate.id);spinner.start();try{if(!candidate.model)throw Error("No fallback model configured");const text=await completion(candidate.id,candidate.model,msg,c);spinner.stop(color("Response ready · "+candidate.id,"g"));return {provider:candidate.id,model:candidate.model,text};}catch(error){spinner.stop(color(candidate.id+" failed: "+error.message,"y"));failures.push(candidate.id+": "+error.message);}}
- throw Error("All configured providers failed: "+failures.join(" | "));
+ const candidates=buildProviderCandidates(id,model,c.fallbacks,c.fallbackModels,c.freeModelPools,c.autoFallback),failures=[];
+ for(const candidate of candidates){const spinner=new Spinner("Thinking · "+candidate.id+" / "+candidate.model);spinner.start();try{const text=await completion(candidate.id,candidate.model,msg,c);spinner.stop(color("Response ready · "+candidate.id,"g"));return {provider:candidate.id,model:candidate.model,text};}catch(error){spinner.stop(color(candidate.id+" / "+candidate.model+" failed: "+error.message,"y"));failures.push(candidate.id+"/"+candidate.model+": "+error.message);if(!isRetryableProviderError(error))throw error;}}
+ throw Error("All free-pool and provider failover candidates failed: "+failures.join(" | "));
+}
+async function discoverFreeModels(id,c){
+ if(id!=="openrouter")throw Error("Automatic free-model discovery is currently supported only by OpenRouter pricing metadata; use /free set for other providers.");
+ const p=provider(id,c),k=key(p,c);if(!k)throw Error("Configure the OpenRouter API key first with /provider openrouter then /key");
+ const data=await req(p.url+"/models",{headers:{Accept:"application/json",Authorization:"Bearer "+k}});
+ return (data.data||[]).filter(x=>{
+  const prompt=Number(x.pricing?.prompt),completion=Number(x.pricing?.completion);
+  return typeof x.id==="string"&&(x.id.endsWith(":free")||(Number.isFinite(prompt)&&Number.isFinite(completion)&&prompt===0&&completion===0));
+ }).sort((a,b)=>(Number(b.context_length)||0)-(Number(a.context_length)||0)||a.id.localeCompare(b.id)).slice(0,6).map(x=>x.id);
 }
 async function completionStream(id,model,msg,c,onToken){
  const p=provider(id,c),k=key(p,c);
@@ -360,6 +370,8 @@ class Agent{
   break;
  }
  case "providers":Object.entries(P).forEach(([id,p])=>console.log(id.padEnd(13)+p[0]));Object.entries(this.c.custom).forEach(([id,p])=>console.log(id.padEnd(13)+p.name+" custom"));break;
+  case "keys":{for(const [id,p] of Object.entries(P)){const configured=Boolean((p[2]&&process.env[p[2]])||this.c.keys[id]);console.log(id.padEnd(13)+(p[2]||"no env var")+" · "+(configured?"configured":"not set"));}for(const [id,p] of Object.entries(this.c.custom||{}))console.log(id.padEnd(13)+((p.env&&process.env[p.env])||this.c.keys[id]?"configured":"not set")+" · custom");break;}
+  case "free":{const [action,id,...rest]=arg.split(/\s+/);if(action==="list"){for(const [providerId,pool] of Object.entries(this.c.freeModelPools||{}))console.log(providerId+":\n"+pool.map((x,n)=>(n+1)+". "+x).join("\n"));if(!Object.keys(this.c.freeModelPools||{}).length)console.log("(no free model pools configured)");}else if(action==="clear"){if(!id)throw Error("Use /free clear PROVIDER");delete this.c.freeModelPools[id];save(this.c);console.log("Free pool cleared for "+id);}else if(action==="set"){if(!id||!rest.length)throw Error("Use /free set PROVIDER MODEL1,MODEL2,...");provider(id,this.c);const pool=normalizeFreePool(rest.join(" ").split(","));this.c.freeModelPools=this.c.freeModelPools||{};this.c.freeModelPools[id]=pool;save(this.c);console.log("Saved "+pool.length+" explicitly selected free models for "+id);}else if(action==="auto"){const target=id||this.c.provider;const pool=await discoverFreeModels(target,this.c);if(!pool.length)throw Error("No zero-priced models were discovered for "+target);this.c.freeModelPools=this.c.freeModelPools||{};this.c.freeModelPools[target]=pool;save(this.c);console.log("Saved six-or-fewer discovered zero-priced models for "+target+":\n"+pool.join("\n"));}else throw Error("Use /free auto [PROVIDER], /free set PROVIDER MODEL1,MODEL2,..., /free list, or /free clear PROVIDER");break;}
  case "provider":if(!arg)console.log(this.c.provider);else{provider(arg,this.c);this.c.provider=arg;this.c.model="";save(this.c);}break;
  case "key":{const p=provider(this.c.provider,this.c);if(p.kind==="ollama")break;const k=await this.secret();if(k){this.c.keys[this.c.provider]=k;save(this.c);console.log("Key saved");}break;}
  case "models":if(arg==="all"){for(const id of [...Object.keys(P),...Object.keys(this.c.custom)])await this.fetchModels(id);}else await this.fetchModels(this.c.provider);break;
@@ -462,6 +474,6 @@ class Agent{
  default:console.log("Unknown command; /help");}return true;}
  async saveMemory(s){fs.mkdirSync(path.dirname(this.memfile),{recursive:true,mode:0o700});fs.writeFileSync(this.memfile,s.slice(0,20000),{mode:0o600});this.memory=s;console.log("Memory saved");}
  async start(){const {TUI}=require("./tui");return new TUI(this).start();}}
-const HELP="/mode [normal|coding|set SLOT PROVIDER MODEL|list] /orchestrator [1-8] /providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /status /palette /files /search QUERY /symbols [QUERY] /diagnose /verify /subagents TASK /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
+const HELP="/mode [normal|coding|set SLOT PROVIDER MODEL|list] /orchestrator [1-8] /providers /provider ID /key /models [all] /model ID /base URL /custom\n/fallback ID MODEL /fallbacks on|off /failover [on|off|PROVIDER MODEL] /free auto|set|list|clear /keys /status /palette /files /search QUERY /symbols [QUERY] /diagnose /verify /subagents TASK /skills /skill NAME /review [all] /read PATH /write PATH\n/agent TASK /plan TASK /hook add|remove|list EVENT /mcp add|remove|list|tools ID /run COMMAND /test /github auth|repo|prs|issues|pr-status|ci|ci-failed|branch|commit|push|pr-create /git status|diff /memory show|edit|clear /session save|load|list /undo PATH /clear /exit";
 if(require.main===module){if(+process.versions.node.split(".")[0]<18){console.error("Node 18+ required: pkg install nodejs");process.exit(1);}new Agent().start().catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={safe,parse,provider,writeFile,sessionFile,saveSession,loadSession,listSessions,backupFile,undoFile,diffPreview,completionStream,validateBranchName,validateCommitMessage,parsePullRequestInput,runProgram,validateCodingModels,CODING_ROLES};
