@@ -23,11 +23,20 @@ def rotate(path):
     try:
         if path.stat().st_size < LIMIT: return
     except OSError: return
-    path.with_name(path.name + "." + str(RETAIN)).unlink(missing_ok=True)
-    for i in range(RETAIN - 1, 0, -1):
-        old = path.with_name(path.name + "." + str(i))
-        if old.exists(): old.replace(path.with_name(path.name + "." + str(i + 1)))
-    path.replace(path.with_name(path.name + ".1"))
+    for i in range(RETAIN, 0, -1):
+        old = path.with_name(path.name + "." + str(i) + ".gz")
+        if old.exists():
+            if i == RETAIN: old.unlink()
+            else: old.replace(path.with_name(path.name + "." + str(i + 1) + ".gz"))
+    archive = path.with_name(path.name + ".1")
+    if archive.exists(): archive.unlink()
+    path.replace(archive)
+    with archive.open("rb") as source, gzip.open(str(archive) + ".gz", "wb", compresslevel=6) as target:
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk: break
+            target.write(chunk)
+    archive.unlink()
 
 def stats(pid):
     try:
@@ -44,6 +53,9 @@ class Manager:
         LOGS.mkdir(mode=0o700, exist_ok=True)
         os.chmod(HOME, 0o700)
         self.apps, self.children, self.cpu = load(STATE, {}), {}, {}
+        # Never signal persisted PIDs: after a daemon crash they may have been reused.
+        for app in self.apps.values():
+            app.update(status="stopped", pid=None, next_restart=0)
         self.lock, self.alive = threading.RLock(), True
         self.watch_state = {}
 
@@ -322,7 +334,7 @@ class Manager:
                         data+=part
                         if len(data)>1024*1024: raise ValueError("request too large")
                     q = json.loads(data.split(b"\n",1)[0].decode())
-                    out = {"ok": True, "result": self.dispatch(q)
+                    out = {"ok": True, "result": self.dispatch(q)}
                 except Exception as e: out = {"ok": False, "error": str(e)}
                 c.sendall((json.dumps(out) + "\n").encode())
         s.close(); SOCK.unlink(missing_ok=True)
@@ -390,6 +402,7 @@ def main():
     sp.choices["api"].add_argument("--host",default="127.0.0.1")
     sp.choices["api"].add_argument("--tls-cert")
     sp.choices["api"].add_argument("--tls-key")
+    sp.choices["api"].add_argument("--create-token",choices=("viewer","operator","admin"))
     sp.choices["start-config"].add_argument("file")
     sp.choices["deploy"].add_argument("name")
     sp.choices["deploy"].add_argument("--branch")
@@ -439,6 +452,7 @@ def main():
         args=[sys.argv[0],"--port",str(a.port),"--host",a.host]
         if a.tls_cert: args += ["--tls-cert",a.tls_cert]
         if a.tls_key: args += ["--tls-key",a.tls_key]
+        if a.create_token: args += ["--create-token",a.create_token]
         sys.argv=args
         api_main(); return 0
     if a.action == "monit":
@@ -456,7 +470,8 @@ def main():
                 "max_restarts":app.get("max_restarts",20),
                 "health_url":app.get("health_url"),"watch":app.get("watch",[]),
                 "restart_every":app.get("restart_every",0),"max_memory_mb":app.get("max_memory_mb",0),
-                "discord_webhook":app.get("discord_webhook"),"requires":app.get("requires",[])})
+                "discord_webhook":app.get("discord_webhook"),"requires":app.get("requires",[]),
+                "cpu_percent":app.get("cpu_percent",0),"hard_memory_mb":app.get("hard_memory_mb",0)})
         print("Started %d applications in dependency order" % len(apps)); return 0
     if a.action == "deploy":
         listing = request({"action":"list"})["processes"]
