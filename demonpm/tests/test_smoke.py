@@ -18,6 +18,9 @@ class Smoke(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('"status": "online"', r.stdout)
         self.assertEqual(self.cli("list").returncode, 0)
+        listed=self.cli("list-json")
+        self.assertEqual(listed.returncode,0,listed.stderr)
+        self.assertIn('"name": "test"',listed.stdout)
         self.assertEqual(self.cli("stop", "test").returncode, 0)
         self.assertEqual(self.cli("delete", "test").returncode, 0)
     def test_no_command_rejected(self):
