@@ -51,7 +51,11 @@ function loadState() {
       typeof app.cwd === 'string' &&
       typeof app.entry === 'string' &&
       Array.isArray(app.args)
-    );
+    ).map(app => ({
+      ...app,
+      autoRestart: app.autoRestart !== false,
+      restartDelayMs: Number.isInteger(app.restartDelayMs) ? Math.max(500, Math.min(app.restartDelayMs, 30000)) : 1000
+    }));
   } catch (error) {
     const backup = STATE_FILE + '.corrupt-' + Date.now();
     try { fs.renameSync(STATE_FILE, backup); } catch {}
@@ -120,29 +124,91 @@ function startApp(app) {
     throw new Error('Node entry file does not exist: ' + entryPath);
   }
 
-  const fd = fs.openSync(logPath(app), 'a', 0o600);
-  const child = spawn(NODE, [entryPath, ...app.args], {
+  // A detached supervisor owns the app's process group and restarts crashed bots.
+  const supervisor = spawn(NODE, [__filename, '--supervise', app.id], {
     cwd: app.cwd,
-    env: { ...process.env, ...(app.env || {}) },
+    env: process.env,
     detached: true,
-    stdio: ['ignore', fd, fd],
+    stdio: 'ignore',
     windowsHide: true
   });
-  fs.closeSync(fd);
-
-  if (!child.pid) throw new Error('Node failed to create the application process.');
-  app.pid = child.pid;
+  if (!supervisor.pid) throw new Error('Could not start the application supervisor.');
+  app.pid = supervisor.pid;
   app.procStartTicks = null;
   app.startedAt = new Date().toISOString();
   app.node = NODE;
-  // Give Linux /proc a moment to publish the new process identity.
   if (process.platform === 'linux') {
-    const ticks = procStartTicks(child.pid);
+    const ticks = procStartTicks(supervisor.pid);
     if (ticks) app.procStartTicks = ticks;
   }
-  child.unref();
+  supervisor.unref();
   saveState();
-  writeLog(app, 'Started: ' + [NODE, entryPath, ...app.args].join(' '));
+  writeLog(app, 'Supervisor started (PID ' + app.pid + '); crash recovery is enabled.');
+}
+
+async function runSupervisor(appId) {
+  ensureStorage();
+  let parsed;
+  try { parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); }
+  catch { process.exit(2); }
+  const app = Array.isArray(parsed.apps) ? parsed.apps.find(item => item.id === appId) : null;
+  if (!app) process.exit(2);
+  const entryPath = path.resolve(app.cwd, app.entry);
+  if (!fs.existsSync(entryPath) || !fs.statSync(entryPath).isFile()) process.exit(2);
+
+  let stopping = false;
+  let child = null;
+  let restartTimer = null;
+  const stop = () => {
+    stopping = true;
+    if (restartTimer) clearTimeout(restartTimer);
+    if (child && child.exitCode === null && child.signalCode === null) {
+      try { child.kill('SIGTERM'); } catch {}
+      setTimeout(() => {
+        if (child && child.exitCode === null && child.signalCode === null) {
+          try { child.kill('SIGKILL'); } catch {}
+        }
+      }, 500).unref();
+    }
+  };
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
+
+  const launch = () => {
+    if (stopping) return;
+    const fd = fs.openSync(logPath(app), 'a', 0o600);
+    try {
+      child = spawn(NODE, [entryPath, ...(Array.isArray(app.args) ? app.args : [])], {
+        cwd: app.cwd,
+        env: { ...process.env, ...(app.env || {}) },
+        detached: false,
+        stdio: ['ignore', fd, fd],
+        windowsHide: true
+      });
+    } finally { fs.closeSync(fd); }
+    if (!child.pid) {
+      writeLog(app, 'Supervisor could not spawn the application process.');
+      scheduleRestart();
+      return;
+    }
+    writeLog(app, 'Application process started (PID ' + child.pid + ').');
+    child.once('error', error => writeLog(app, 'Application spawn error: ' + error.message));
+    child.once('exit', (code, signal) => {
+      writeLog(app, 'Application exited (code=' + code + ', signal=' + signal + ').');
+      child = null;
+      if (!stopping) scheduleRestart();
+      else process.exit(0);
+    });
+  };
+  const scheduleRestart = () => {
+    if (stopping) return;
+    const delay = Math.max(500, Math.min(Number(app.restartDelayMs) || 1000, 30000));
+    writeLog(app, 'Restarting application in ' + delay + 'ms.');
+    restartTimer = setTimeout(launch, delay);
+  };
+  launch();
+  while (!stopping) await sleep(250);
+  process.exit(0);
 }
 
 function isProcessGroupAlive(app) {
@@ -365,7 +431,7 @@ async function addApp() {
   if (!entry.toLowerCase().endsWith('.js') && !entry.toLowerCase().endsWith('.cjs') && !entry.toLowerCase().endsWith('.mjs')) {
     throw new Error('Only JavaScript entry files (.js, .cjs, .mjs) are supported.');
   }
-  const app = { id: safeId(), name, cwd, entry, args: parts, env: {}, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
+  const app = { id: safeId(), name, cwd, entry, args: parts, env: {}, autoRestart: true, restartDelayMs: 1000, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
   const resolved = path.resolve(cwd, entry);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error('Entry file not found: ' + resolved);
   state.apps.push(app);
@@ -470,6 +536,17 @@ async function main() {
     return;
   }
   loadState();
+  // Recover apps configured for automatic restart when the manager is opened again.
+  for (const app of state.apps) {
+    if (app.autoRestart && !isAlive(app)) {
+      try {
+        startApp(app);
+        writeLog(app, 'Startup recovery: supervisor relaunched by DEMONPM.');
+      } catch (error) {
+        writeLog(app, 'Startup recovery failed: ' + error.message);
+      }
+    }
+  }
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
   process.stdin.resume();
@@ -522,8 +599,15 @@ async function main() {
   saveState();
 }
 
-main().catch(error => {
-  shutdown();
-  console.error('DEMONPM JS fatal error:', error.message);
-  process.exitCode = 1;
-});
+if (process.argv[2] === '--supervise' && process.argv[3]) {
+  runSupervisor(process.argv[3]).catch(error => {
+    try { fs.appendFileSync(path.join(LOG_DIR, process.argv[3] + '.log'), '[' + new Date().toISOString() + '] Supervisor error: ' + error.message + '\\n'); } catch {}
+    process.exitCode = 1;
+  });
+} else {
+  main().catch(error => {
+    shutdown();
+    console.error('DEMONPM JS fatal error:', error.message);
+    process.exitCode = 1;
+  });
+}
