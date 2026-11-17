@@ -333,8 +333,16 @@ class Manager:
             return {"deleted": name}
         if act == "logs":
             if name not in self.apps: raise ValueError("unknown process: " + str(name))
-            try: lines = (LOGS / (name + ".log")).read_text(errors="replace").splitlines()
-            except OSError: lines = []
+            lines=[]
+            for index in range(RETAIN,0,-1):
+                archive=LOGS / (name + ".log." + str(index) + ".gz")
+                if archive.exists():
+                    try:
+                        with gzip.open(archive,"rt",encoding="utf-8",errors="replace") as stream:
+                            lines.extend(stream.read().splitlines())
+                    except OSError: pass
+            try: lines.extend((LOGS / (name + ".log")).read_text(errors="replace").splitlines())
+            except OSError: pass
             return {"logs": "\n".join(lines[-max(1, min(int(q.get("lines", 100)), 5000)):])}
         if act == "save": atomic(SAVED, self.apps); return {"saved": str(SAVED)}
         if act == "resurrect":
