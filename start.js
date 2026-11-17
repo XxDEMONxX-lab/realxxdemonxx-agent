@@ -459,7 +459,13 @@ async function addApp() {
   if (!entry.toLowerCase().endsWith('.js') && !entry.toLowerCase().endsWith('.cjs') && !entry.toLowerCase().endsWith('.mjs')) {
     throw new Error('Only JavaScript entry files (.js, .cjs, .mjs) are supported.');
   }
-  const app = { id: safeId(), name, cwd, entry, args: parts, env: {}, autoRestart: true, desiredRunning: false, restartDelayMs: 1000, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
+  const delayInput = await prompt('Restart delay in ms (500–30000, default 1000): ', '1000');
+  const restartDelayMs = Number(delayInput);
+  if (!Number.isInteger(restartDelayMs) || restartDelayMs < 500 || restartDelayMs > 30000) throw new Error('Restart delay must be 500–30000ms.');
+  const limitInput = await prompt('Max restarts per 60 seconds (0 = unlimited): ', '0');
+  const maxRestarts = Number(limitInput);
+  if (!Number.isInteger(maxRestarts) || maxRestarts < 0 || maxRestarts > 1000) throw new Error('Restart limit must be 0–1000.');
+  const app = { id: safeId(), name, cwd, entry, args: parts, env: {}, autoRestart: true, desiredRunning: false, restartDelayMs, maxRestartDelayMs: 30000, maxRestarts, restartWindowMs: 60000, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
   const resolved = path.resolve(cwd, entry);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error('Entry file not found: ' + resolved);
   state.apps.push(app);
