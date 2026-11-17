@@ -1,5 +1,5 @@
-"""Resource-limited plugin hooks. Hooks are NOT a security boundary."""
-import json, os, subprocess
+"""Bubblewrap-isolated plugin hooks. Fail closed if the sandbox runtime is unavailable."""
+import json, os, shutil, subprocess
 from pathlib import Path
 
 HOOKS = {"pre-start","post-start","pre-stop","post-stop","on-crash"}
@@ -20,18 +20,38 @@ def load_plugins(root):
         cwd=(root / item.get("cwd",".")).resolve()
         if cwd != root and root not in cwd.parents:
             raise ValueError("plugin cwd must stay inside plugin directory")
-        result.append((item["hook"],command,cwd,int(item.get("timeout",5))))
+        result.append((item["hook"],command,cwd,max(1,min(int(item.get("timeout",5)),30))))
     return result
 
 def run_hooks(root, hook, app_name, timeout=5):
     if hook not in HOOKS: raise ValueError("unknown plugin hook")
-    for selected, command, cwd, configured_timeout in load_plugins(root):
-        if selected != hook: continue
-        env={"PATH":os.environ.get("PATH",""),"HOME":str(cwd),
-             "DEMONPM_APP":app_name,"DEMONPM_HOOK":hook}
-        try:
-            subprocess.run(command,cwd=str(cwd),env=env,stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True,
-                timeout=max(1,min(configured_timeout,timeout)),close_fds=True)
-        except Exception as exc:
-            raise RuntimeError("plugin hook %s failed: %s" % (hook,exc))
+    root=Path(root).expanduser().resolve()
+    selected=[x for x in load_plugins(root) if x[0]==hook]
+    if not selected: return
+    bwrap=shutil.which("bwrap")
+    if not bwrap:
+        raise RuntimeError("plugins require bubblewrap (bwrap); hooks fail closed without OS isolation")
+    binds=[]
+    for path in ("/usr","/bin","/sbin","/lib","/lib64","/etc"):
+        if Path(path).exists(): binds += ["--ro-bind",path,path]
+    for _,command,cwd,configured_timeout in selected:
+        relative=cwd.relative_to(root)
+        inside="/plugin" if str(relative)=="." else "/plugin/"+relative.as_posix()
+        argv=[bwrap,"--die-with-parent","--new-session","--unshare-all",
+              "--ro-bind",str(root),"/plugin","--proc","/proc","--dev","/dev",
+              "--tmpfs","/tmp","--dir","/run","--chdir",inside,
+              "--clearenv","--setenv","PATH","/usr/local/bin:/usr/bin:/bin",
+              "--setenv","HOME","/tmp","--setenv","DEMONPM_APP",app_name,
+              "--setenv","DEMONPM_HOOK",hook]
+        argv += binds + ["--"] + command
+        def limits():
+            try:
+                import resource
+                resource.setrlimit(resource.RLIMIT_CPU,(10,10))
+                resource.setrlimit(resource.RLIMIT_FSIZE,(16*1024*1024,16*1024*1024))
+                resource.setrlimit(resource.RLIMIT_NOFILE,(32,32))
+                resource.setrlimit(resource.RLIMIT_CORE,(0,0))
+            except (ImportError,OSError,ValueError): pass
+        subprocess.run(argv,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,check=True,timeout=min(timeout,configured_timeout),
+            close_fds=True,preexec_fn=limits)
