@@ -1,6 +1,6 @@
-# demonpm 5.0 development branch
+# demonpm 5.0
 
-Dependency-free Linux/Termux process supervisor. Requires Python 3.9+; no npm or pip dependencies.
+Dependency-free Python process supervisor for Linux and Termux. Python 3.9+; no npm or pip dependencies.
 
 ## Install
 
@@ -8,12 +8,8 @@ From the repository root:
 
 ~~~sh
 sh demonpm/install.sh
-~~~
-
-If `~/.local/bin` is not already on PATH, add:
-
-~~~sh
 export PATH="$HOME/.local/bin:$PATH"
+demonpm --version
 ~~~
 
 ## Process lifecycle
@@ -29,70 +25,120 @@ demonpm save
 demonpm resurrect
 ~~~
 
-## Advanced process options
+The daemon can be run under systemd using `demonpm/examples/demonpm.service`. It runs in the foreground and restores saved applications after daemon startup. On Termux, install Termux:Boot and use `demonpm/examples/termux-boot.sh`; Android may still kill Termux.
+
+## Monitoring and reliability
 
 ~~~sh
-# Restart when watched source files change (ignores .git, node_modules, __pycache__)
-demonpm start api --cwd "$HOME/api" --watch src --watch app.py -- python3 app.py
-
-# Restart periodically; enforce an RSS memory ceiling
-demonpm start worker --restart-every 3600 --max-memory-mb 256 -- python3 worker.py
-
-# Dependency ordering; dependencies must already be registered
-demonpm start web --requires database -- python3 web.py
-
-# Interactive terminal dashboard
 demonpm monit
+demonpm start api --cwd "$HOME/api" --watch src --health-url http://127.0.0.1:8000/health -- python3 app.py
+demonpm start worker --restart-every 3600 --max-memory-mb 256 -- python3 worker.py
+~~~
 
-# Load a validated ecosystem JSON file in dependency order
-demonpm start-config demonpm/ecosystem.example.json
+- Exponential crash-restart backoff and consecutive health-probe debounce.
+- File-watch polling, scheduled restarts, process-group shutdown.
+- Linux `/proc` CPU/RSS telemetry.
+- Logs rotate at 5 MiB on the next process start and retain three gzip archives. A currently running process's output file is not compressed while open.
+- Discord webhook notifications for lifecycle and health events.
 
-# Fast-forward Git deployment; refuses a dirty worktree and resets to the old commit on failure
-demonpm deploy api --branch main
+## Multi-instance clusters and Nginx load balancing
 
-# Authenticated loopback-only HTTP API (token is stored in ~/.demonpm/api.token)
+Create a base application first, then scale it into local replicas. The app must read the `PORT` environment variable and bind to that port:
+
+~~~sh
+demonpm start web --cwd "$HOME/web" -- python3 app.py
+demonpm scale web --replicas 3 --base-port 8100
+~~~
+
+This creates `web-1`, `web-2`, and `web-3` with ports 8100–8102. Then generate and activate an Nginx upstream file:
+
+~~~sh
+demonpm proxy-sync web --upstream-name web_backend --upstream-file /etc/nginx/conf.d/web-upstream.conf
+~~~
+
+Include that file from your Nginx configuration and point your `proxy_pass` at `http://web_backend`. Nginx must be installed and the invoking user must have permission to write the include and reload Nginx. Replicas run on the same host; this is not a distributed cluster scheduler.
+
+## Blue-green traffic switching
+
+Start the new version under a separate process name and wait until its health endpoint passes. Then switch Nginx to the new server; the old process is stopped only after Nginx validates and reloads the new upstream:
+
+~~~sh
+demonpm start web-green --cwd "$HOME/web-green" --env PORT=8200 -- python3 app.py
+demonpm bluegreen web web-green --server 127.0.0.1:8200 --health-url http://127.0.0.1:8200/health --upstream-name web_backend --upstream-file /etc/nginx/conf.d/web-upstream.conf
+~~~
+
+This provides an Nginx upstream cutover, not a universal zero-downtime guarantee. Long-lived connections, app readiness, database migrations, and Nginx configuration must be handled by the application operator. If Nginx validation or reload fails, the previous upstream file is restored and the old app is left running.
+
+## Hard resource limits (Linux cgroup v2)
+
+~~~sh
+demonpm start worker --cpu-percent 50 --hard-memory-mb 256 -- python3 worker.py
+~~~
+
+This limits CPU to 50% of one CPU core and memory to 256 MiB using cgroup v2. The host must delegate writable cgroups to the user and enable the relevant controllers. If setup fails, demonpm kills the just-started child and reports the error rather than silently ignoring the limit. The existing `--max-memory-mb` is a sampled RSS threshold and is not a hard limit. Termux generally cannot configure cgroups; omit these flags there.
+
+## Authenticated web dashboard and RBAC API
+
+Loopback-only by default:
+
+~~~sh
 demonpm api --port 8765
 ~~~
 
-The API exposes `GET /v1/processes` and `POST /v1/actions`. Send `Authorization: Bearer <token>`. It binds only to 127.0.0.1; use an SSH tunnel rather than exposing it to the internet.
-
-## Alerts, logs and resource monitoring
-
-Use `--discord-webhook URL` to send start/exit notifications. Logs rotate at 5 MiB and retain three archives. CPU/RSS readings use Linux `/proc`; CPU is sampled between list calls. Memory ceilings trigger process termination and the normal restart policy.
-
-## Termux boot
-
-Install and open Termux:Boot once, then create:
+The first start generates an admin bearer token and prints it once. Open `http://127.0.0.1:8765/` and paste the token. Create additional scoped tokens:
 
 ~~~sh
-mkdir -p "$HOME/.termux/boot"
-cat > "$HOME/.termux/boot/20-demonpm" <<'SH'
-#!/data/data/com.termux/files/usr/bin/sh
-export PATH="$HOME/.local/bin:$PATH"
-demonpm resurrect
-SH
-chmod 700 "$HOME/.termux/boot/20-demonpm"
+demonpm api --create-token viewer
+demonpm api --create-token operator
 ~~~
 
-Run `demonpm save` after registering applications. Android battery management can still terminate Termux; no userspace supervisor can prevent that.
+Roles:
+- `viewer`: view process status.
+- `operator`: view, stop, restart, read logs, save and resurrect.
+- `admin`: operator actions plus delete.
 
-## Security
+For remote access, use TLS:
 
-- State and logs live under `~/.demonpm` (override with `DEMONPM_HOME`).
-- State directory is owner-only; local daemon socket is mode 0600.
-- Commands are argument arrays, not shell strings.
-- Environment values are persisted for resurrection. Do not store long-lived secrets on shared devices or commit them.
-- API is loopback-only and bearer-token protected. Do not port-forward it publicly without TLS and a stronger deployment boundary.
-- Git deploy refuses dirty working trees and uses fast-forward-only pulls.
+~~~sh
+demonpm api --host 0.0.0.0 --port 8765 --tls-cert /path/fullchain.pem --tls-key /path/privkey.pem
+~~~
 
-## Current scope and limitations
+Never expose the API over plain HTTP. The token store is hashed and stored in `~/.demonpm/api.tokens.json` with owner-only permissions. The dashboard does not persist the token in browser storage.
 
-This branch adds a local single-user manager, file watch polling, scheduled restarts, RSS limit enforcement, dependency ordering, ecosystem config validation, TUI, loopback API and guarded Git deployment.
+## Plugin hooks (bubblewrap required)
 
-It is not yet a full distributed orchestrator: no true zero-downtime/blue-green traffic switching, built-in load balancer, multi-user/RBAC isolation, remote web dashboard, cluster mode, compressed log retention, or plugin sandbox. CPU is observed but not enforced as a hard quota. Android can still kill Termux.
+Place a `plugins.json` file under `~/.demonpm/plugins/`:
+
+~~~json
+[
+  {"hook":"post-start","command":["/plugin/notify.sh"],"cwd":".","timeout":5}
+]
+~~~
+
+Hooks supported: `pre-start`, `post-start`, `pre-stop`, `post-stop`, `on-crash`. Hooks execute with bubblewrap namespaces, no network namespace, read-only host filesystem binds, an isolated temporary directory, a bounded timeout, and a separate process group. If bubblewrap is missing, configured hooks fail closed. Bubblewrap/user namespaces must be supported by the host. Review plugin code before enabling it.
+
+## Git deployment
+
+~~~sh
+demonpm deploy web --branch main
+~~~
+
+Requires an explicit app working directory, a clean Git tree and a fast-forward update. On failure, demonpm attempts to reset to the previous commit and restart the previous app revision. This is not a replacement for database migration rollback.
+
+## Security and limitations
+
+- Local Unix socket is owner-only; state and token files are mode 0600 under a mode 0700 state directory.
+- Commands are argument arrays; no shell string interpolation.
+- Environment variables are persisted for resurrection. Avoid placing long-lived secrets in shared state or committing config files.
+- Remote API requires TLS and RBAC tokens. Prefer a firewall or private VPN in addition to TLS.
+- Plugin hooks require bubblewrap and fail closed without it.
+- Local replicas and Nginx upstreams are single-host only. No distributed scheduler, multi-host cluster, built-in service discovery, or Kubernetes integration.
+- No generic proxy can guarantee blue-green zero downtime for arbitrary applications.
+- Hard CPU/memory limits require delegated Linux cgroup v2; not generally available in Termux.
 
 ## Tests
 
 ~~~sh
+python3 -m compileall -q demonpm
 python3 -m unittest discover -s demonpm/tests -v
 ~~~
