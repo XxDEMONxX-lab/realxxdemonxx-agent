@@ -49,7 +49,7 @@ OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI,
 Use /models to discover current models and /models all to query the registry.
 Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MODEL_ID`; each fallback needs credentials. Automatic failover is limited to rate limits, transient server errors, and network timeouts. `/keys` reports which providers have credentials without exposing secrets.
 
-OpenRouter free models can be discovered with `/free auto openrouter`; this stores up to six zero-priced models (ranked by advertised context length) as a fallback pool. Use `/free set PROVIDER MODEL1,MODEL2,...` to explicitly mark up to six models as free for another provider, `/free list` to inspect pools, and `/free clear PROVIDER` to remove one. Free-tier status is not exposed consistently by every provider, so the agent never guesses that an arbitrary model is free or silently adds a paid model.
+OpenRouter free models can be discovered with `/free auto openrouter`; this stores up to six zero-priced models (ranked by advertised context length) as a fallback pool. Use `/free set PROVIDER MODEL1,MODEL2,...` to explicitly mark up to six models as free for another provider, `/free list` to inspect pools, and `/free clear PROVIDER` to remove one. Free-tier status is not exposed consistently by every provider, so the agent never guesses that an arbitrary model is free or silently adds a paid model. On Termux, keep worker slots on remote APIs: the default Ollama endpoint is localhost and would run inference on the phone. Only use Ollama after changing its base URL to a remote server.
 
 ## Commands
 | Command | Purpose |
