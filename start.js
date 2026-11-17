@@ -455,11 +455,11 @@ function render() {
     add(frame('[Home/G]       First app     [End/Shift+G] Last app'));
     add(frame('[Enter/Space]  Start or stop selected app'));
     add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart'));
-    add(frame('[L] Logs  [E] Env  [V] Mark  [F] Filter  [B] Bulk  [D] Delete'));
+    add(frame('[L] Logs  [E] Env  [V] Mark  [F] Filter  [B] Bulk  [I] Import'));
     add(frame('[?] Close help  [Q] Quit'));
   } else {
     add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [E] Env'));
-    add(frame('[V] Mark  [F] Filter  [B] Bulk  [D] Delete  [M] Refresh  [Q] Quit'));
+    add(frame('[V] Mark  [F] Filter  [B] Bulk  [I] Import  [O] Export  [D] Delete  [Q] Quit'));
   }
   add(cyan + '╠' + border + '╣' + reset);
   add(frame((notice.startsWith('Error:') ? '\x1b[1;31m' : muted) + truncate(notice, inner - 2) + reset));
@@ -553,6 +553,55 @@ async function addApp() {
   notice = name + ' added. Press S to start it.';
 }
 
+async function exportConfig() {
+  const destination = path.resolve(await prompt('Export config file path: ', path.join(process.cwd(), 'demonpm-config.json')));
+  const payload = {
+    format: 'demonpm-js-config',
+    version: 1,
+    apps: state.apps.map(({ id, pid, procStartTicks, desiredRunning, startedAt, stoppedAt, env, ...app }) => ({
+      ...app,
+      env: {},
+      desiredRunning: false
+    }))
+  };
+  fs.writeFileSync(destination, JSON.stringify(payload, null, 2), { mode: 0o600, flag: 'wx' });
+  notice = 'Exported ' + payload.apps.length + ' app config(s) to ' + destination + ' (environment secrets excluded).';
+}
+
+async function importConfig() {
+  const source = path.resolve(await prompt('Import config file path: '));
+  if (!source || !fs.existsSync(source) || !fs.statSync(source).isFile()) throw new Error('Config file not found.');
+  const parsed = JSON.parse(fs.readFileSync(source, 'utf8'));
+  if (!parsed || parsed.format !== 'demonpm-js-config' || parsed.version !== 1 || !Array.isArray(parsed.apps)) {
+    throw new Error('Unsupported or invalid DEMONPM config file.');
+  }
+  const imported = [];
+  for (const raw of parsed.apps) {
+    if (!raw || typeof raw.name !== 'string' || !/^[a-zA-Z0-9._-]{1,48}$/.test(raw.name) ||
+        typeof raw.cwd !== 'string' || typeof raw.entry !== 'string' || !Array.isArray(raw.args) ||
+        !raw.args.every(arg => typeof arg === 'string')) {
+      throw new Error('Config contains an invalid app entry.');
+    }
+    if (state.apps.some(app => app.name.toLowerCase() === raw.name.toLowerCase()) ||
+        imported.some(app => app.name.toLowerCase() === raw.name.toLowerCase())) continue;
+    const cwd = path.resolve(raw.cwd);
+    const entry = raw.entry;
+    const nodePath = typeof raw.nodePath === 'string' && path.isAbsolute(raw.nodePath) ? raw.nodePath : NODE;
+    imported.push({
+      id: safeId(), name: raw.name, cwd, entry, args: raw.args.slice(0, 256),
+      nodePath, env: {}, autoRestart: raw.autoRestart !== false, desiredRunning: false,
+      restartDelayMs: Number.isInteger(raw.restartDelayMs) ? Math.max(500, Math.min(raw.restartDelayMs, 30000)) : 1000,
+      maxRestartDelayMs: 30000,
+      maxRestarts: Number.isInteger(raw.maxRestarts) ? Math.max(0, Math.min(raw.maxRestarts, 1000)) : 0,
+      restartWindowMs: 60000, pid: null, procStartTicks: null, createdAt: new Date().toISOString()
+    });
+  }
+  state.apps.push(...imported);
+  selected = Math.max(0, visibleApps().length - 1);
+  saveState();
+  notice = 'Imported ' + imported.length + ' app(s); duplicates skipped. Apps were not started.';
+}
+
 async function editEnvironment(app) {
   const env = app.env && typeof app.env === 'object' && !Array.isArray(app.env) ? { ...app.env } : {};
   const key = await prompt('Environment variable name (blank to cancel): ');
@@ -644,6 +693,12 @@ async function action(key) {
         break;
       case 'e':
         if (app) await editEnvironment(app);
+        break;
+      case 'i':
+        await importConfig();
+        break;
+      case 'o':
+        await exportConfig();
         break;
       case 'd':
         if (!app) break;
@@ -741,7 +796,7 @@ async function main() {
       else notice = 'Press A to add your first Node.js app.';
     } else if (str === '?' || str === 'h' || str === 'H') {
       showHelp = !showHelp;
-    } else if (str && 'asxrledmfvb'.includes(str.toLowerCase())) {
+    } else if (str && 'asxrledmfvbi o'.replace(/ /g, '').includes(str.toLowerCase())) {
       await action(str.toLowerCase());
     }
     render();
