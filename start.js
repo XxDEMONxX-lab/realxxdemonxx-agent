@@ -28,6 +28,7 @@ let selected = 0;
 let notice = 'Use ↑/↓ to select, Enter to open, q to quit.';
 let running = true;
 let prompting = false;
+let actionBusy = false;
 let keyHandler;
 
 function ensureStorage() {
@@ -189,7 +190,7 @@ function truncate(value, width) {
 function render() {
   // Do not clear/redraw the terminal while readline owns stdin; doing so
   // interrupts the active line editor and can erase text being typed.
-  if (prompting) return;
+  if (prompting || actionBusy) return;
   const width = Math.max(54, Math.min(process.stdout.columns || 80, 110));
   const line = '─'.repeat(width - 2);
   clearScreen();
@@ -327,7 +328,8 @@ async function selectedApp() {
 }
 
 async function action(key) {
-  // Suspend menu key handling while prompts and log viewing own stdin.
+  // Suspend both menu input and periodic redraws while an action owns the terminal.
+  actionBusy = true;
   if (keyHandler) process.stdin.off('keypress', keyHandler);
   try {
     const app = await selectedApp();
@@ -373,6 +375,7 @@ async function action(key) {
   }
   if (process.stdin.isTTY && !process.stdin.isRaw && running) process.stdin.setRawMode(true);
   process.stdin.resume();
+  actionBusy = false;
   if (keyHandler && running) process.stdin.on('keypress', keyHandler);
 }
 
