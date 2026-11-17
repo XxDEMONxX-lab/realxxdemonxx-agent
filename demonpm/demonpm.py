@@ -106,7 +106,7 @@ class Manager:
         lock = self.log_locks.setdefault(name, threading.RLock())
         with lock:
             with path.open("a", encoding="utf-8") as stream:
-                stream.write(time.strftime("[%Y-%m-%d %H:%M:%S] ") + message + "\\n")
+                stream.write(time.strftime("[%Y-%m-%d %H:%M:%S] ") + message + "\n")
 
     def capture_output(self, name, process):
         path = LOGS / (name + ".log")
