@@ -25,6 +25,8 @@ const NODE = process.execPath;
 const IS_TTY = Boolean(process.stdin.isTTY && process.stdout.isTTY);
 const state = { apps: [] };
 let selected = 0;
+let filterText = '';
+const selectedIds = new Set();
 let notice = 'Use ↑/↓ to select, Enter to open, q to quit.';
 let running = true;
 let prompting = false;
@@ -108,6 +110,12 @@ function isAlive(app) {
 function status(app) {
   return isAlive(app) ? 'RUNNING' : 'STOPPED';
 }
+
+function visibleApps() {
+  const q = filterText.trim().toLowerCase();
+  return state.apps.filter(app => !q || [app.name, app.cwd, app.entry].some(v => String(v || '').toLowerCase().includes(q)));
+}
+
 
 const metricSamples = new Map();
 function processMetrics(app) {
@@ -392,22 +400,24 @@ function render() {
   add(cyan + '╔' + top + '╗' + reset);
   add(cyan + '║' + reset + pad('  DEMONPM JS  ·  NODE PROCESS MANAGER', inner) + cyan + '║' + reset);
   add(cyan + '╠' + border + '╣' + reset);
-  add(frame(muted + '↑/↓ or j/k navigate   Enter start/stop   ? help   q quit' + reset));
+  add(frame(muted + '↑/↓ navigate  Enter start/stop  V mark  F filter  B bulk  ? help  Q quit' + reset));
   add(cyan + '╠' + border + '╣' + reset);
-  add(frame('\x1b[1;37m APPLICATIONS \x1b[0m' + muted + ' (' + state.apps.length + ')' + reset));
+  const apps = visibleApps();
+  add(frame('\x1b[1;37m APPLICATIONS \x1b[0m' + muted + ' (' + apps.length + '/' + state.apps.length + ')' + reset));
+  if (filterText) add(frame('Filter: ' + filterText));
 
-  if (!state.apps.length) {
-    add(frame(muted + 'No applications yet. Press A to add a Node.js app.' + reset));
+  if (!apps.length) {
+    add(frame(muted + 'No matching apps. Press F to change the filter.' + reset));
   } else {
-    const listCapacity = Math.max(1, Math.min(state.apps.length, height - 15));
-    let first = Math.max(0, Math.min(selected - Math.floor(listCapacity / 2), state.apps.length - listCapacity));
-    const last = Math.min(state.apps.length, first + listCapacity);
+    const listCapacity = Math.max(1, Math.min(apps.length, height - 16));
+    let first = Math.max(0, Math.min(selected - Math.floor(listCapacity / 2), apps.length - listCapacity));
+    const last = Math.min(apps.length, first + listCapacity);
     if (first > 0) add(frame(muted + '  ↑ ' + first + ' more above' + reset));
     for (let i = first; i < last; i++) {
-      const app = state.apps[i];
+      const app = apps[i];
       const active = i === selected;
       const runningText = status(app) === 'RUNNING';
-      const marker = active ? cyan + '❯' + reset : ' ';
+      const marker = (active ? cyan + '❯' : ' ') + (selectedIds.has(app.id) ? '\x1b[1;33m◆' : ' ') + reset;
       const stateLabel = runningText ? '\x1b[1;32m● RUNNING' : muted + '○ STOPPED';
       const leftWidth = Math.max(12, Math.floor(inner * 0.43));
       const name = pad(app.name, leftWidth);
@@ -418,11 +428,11 @@ function render() {
         ' '.repeat(Math.max(0, inner - 3 - leftWidth - 1 - stateLabel.replace(/\x1b\[[0-9;]*m/g, '').length - 1 - file.length)) +
         cyan + '║' + reset);
     }
-    if (last < state.apps.length) add(frame(muted + '  ↓ ' + (state.apps.length - last) + ' more below' + reset));
+    if (last < apps.length) add(frame(muted + '  ↓ ' + (apps.length - last) + ' more below' + reset));
   }
 
   add(cyan + '╠' + border + '╣' + reset);
-  const app = state.apps[selected];
+  const app = apps[selected];
   add(frame('\x1b[1;37m SELECTED \x1b[0m'));
   if (app) {
     add(frame('Name: ' + app.name));
@@ -445,11 +455,11 @@ function render() {
     add(frame('[Home/G]       First app     [End/Shift+G] Last app'));
     add(frame('[Enter/Space]  Start or stop selected app'));
     add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart'));
-    add(frame('[L] Logs  [E] Environment  [D] Delete  [M] Refresh status'));
+    add(frame('[L] Logs  [E] Env  [V] Mark  [F] Filter  [B] Bulk  [D] Delete'));
     add(frame('[?] Close help  [Q] Quit'));
   } else {
-    add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [E] Env  [D] Delete'));
-    add(frame('[M] Refresh  [?] Help  [Q] Quit'));
+    add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [E] Env'));
+    add(frame('[V] Mark  [F] Filter  [B] Bulk  [D] Delete  [M] Refresh  [Q] Quit'));
   }
   add(cyan + '╠' + border + '╣' + reset);
   add(frame((notice.startsWith('Error:') ? '\x1b[1;31m' : muted) + truncate(notice, inner - 2) + reset));
@@ -581,9 +591,28 @@ function waitAnyKey() {
 }
 
 async function selectedApp() {
-  const app = state.apps[selected];
+  const app = visibleApps()[selected];
   if (!app) { notice = 'Select an application first.'; return null; }
   return app;
+}
+
+async function bulkAction() {
+  const targets = state.apps.filter(app => selectedIds.has(app.id));
+  if (!targets.length) { notice = 'Mark apps with V before bulk actions.'; return; }
+  const choice = (await prompt('Bulk action: start / stop / restart / clear: ')).toLowerCase();
+  if (choice === 'clear') { selectedIds.clear(); notice = 'Selection cleared.'; return; }
+  if (!['start', 'stop', 'restart'].includes(choice)) { notice = 'Bulk action cancelled.'; return; }
+  let ok = 0;
+  const errors = [];
+  for (const app of targets) {
+    try {
+      if (choice === 'start') startApp(app);
+      else if (choice === 'stop') await stopApp(app);
+      else { if (isAlive(app)) await stopApp(app); startApp(app); }
+      ok++;
+    } catch (error) { errors.push(app.name + ': ' + error.message); }
+  }
+  notice = 'Bulk ' + choice + ': ' + ok + '/' + targets.length + ' succeeded' + (errors.length ? ' | ' + errors.slice(0,2).join('; ') : '');
 }
 
 async function action(key) {
@@ -623,10 +652,24 @@ async function action(key) {
           notice = 'Delete cancelled.';
           break;
         }
-        state.apps.splice(selected, 1);
-        selected = Math.max(0, Math.min(selected, state.apps.length - 1));
+        state.apps.splice(state.apps.findIndex(item => item.id === app.id), 1);
+        selectedIds.delete(app.id);
+        selected = Math.max(0, Math.min(selected, visibleApps().length - 1));
         saveState();
         notice = 'Application entry deleted. Source files and logs were kept.';
+        break;
+      case 'f': {
+        filterText = await prompt('Filter by app name/path (blank clears): ');
+        selected = 0;
+        notice = filterText ? 'Filter applied.' : 'Filter cleared.';
+        break;
+      }
+      case 'v':
+        if (app) { if (selectedIds.has(app.id)) selectedIds.delete(app.id); else selectedIds.add(app.id); }
+        notice = app ? (selectedIds.has(app.id) ? app.name + ' marked.' : app.name + ' unmarked.') : 'No app selected.';
+        break;
+      case 'b':
+        await bulkAction();
         break;
       case 'm':
         notice = 'Status refreshed.';
@@ -680,15 +723,15 @@ async function main() {
     if (key.name === 'up' || str === 'k' || str === 'K') {
       selected = Math.max(0, selected - 1);
     } else if (key.name === 'down' || str === 'j' || str === 'J') {
-      selected = Math.min(Math.max(0, state.apps.length - 1), selected + 1);
+      selected = Math.min(Math.max(0, visibleApps().length - 1), selected + 1);
     } else if (key.name === 'home' || str === 'g') {
       selected = 0;
     } else if (key.name === 'end' || str === 'G') {
-      selected = Math.max(0, state.apps.length - 1);
+      selected = Math.max(0, visibleApps().length - 1);
     } else if (key.name === 'pageup') {
       selected = Math.max(0, selected - Math.max(1, (process.stdout.rows || 24) - 15));
     } else if (key.name === 'pagedown') {
-      selected = Math.min(Math.max(0, state.apps.length - 1), selected + Math.max(1, (process.stdout.rows || 24) - 15));
+      selected = Math.min(Math.max(0, visibleApps().length - 1), selected + Math.max(1, (process.stdout.rows || 24) - 16));
     } else if (key.name === 'q' || str === 'Q') {
       shutdown();
       return;
@@ -698,7 +741,7 @@ async function main() {
       else notice = 'Press A to add your first Node.js app.';
     } else if (str === '?' || str === 'h' || str === 'H') {
       showHelp = !showHelp;
-    } else if (str && 'asxrledm'.includes(str.toLowerCase())) {
+    } else if (str && 'asxrledmfvb'.includes(str.toLowerCase())) {
       await action(str.toLowerCase());
     }
     render();
