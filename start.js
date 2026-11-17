@@ -663,6 +663,7 @@ function render() {
     add(frame('[L] Logs  [E] Env  [C] Crash history  [T] Startup order'));
     add(frame('[V] Mark  [F] Filter  [B] Bulk  [I] Import  [O] Export'));
     add(frame('[P] Start all  [Z] Stop all  [?] Close help  [Q] Quit'));
+    add(frame('CLI self-test: node start.js --self-test'));
   } else {
     add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [E] Env'));
     add(frame('[V] Mark  [F] Filter  [B] Bulk  [I] Import  [O] Export  [C] Crashes  [T] Order'));
@@ -1180,14 +1181,17 @@ async function main() {
   loadState();
   // Recover apps configured for automatic restart when the manager is opened again.
   for (const app of [...state.apps].sort((a, b) => (a.startupOrder ?? 100) - (b.startupOrder ?? 100))) {
-    if (app.autoRestart && app.desiredRunning && !isAlive(app)) {
+    if (app.autoRestart && app.desiredRunning) {
       try {
-        startApp(app);
-        writeLog(app, 'Startup recovery: supervisor relaunched by DEMONPM.');
-        recordEvent(app, 'startup-recovery', 'Supervisor relaunched during manager startup.');
+        if (!isAlive(app)) {
+          startApp(app);
+          writeLog(app, 'Startup recovery: supervisor relaunched by DEMONPM.');
+          recordEvent(app, 'startup-recovery', 'Supervisor relaunched during manager startup.');
+        }
         if (app.waitForHealthyBeforeNext && app.healthCheckUrl && !await waitForHealthy(app)) {
-          writeLog(app, 'Startup recovery health readiness timed out.');
+          writeLog(app, 'Startup recovery health readiness timed out; later apps were not recovered.');
           recordEvent(app, 'readiness-timeout', 'Health readiness timed out during startup recovery.');
+          break;
         }
       } catch (error) {
         writeLog(app, 'Startup recovery failed: ' + error.message);
