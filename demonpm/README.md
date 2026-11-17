@@ -89,7 +89,7 @@ This provides an Nginx upstream cutover, not a universal zero-downtime guarantee
 demonpm start worker --cpu-percent 50 --hard-memory-mb 256 -- python3 worker.py
 ~~~
 
-This limits CPU to 50% of one CPU core and memory to 256 MiB using cgroup v2. The host must delegate writable cgroups to the user and enable the relevant controllers. If setup fails, demonpm kills the just-started child and reports the error rather than silently ignoring the limit. The existing `--max-memory-mb` is a sampled RSS threshold and is not a hard limit. Termux generally cannot configure cgroups; omit these flags there.
+This limits CPU to 50% of one CPU core and memory to 256 MiB using cgroup v2. The host must delegate a writable cgroup subtree and enable the relevant controllers. The supplied systemd unit sets `Delegate=yes`; additional systemd/user-manager policy may still be required. Set `DEMONPM_CGROUP_ROOT` if the delegated subtree is mounted elsewhere. If setup fails, demonpm kills the just-started child and reports the error rather than silently ignoring the limit. The existing `--max-memory-mb` is a sampled RSS threshold and is not a hard limit. Termux generally cannot configure cgroups; omit these flags there.
 
 ## Authenticated web dashboard and RBAC API
 
