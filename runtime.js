@@ -31,7 +31,7 @@ async function completion(id,model,msg,c){const p=provider(id,c),k=key(p,c);let 
  if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2})});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
 async function completeWithFallback(id,model,msg,c){
  const candidates=[{id,model},...(c.autoFallback?(c.fallbacks||[]).map(providerId=>({id:providerId,model:c.fallbackModels?.[providerId]})):[])],failures=[];
- for(const candidate of candidates){try{if(!candidate.model)throw Error("No fallback model configured");return {provider:candidate.id,model:candidate.model,text:await completion(candidate.id,candidate.model,msg,c)};}catch(error){failures.push(candidate.id+": "+error.message);}}
+ for(const candidate of candidates){const spinner=new Spinner("Thinking · "+candidate.id);spinner.start();try{if(!candidate.model)throw Error("No fallback model configured");const text=await completion(candidate.id,candidate.model,msg,c);spinner.stop(color("Response ready · "+candidate.id,"g"));return {provider:candidate.id,model:candidate.model,text};}catch(error){spinner.stop(color(candidate.id+" failed: "+error.message,"y"));failures.push(candidate.id+": "+error.message);}}
  throw Error("All configured providers failed: "+failures.join(" | "));
 }
 async function completionStream(id,model,msg,c,onToken){
@@ -187,15 +187,15 @@ class Agent{
    try{outcome=await runOrchestrationLoop({task:prompt,maxIterations:this.c.orchestrationMaxIterations||4,
     readFile:async p=>{const f=safe(p);return fs.existsSync(f)?readFile(p):null;},
     runIteration:async({task,iteration,readFile,stagedFiles})=>{
-     const files=listFiles();
+     const files=[...new Set([...listFiles(),...stagedFiles.keys()])];
      const plan=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:planner},{role:"user",content:"Original objective: "+prompt+"\nRound "+iteration+" task: "+task+"\nAlready staged: "+[...stagedFiles.keys()].join(", ")+"\nManifest:\n"+files.join("\n")}],this.c);
      return runCodingTeam(task,selected,async()=>plan.text,async(target,assignment,current,source,manifest)=>{
       const answer=await completeWithFallback(target.provider,target.model,[{role:"system",content:worker},{role:"user",content:"Objective: "+prompt+"\nTask: "+current+"\nAssigned: "+assignment.path+"\nGoal: "+assignment.goal+"\nCurrent content:\n"+(source===null?"NEW FILE":source)+"\nManifest:\n"+manifest.join("\n")}],this.c);
       return answer.text;
      },{files,readFile});
     },
-    reviewIteration:async({task,iteration,changes,history})=>{
-     const evidence=changes.map(x=>({path:x.path,summary:x.summary,content:x.content.slice(0,6000)}));
+    reviewIteration:async({task,iteration,changes,history,stagedFiles})=>{
+     const evidence=changes.map(x=>({path:x.path,summary:x.summary}));const staged=[...stagedFiles].map(([path,content])=>({path,content:content.slice(0,6000)}));
      const review=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:reviewer},{role:"user",content:"Original objective: "+prompt+"\nCurrent task: "+task+"\nPrevious reviews: "+JSON.stringify(history)+"\nWorker results: "+JSON.stringify(evidence).slice(0,35000)}],this.c);
      return parseObject(review.text,"Main-model review");
     }
