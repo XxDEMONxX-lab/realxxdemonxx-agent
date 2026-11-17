@@ -1,5 +1,5 @@
 """Bubblewrap-isolated plugin hooks. Fail closed if the sandbox runtime is unavailable."""
-import json, os, shutil, subprocess
+import json, os, shutil, signal, subprocess
 from pathlib import Path
 
 HOOKS = {"pre-start","post-start","pre-stop","post-stop","on-crash"}
@@ -44,14 +44,13 @@ def run_hooks(root, hook, app_name, timeout=5):
               "--setenv","HOME","/tmp","--setenv","DEMONPM_APP",app_name,
               "--setenv","DEMONPM_HOOK",hook]
         argv += binds + ["--"] + command
-        def limits():
-            try:
-                import resource
-                resource.setrlimit(resource.RLIMIT_CPU,(10,10))
-                resource.setrlimit(resource.RLIMIT_FSIZE,(16*1024*1024,16*1024*1024))
-                resource.setrlimit(resource.RLIMIT_NOFILE,(32,32))
-                resource.setrlimit(resource.RLIMIT_CORE,(0,0))
-            except (ImportError,OSError,ValueError): pass
-        subprocess.run(argv,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,check=True,timeout=min(timeout,configured_timeout),
-            close_fds=True,preexec_fn=limits)
+        proc=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,close_fds=True,start_new_session=True)
+        try:
+            code=proc.wait(timeout=min(timeout,configured_timeout))
+            if code: raise RuntimeError("plugin exited with status %d" % code)
+        except Exception:
+            try: os.killpg(proc.pid,signal.SIGKILL)
+            except ProcessLookupError: pass
+            proc.wait()
+            raise
