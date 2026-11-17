@@ -251,7 +251,7 @@ def main():
     for a in ("stop", "restart", "delete", "logs"):
         x = sp.add_parser(a); x.add_argument("name")
         if a == "logs": x.add_argument("-n", "--lines", type=int, default=100)
-    for a in ("list", "save", "resurrect", "daemon-stop"): sp.add_parser(a)
+    for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "monit"): sp.add_parser(a)
     a = p.parse_args()
     if a.action == "_daemon": Manager().serve(); return 0
     if a.action == "daemon-stop": request({"action": "shutdown"}); return 0
@@ -268,7 +268,12 @@ def main():
     elif a.action in ("stop", "restart", "delete", "logs"):
         q["name"] = a.name
         if a.action == "logs": q["lines"] = a.lines
+    if a.action == "monit":
+        from tui import main as tui_main
+        tui_main(); return 0
     r = request(q)
+    if a.action == "list-json":
+        print(json.dumps(r["processes"], indent=2)); return 0
     if a.action == "list":
         for z in r["processes"]:
             print("%-18s %-8s pid=%s cpu=%s%% mem=%sMB restarts=%s" %
