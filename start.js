@@ -210,6 +210,10 @@ async function stopApp(app, gracefulMs = 250) {
   writeLog(app, 'Stopped; termination signal sent to its process group.');
 }
 
+function clearScreen() {
+  process.stdout.write('\x1b[2J\x1b[H');
+}
+
 function truncate(value, width) {
   const text = String(value ?? '');
   if (width <= 0) return '';
