@@ -314,6 +314,8 @@ async function selectedApp() {
 }
 
 async function action(key) {
+  // Suspend menu key handling while prompts and log viewing own stdin.
+  if (keyHandler) process.stdin.off('keypress', keyHandler);
   try {
     const app = await selectedApp();
     switch (key) {
@@ -358,6 +360,7 @@ async function action(key) {
   }
   if (process.stdin.isTTY && !process.stdin.isRaw && running) process.stdin.setRawMode(true);
   process.stdin.resume();
+  if (keyHandler && running) process.stdin.on('keypress', keyHandler);
 }
 
 function shutdown() {
