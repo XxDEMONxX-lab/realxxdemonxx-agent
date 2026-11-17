@@ -27,6 +27,9 @@ function atomicWrite(file,content,options={}){
  let fd;
  try{
   fd=fs.openSync(temp,"wx",mode);
+  // open(2) applies the process umask; restore the intended mode explicitly.
+  // This preserves existing permissions when atomically replacing a file.
+  fs.fchmodSync(fd,mode);
   fs.writeFileSync(fd,bytes);
   fs.fsyncSync(fd);
   fs.closeSync(fd);fd=undefined;
