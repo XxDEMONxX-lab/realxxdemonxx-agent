@@ -203,7 +203,7 @@ class Agent{
      const plan=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:planner},{role:"user",content:"Original objective: "+prompt+"\nRound "+iteration+" task: "+task+"\nAlready staged: "+[...stagedFiles.keys()].join(", ")+"\nManifest:\n"+files.join("\n")}],this.c);
      return runCodingTeam(task,selected,async()=>plan.text,async(target,assignment,current,source,manifest)=>{
       const answer=await completeWithFallback(target.provider,target.model,[{role:"system",content:worker},{role:"user",content:"Objective: "+prompt+"\nTask: "+current+"\nAssigned: "+assignment.path+"\nGoal: "+assignment.goal+"\nCurrent content:\n"+(source===null?"NEW FILE":source)+"\nManifest:\n"+manifest.join("\n")}],this.c);
-      return answer.text;
+      return {raw:answer.text,provider:answer.provider,model:answer.model};
      },{files,readFile});
     },
     reviewIteration:async({task,iteration,changes,history,stagedFiles})=>{
