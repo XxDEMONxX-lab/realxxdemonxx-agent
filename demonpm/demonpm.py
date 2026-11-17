@@ -97,7 +97,10 @@ class Manager:
                 "restarts": a.get("restarts", 0), "cpu_percent": cpu,
                 "rss_mb": st["rss_mb"], "command": a["command"], "cwd": a.get("cwd")}
 
-    def start(self, name):
+    def start(self, name, stack=None):
+        stack = tuple(stack or ())
+        if name in stack: raise ValueError("dependency cycle: " + " -> ".join(stack + (name,)))
+        stack = stack + (name,)
         with self.lock:
             a = self.apps[name]
             old = self.children.get(name)
@@ -346,7 +349,9 @@ def main():
                 "cwd":app.get("cwd"),"env":app.get("env",{}),
                 "autorestart":app.get("autorestart",True),
                 "max_restarts":app.get("max_restarts",20),
-                "health_url":app.get("health_url")})
+                "health_url":app.get("health_url"),"watch":app.get("watch",[]),
+                "restart_every":app.get("restart_every",0),"max_memory_mb":app.get("max_memory_mb",0),
+                "discord_webhook":app.get("discord_webhook"),"requires":app.get("requires",[])})
         print("Started %d applications in dependency order" % len(apps)); return 0
     if a.action == "deploy":
         listing = request({"action":"list"})["processes"]
