@@ -19,20 +19,20 @@ function load(){try{const c={...base(),...JSON.parse(fs.readFileSync(FILE,"utf8"
 function save(c){fs.mkdirSync(DIR,{recursive:true,mode:0o700});try{fs.chmodSync(DIR,0o700);}catch{}const t=FILE+"."+process.pid+".tmp",fd=fs.openSync(t,"w",0o600);try{fs.writeFileSync(fd,JSON.stringify(c,null,2));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(t,FILE);}
 function provider(id,c){const p=P[id];if(p)return {id,name:p[0],url:(c.baseUrls[id]||p[1]).replace(/\/+$/,""),env:p[2],kind:p[3]||"openai"};const x=c.custom[id];if(x)return {id,name:x.name,url:x.url,env:x.env,kind:"openai"};throw Error("Unknown provider "+id);}
 function key(p,c){return (p.env&&process.env[p.env])||c.keys[p.id]||"";}
-async function req(url,opt={}){const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),120000);try{const r=await fetch(url,{...opt,signal:ac.signal}),s=await r.text();if(!r.ok)throw Error("HTTP "+r.status+": "+s.slice(0,500));return s?JSON.parse(s):{};}catch(e){if(e.name==="AbortError")throw Error("Request timeout");throw e;}finally{clearTimeout(tm);}}
+async function req(url,opt={}){const ac=new AbortController(),external=opt.signal,abort=()=>ac.abort(external?.reason),tm=setTimeout(()=>ac.abort(new Error("Request timeout")),120000);if(external?.aborted)abort();else external?.addEventListener("abort",abort,{once:true});try{const r=await fetch(url,{...opt,signal:ac.signal}),s=await r.text();if(!r.ok)throw Error("HTTP "+r.status+": "+s.slice(0,500));return s?JSON.parse(s):{};}catch(e){if(external?.aborted){const x=Error("Request cancelled");x.name="AbortError";throw x;}if(ac.signal.aborted)throw Error("Request timeout");throw e;}finally{clearTimeout(tm);external?.removeEventListener("abort",abort);}}
 async function models(id,c){const p=provider(id,c),k=key(p,c);let d,h={Accept:"application/json"};if(k)h.Authorization="Bearer "+k;
  if(p.kind==="anthropic"){if(!k)throw Error("API key required");d=await req(p.url+"/models?limit=1000",{headers:{...h,"x-api-key":k,"anthropic-version":"2023-06-01"}});return (d.data||[]).map(x=>x.id).filter(Boolean).sort();}
  if(p.kind==="gemini"){if(!k)throw Error("API key required");d=await req(p.url+"/models?key="+encodeURIComponent(k));return (d.models||[]).filter(x=>(x.supportedGenerationMethods||[]).includes("generateContent")).map(x=>x.name.replace("models/","")).sort();}
  if(p.kind==="ollama"){d=await req(p.url+"/tags");return (d.models||[]).map(x=>x.name).filter(Boolean).sort();}
  if(!k&&id!=="openrouter")throw Error("API key missing; use /key");d=await req(p.url+"/models",{headers:h});return (d.data||[]).map(x=>x.id).filter(Boolean).sort();}
-async function completion(id,model,msg,c){const p=provider(id,c),k=key(p,c);let d;
- if(p.kind==="anthropic"){if(!k)throw Error("API key missing");const system=msg.filter(x=>x.role==="system").map(x=>x.content).join("\n");d=await req(p.url+"/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},body:JSON.stringify({model,max_tokens:4096,system,messages:msg.filter(x=>x.role!=="system"),temperature:.2})});return (d.content||[]).filter(x=>x.type==="text").map(x=>x.text).join("");}
- if(p.kind==="gemini"){if(!k)throw Error("API key missing");const contents=msg.filter(x=>x.role!=="system").map(x=>({role:x.role==="assistant"?"model":"user",parts:[{text:x.content}]})),system=msg.filter(x=>x.role==="system").map(x=>x.content).join("\n");d=await req(p.url+"/models/"+encodeURIComponent(model)+":generateContent?key="+encodeURIComponent(k),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contents,systemInstruction:{parts:[{text:system}]},generationConfig:{temperature:.2}})});const t=d.candidates?.[0]?.content?.parts?.map(x=>x.text||"").join("");if(!t)throw Error("No Gemini text");return t;}
- if(p.kind==="ollama"){d=await req(p.url+"/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({model,messages:msg,stream:false})});if(typeof d.message?.content!=="string")throw Error("Bad Ollama response");return d.message.content;}
- if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2})});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
-async function completeWithFallback(id,model,msg,c){
+async function completion(id,model,msg,c,signal){const p=provider(id,c),k=key(p,c);let d;
+ if(p.kind==="anthropic"){if(!k)throw Error("API key missing");const system=msg.filter(x=>x.role==="system").map(x=>x.content).join("\n");d=await req(p.url+"/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},body:JSON.stringify({model,max_tokens:4096,system,messages:msg.filter(x=>x.role!=="system"),temperature:.2}),signal});return (d.content||[]).filter(x=>x.type==="text").map(x=>x.text).join("");}
+ if(p.kind==="gemini"){if(!k)throw Error("API key missing");const contents=msg.filter(x=>x.role!=="system").map(x=>({role:x.role==="assistant"?"model":"user",parts:[{text:x.content}]})),system=msg.filter(x=>x.role==="system").map(x=>x.content).join("\n");d=await req(p.url+"/models/"+encodeURIComponent(model)+":generateContent?key="+encodeURIComponent(k),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contents,systemInstruction:{parts:[{text:system}]},generationConfig:{temperature:.2}}),signal});const t=d.candidates?.[0]?.content?.parts?.map(x=>x.text||"").join("");if(!t)throw Error("No Gemini text");return t;}
+ if(p.kind==="ollama"){d=await req(p.url+"/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({model,messages:msg,stream:false}),signal});if(typeof d.message?.content!=="string")throw Error("Bad Ollama response");return d.message.content;}
+ if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2}),signal});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
+async function completeWithFallback(id,model,msg,c,signal){
  const candidates=buildProviderCandidates(id,model,c.fallbacks,c.fallbackModels,c.freeModelPools,c.autoFallback),failures=[];let quotaProvider=null;
- for(const candidate of candidates){if(candidate.id===quotaProvider)continue;const spinner=new Spinner("Thinking · "+candidate.id+" / "+candidate.model);spinner.start();try{const text=await completion(candidate.id,candidate.model,msg,c);spinner.stop(color("Response ready · "+candidate.id,"g"));return {provider:candidate.id,model:candidate.model,text};}catch(error){spinner.stop(color(candidate.id+" / "+candidate.model+" failed: "+error.message,"y"));failures.push(candidate.id+"/"+candidate.model+": "+error.message);if(isProviderQuotaError(error)){quotaProvider=candidate.id;continue;}if(!isRetryableProviderError(error))throw error;}}
+ for(const candidate of candidates){if(signal?.aborted){const x=Error("Request cancelled");x.name="AbortError";throw x;}if(candidate.id===quotaProvider)continue;const spinner=new Spinner("Thinking · "+candidate.id+" / "+candidate.model);spinner.start();try{const text=await completion(candidate.id,candidate.model,msg,c,signal);spinner.stop(color("Response ready · "+candidate.id,"g"));return {provider:candidate.id,model:candidate.model,text};}catch(error){spinner.stop(color(candidate.id+" / "+candidate.model+" failed: "+error.message,"y"));if(signal?.aborted||error.name==="AbortError")throw error;failures.push(candidate.id+"/"+candidate.model+": "+error.message);if(isProviderQuotaError(error)){quotaProvider=candidate.id;continue;}if(!isRetryableProviderError(error))throw error;}}
  throw Error("All free-pool and provider failover candidates failed: "+failures.join(" | "));
 }
 async function discoverFreeModels(id,c){
@@ -45,10 +45,10 @@ async function discoverFreeModels(id,c){
   return typeof x.id==="string"&&(x.id.endsWith(":free")||(hasPrice&&Number.isFinite(prompt)&&Number.isFinite(completion)&&prompt===0&&completion===0));
  }).sort((a,b)=>(Number(b.context_length)||0)-(Number(a.context_length)||0)||a.id.localeCompare(b.id)).slice(0,6).map(x=>x.id);
 }
-async function completionStream(id,model,msg,c,onToken){
+async function completionStream(id,model,msg,c,onToken,signal){
  const p=provider(id,c),k=key(p,c);
  const {streamCompletion}=require("./streaming");
- return streamCompletion(p,k,model,msg,onToken);
+ return streamCompletion(p,k,model,msg,onToken,signal);
 }
 function safe(raw){if(!raw)throw Error("Relative path required");const f=path.resolve(ROOT,raw),rel=path.relative(ROOT,f);if(rel===".."||rel.startsWith(".."+path.sep)||path.isAbsolute(rel))throw Error("Path outside project");let cur=ROOT;for(const x of rel.split(path.sep)){cur=path.join(cur,x);try{const r=path.relative(ROOT,fs.realpathSync(cur));if(r===".."||r.startsWith(".."+path.sep)||path.isAbsolute(r))throw Error("Symlink outside project");}catch(e){if(e.code!=="ENOENT")throw e;}}return f;}
 function readFile(p){const f=safe(p),s=fs.statSync(f);if(!s.isFile()||s.size>200000)throw Error("Not a file or over 200KB");return fs.readFileSync(f,"utf8");}
@@ -147,11 +147,11 @@ class Agent{
      if(!model)throw Error("Fallback model not configured");
      const selected=provider(id,this.c);
      answer=!agent
-      ?await completionStream(id,model,messages,this.c,chunk=>{if(this.onStream)this.onStream(chunk);else stdout.write(chunk);})
-      :await completion(id,model,messages,this.c);
+      ?await completionStream(id,model,messages,this.c,chunk=>{if(this.onStream)this.onStream(chunk);else stdout.write(chunk);},this.abortSignal)
+      :await completion(id,model,messages,this.c,this.abortSignal);
      if(!agent){if(this.onStream)this.onStream("\n");else stdout.write("\n");}
      used=id;sp.stop(color("Response ready · "+id,"g"));break;
-    }catch(e){sp.stop(color(id+" failed: "+e.message,"y"));if(isProviderQuotaError(e))quotaProvider=id;}
+    }catch(e){sp.stop(color(id+" failed: "+e.message,"y"));if(this.abortSignal?.aborted||e.name==="AbortError")throw e;if(isProviderQuotaError(e))quotaProvider=id;}
    }
    if(answer===undefined){console.log(color("All providers failed","red"));break;}
    finalAnswer=answer;finalUsed=used;if(!agent)historyAnswer=answer;
@@ -181,8 +181,8 @@ class Agent{
   if(selected.kind!=="ollama"&&!key(selected,this.c)){console.log("Main model API key missing. Configure it with /provider "+this.c.provider+" then /key.");return;}
   const messages=[{role:"system",content:"You are Demon Agent task router. Classify the latest user request. Return ONLY JSON with one field named type whose value is coding or chat. Use coding ONLY when the user asks to create, modify, debug, refactor, test, or otherwise perform a concrete change to source code or a software project. Questions, explanations, brainstorming, general knowledge, greetings, and requests for coding advice are chat, not coding. Never execute or propose actions."},{role:"user",content:"Task:\n"+prompt}];
   let type="chat";
-  try{const routed=await completeWithFallback(this.c.provider,this.c.model,messages,this.c);if(routed.provider!==this.c.provider)console.log("Task router fallback used: "+routed.provider);type=classifyTask(routed.text);}
-  catch(error){console.log(color("Task classification unavailable; safely treating this as normal chat: "+error.message,"y"));}
+  try{const routed=await completeWithFallback(this.c.provider,this.c.model,messages,this.c,this.abortSignal);if(routed.provider!==this.c.provider)console.log("Task router fallback used: "+routed.provider);type=classifyTask(routed.text);}
+  catch(error){if(this.abortSignal?.aborted||error.name==="AbortError")throw error;console.log(color("Task classification unavailable; safely treating this as normal chat: "+error.message,"y"));}
   if(type==="coding"){console.log(color("CODING TASK DETECTED · delegating to five AI workers","c"));await this.askCodingModels(prompt);return;}
   console.log(color("CHAT TASK DETECTED · answering with the main model","c"));
   const mode=this.c.mode;this.c.mode="normal";
@@ -197,22 +197,22 @@ class Agent{
    const reviewer="Review staged work against the original objective. Return only JSON {\"complete\":true|false,\"summary\":\"review\",\"nextTask\":\"specific follow-up or empty\"}. Mark complete only if the original objective is actually done. Never claim tests ran without evidence.";
    console.log(color("CODING MODE · main model orchestrates five remote workers","c"));
    let outcome;
-   try{outcome=await runOrchestrationLoop({task:prompt,maxIterations:this.c.orchestrationMaxIterations||4,
+   try{outcome=await runOrchestrationLoop({task:prompt,maxIterations:this.c.orchestrationMaxIterations||4,signal:this.abortSignal,
     readFile:async p=>{const f=safe(p);return fs.existsSync(f)?readFile(p):null;},
     runIteration:async({task,iteration,readFile,stagedFiles})=>{
      const files=[...new Set([...listFiles(),...stagedFiles.keys()])];
-     const plan=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:planner},{role:"user",content:"Original objective: "+prompt+"\nRound "+iteration+" task: "+task+"\nAlready staged: "+[...stagedFiles.keys()].join(", ")+"\nManifest:\n"+files.join("\n")}],this.c);
+     const plan=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:planner},{role:"user",content:"Original objective: "+prompt+"\nRound "+iteration+" task: "+task+"\nAlready staged: "+[...stagedFiles.keys()].join(", ")+"\nManifest:\n"+files.join("\n")}],this.c,this.abortSignal);
      return runCodingTeam(task,selected,async()=>plan.text,async(target,assignment,current,source,manifest)=>{
-      const answer=await completeWithFallback(target.provider,target.model,[{role:"system",content:worker},{role:"user",content:"Objective: "+prompt+"\nTask: "+current+"\nAssigned: "+assignment.path+"\nGoal: "+assignment.goal+"\nCurrent content:\n"+(source===null?"NEW FILE":source)+"\nManifest:\n"+manifest.join("\n")}],this.c);
+      const answer=await completeWithFallback(target.provider,target.model,[{role:"system",content:worker},{role:"user",content:"Objective: "+prompt+"\nTask: "+current+"\nAssigned: "+assignment.path+"\nGoal: "+assignment.goal+"\nCurrent content:\n"+(source===null?"NEW FILE":source)+"\nManifest:\n"+manifest.join("\n")}],this.c,this.abortSignal);
       return {raw:answer.text,provider:answer.provider,model:answer.model};
-     },{files,readFile});
+     },{files,readFile,signal:this.abortSignal});
     },
     reviewIteration:async({task,iteration,changes,history,stagedFiles})=>{
      const evidence=changes.map(x=>({path:x.path,summary:x.summary}));const staged=[...stagedFiles].map(([path,content])=>({path,content:content.slice(0,6000)}));
-     const review=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:reviewer},{role:"user",content:"Original objective: "+prompt+"\nCurrent task: "+task+"\nPrevious reviews: "+JSON.stringify(history)+"\nLatest worker summaries: "+JSON.stringify(evidence)+"\nAll staged file contents (capped at 6KB per file): "+JSON.stringify(staged).slice(0,35000)}],this.c);
+     const review=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:reviewer},{role:"user",content:"Original objective: "+prompt+"\nCurrent task: "+task+"\nPrevious reviews: "+JSON.stringify(history)+"\nLatest worker summaries: "+JSON.stringify(evidence)+"\nAll staged file contents (capped at 6KB per file): "+JSON.stringify(staged).slice(0,35000)}],this.c,this.abortSignal);
      return parseObject(review.text,"Main-model review");
     }
-   });}catch(e){console.log(color(e.message,"red"));for(const x of e.results||[])if(!x.ok)console.log("Worker "+x.index+" "+x.path+": "+x.error);return;}
+   });}catch(e){if(this.abortSignal?.aborted||e.name==="AbortError")throw e;console.log(color(e.message,"red"));for(const x of e.results||[])if(!x.ok)console.log("Worker "+x.index+" "+x.path+": "+x.error);return;}
    const changes=outcome.changes;
    console.log("\n"+color(outcome.complete?"OBJECTIVE COMPLETE":"ITERATION LIMIT REACHED","g")+" · "+outcome.iterations+" rounds · preview only");
    for(const x of changes){console.log("\n"+x.path+" · "+x.provider+"/"+x.model+"\n"+x.summary+"\n"+diffPreview(x.path,x.content));}
