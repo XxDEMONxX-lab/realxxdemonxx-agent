@@ -445,7 +445,7 @@ class Manager:
 def alive():
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(1); s.connect(str(SOCK)); s.sendall(b'{"action":"ping"}\n')
+            s.settimeout(.25); s.connect(str(SOCK)); s.sendall(b'{"action":"ping"}\n')
             return json.loads(s.recv(4096)).get("ok", False)
     except (OSError, ValueError): return False
 
