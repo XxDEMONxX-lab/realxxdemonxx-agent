@@ -27,7 +27,7 @@ class TUI {
   this.agent=agent;this.logs=["Welcome to Demon Agent 3.0. Type a message or /help."];
   this.maxLogs=500;this.status="READY";this.busy=false;this.frame=0;this.scroll=0;this.maxScroll=0;this.viewportRows=3;
   this.input="";this.cursor=0;this.prompt="";this.pending=null;this.history=[];this.historyIndex=0;this.savedInput="";
-  this.exitRequested=false;this.started=false;this.lastRender="";this.streamOpen=false;this.commandSelection=0;
+  this.exitRequested=false;this.started=false;this.lastRender="";this.streamOpen=false;this.commandSelection=0;this.activeController=null;
  }
  dimensions(){return {w:Math.max(40,process.stdout.columns||80),h:Math.max(12,process.stdout.rows||24)};}
  line(s,w){const raw=String(s),visible=strip(raw),body=visible.length>w-2?truncate(visible,w-2):raw;return "│"+body+" ".repeat(Math.max(0,w-2-strip(body).length))+"│";}
@@ -118,6 +118,10 @@ class TUI {
   this.prompt="";this.input="";this.cursor=0;this.render();pending.resolve(value);
  }
  onKeypress(str,key){
+  if(key?.name==="escape"&&this.busy&&this.activeController){
+   if(!this.activeController.signal.aborted){this.status="CANCELLING";this.addLog("Cancellation requested…");this.activeController.abort();this.render();}
+   return;
+  }
   if(!this.pending)return;
   if(key?.name==="escape"&&this.input.startsWith("/")){this.input="";this.cursor=0;this.commandSelection=0;this.render();return;}
   if(key?.name==="tab"&&this.commandMatches().length){this.completeCommand();this.render();return;}
@@ -182,7 +186,7 @@ class TUI {
     const input=await this.readLine("MESSAGE",{remember:true});
     if(input===null||this.exitRequested)break;
     if(!input.trim())continue;
-    this.addLog("❯ "+input);this.busy=true;this.status="THINKING";this.scroll=0;this.render();
+    this.addLog("❯ "+input);this.busy=true;this.status="THINKING";this.scroll=0;this.activeController=new AbortController();a.abortSignal=this.activeController.signal;this.render();
     try{
      if(input.startsWith("/agent ")){this.beginStream();try{await a.askModel(input.slice(7).trim(),true);}finally{this.endStream();}}
      else if(input==="/scroll up"){this.scrollBy(8);}
@@ -192,8 +196,8 @@ class TUI {
      else if(input==="/clear"){this.logs=["Conversation cleared."];this.scroll=0;}
      else if(input.startsWith("/")){this.status="RUNNING COMMAND";const keep=await a.command(input);if(!keep)this.exitRequested=true;}
      else{this.status="GENERATING";this.beginStream();try{await a.askModel(input,false);}finally{this.endStream();}}
-    }catch(e){this.log("ERROR: "+(e?.message||String(e)));}
-    finally{this.busy=false;this.status="READY";this.render();}
+    }catch(e){if(this.activeController?.signal.aborted)this.log("CANCELLED: Generation stopped.");else this.log("ERROR: "+(e?.message||String(e)));}
+    finally{this.busy=false;this.status="READY";this.activeController=null;a.abortSignal=null;this.render();}
    }
   }finally{
    clearInterval(animation);

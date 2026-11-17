@@ -8,6 +8,11 @@ test("runs five workers for five distinct files",async()=>{const models=Array.fr
 test("fails the whole staged run when any worker fails",async()=>{const models=Array.from({length:5},(_,i)=>({provider:"p"+i,model:"m"+i}));await assert.rejects(()=>runCodingTeam("task",models,async()=>({files:models.map((_,i)=>"f"+i)}),async(model,assignment)=>{if(assignment.path==="f3")throw Error("offline");return {path:assignment.path,content:"x",summary:"ok"};},{readFile:async()=>"old"}),/No files were changed/);});
 test("rejects duplicate paths before workers start",async()=>{const models=Array.from({length:5},(_,i)=>({provider:"p"+i,model:"m"+i}));let called=0;await assert.rejects(()=>runCodingTeam("task",models,async()=>({files:["a","b","c","d","a"]}),async()=>{called++;},{readFile:async()=>"old"}),/share a file/);assert.equal(called,0);});
 
+test("cancellation propagates instead of being converted into worker failures",async()=>{
+ const models=Array.from({length:5},(_,i)=>({provider:"p"+i,model:"m"+i})),controller=new AbortController();let started=0;
+ await assert.rejects(()=>runCodingTeam("task",models,async()=>({files:models.map((_,i)=>"f"+i)}),async()=>{started++;controller.abort();throw Object.assign(Error("cancelled"),{name:"AbortError"});},{readFile:async()=>"old",signal:controller.signal}),{name:"AbortError"});
+ assert.equal(started,1);
+});
 test("records the actual fallback provider used by a worker",async()=>{
  const models=Array.from({length:5},(_,i)=>({provider:"primary"+i,model:"model"+i}));
  const results=await runCodingTeam("task",models,async()=>({files:models.map((_,i)=>"file"+i)}),async(model,assignment)=>({
