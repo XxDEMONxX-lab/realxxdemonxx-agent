@@ -109,8 +109,18 @@ function status(app) {
   return isAlive(app) ? 'RUNNING' : 'STOPPED';
 }
 
+function rotateLog(app) {
+  const file = logPath(app);
+  try {
+    if (fs.statSync(file).size < 2 * 1024 * 1024) return;
+    try { fs.unlinkSync(file + '.1'); } catch {}
+    fs.renameSync(file, file + '.1');
+  } catch {}
+}
+
 function writeLog(app, message) {
   try {
+    rotateLog(app);
     fs.appendFileSync(logPath(app), '[' + new Date().toISOString() + '] ' + message + '\n', { mode: 0o600 });
   } catch {}
 }
