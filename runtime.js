@@ -326,7 +326,7 @@ class Agent{
   if(action==="normal"){this.c.mode="normal";save(this.c);console.log("Normal mode enabled · one AI handles chat.");}
   else if(action==="coding"){
    const configured=validateCodingModels(this.c.codingModels,this.c);
-   this.c.mode="coding";save(this.c);console.log("Coding mode enabled · 5 AI specialists will work in parallel.");
+   this.c.mode="coding";save(this.c);console.log("Coding mode enabled · main model routes chat and orchestrates five workers.");
    console.log(configured.map((x,n)=>(n+1)+". "+x.provider+" / "+x.model).join("\n"));
   }else if(action==="set"){
    const slot=Number(parts[0]),providerId=parts[1],modelId=parts.slice(2).join(" ");
