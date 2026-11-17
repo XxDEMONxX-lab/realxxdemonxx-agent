@@ -12,7 +12,12 @@ test("provider candidates try the selected model and configured free pool before
 test("provider candidate construction deduplicates and honors disabled failover",()=>{
  assert.deepEqual(buildProviderCandidates("p","m",["p","q"],{q:"m"},{p:["m","p2"]},false),[{id:"p",model:"m"},{id:"p",model:"p2"}]);
 });
-test("provider-wide quota errors are distinguished from transient model failures",()=>{\n assert.equal(isProviderQuotaError(new Error("HTTP 429: quota exceeded")),true);\n assert.equal(isProviderQuotaError(new Error("RESOURCE_EXHAUSTED")),true);\n assert.equal(isProviderQuotaError(new Error("HTTP 503: unavailable")),false);\n});\ntest("only rate limits, transient server failures and network timeouts trigger automatic failover",()=>{
+test("provider-wide quota errors are distinguished from transient model failures",()=>{
+ assert.equal(isProviderQuotaError(new Error("HTTP 429: quota exceeded")),true);
+ assert.equal(isProviderQuotaError(new Error("RESOURCE_EXHAUSTED")),true);
+ assert.equal(isProviderQuotaError(new Error("HTTP 503: unavailable")),false);
+});
+test("only rate limits, transient server failures and network timeouts trigger automatic failover",()=>{
  for(const message of ["HTTP 429: quota exceeded","HTTP 503: unavailable","Request timeout","fetch failed","ECONNRESET"])assert.equal(isRetryableProviderError(new Error(message)),true);
  for(const message of ["HTTP 400: invalid request","HTTP 401: bad key","HTTP 404: model missing"])assert.equal(isRetryableProviderError(new Error(message)),false);
 });
