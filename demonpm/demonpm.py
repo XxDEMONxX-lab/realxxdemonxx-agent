@@ -342,6 +342,7 @@ def main():
         q["name"] = a.name
         if a.action == "logs": q["lines"] = a.lines
     if a.action == "api":
+        request({"action":"list"})
         from api import main as api_main
         sys.argv = [sys.argv[0], "--port", str(a.port)]
         api_main(); return 0
@@ -351,7 +352,9 @@ def main():
     if a.action == "start-config":
         from config import load_config
         apps = load_config(a.file)
+        existing = {x["name"] for x in request({"action":"list"})["processes"]}
         for app in apps:
+            if app["name"] in existing: continue
             request({"action":"start","name":app["name"],"command":app["command"],
                 "cwd":app.get("cwd"),"env":app.get("env",{}),
                 "autorestart":app.get("autorestart",True),
