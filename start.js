@@ -3,6 +3,8 @@
 
 /**
  * DEMONPM JS — dependency-free interactive Node.js process manager.
+ * Version 8.0.0 adds atomic state writes, locked log rotation, durable event history,
+ * graceful shutdown, health-aware startup, and a non-interactive self-test.
  * Runtime: Node.js 18+. No npm packages, Python, shell command execution, or daemon required.
  *
  * Managed applications are launched as detached Node processes. Their PID, working
@@ -11,6 +13,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 const readline = require('node:readline');
@@ -19,10 +22,14 @@ const https = require('node:https');
 const { promisify } = require('node:util');
 const sleep = promisify(setTimeout);
 
-const VERSION = '7.0.0';
+const VERSION = '8.0.0';
 const HOME = path.join(os.homedir(), '.demonpm-js');
 const STATE_FILE = path.join(HOME, 'state.json');
 const LOG_DIR = path.join(HOME, 'logs');
+const MAX_LOG_BYTES = 2 * 1024 * 1024;
+const MAX_HISTORY_BYTES = 2 * 1024 * 1024;
+const lockWaitCell = new Int32Array(new SharedArrayBuffer(4));
+const logWarnings = new Map();
 const NODE = process.execPath;
 const IS_TTY = Boolean(process.stdin.isTTY && process.stdout.isTTY);
 const state = { apps: [] };
@@ -43,6 +50,64 @@ function ensureStorage() {
   try { fs.chmodSync(LOG_DIR, 0o700); } catch {}
 }
 
+function atomicWriteFile(file, data, mode = 0o600) {
+  const directory = path.dirname(file);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const temporary = path.join(directory,
+    '.' + path.basename(file) + '.tmp-' + process.pid + '-' + crypto.randomBytes(8).toString('hex'));
+  let fd = null;
+  try {
+    fd = fs.openSync(temporary, 'wx', mode);
+    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(String(data));
+    let offset = 0;
+    while (offset < buffer.length) {
+      const written = fs.writeSync(fd, buffer, offset, buffer.length - offset);
+      if (written <= 0) throw new Error('Short write while saving ' + path.basename(file));
+      offset += written;
+    }
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = null;
+    fs.renameSync(temporary, file);
+    try {
+      const dirFd = fs.openSync(directory, 'r');
+      try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
+    } catch {}
+    try { fs.chmodSync(file, mode); } catch {}
+  } catch (error) {
+    if (fd !== null) { try { fs.closeSync(fd); } catch {} }
+    try { fs.unlinkSync(temporary); } catch {}
+    throw error;
+  }
+}
+
+function withFileLock(file, operation) {
+  const lockFile = file + '.lock';
+  const deadline = Date.now() + 1500;
+  let lockFd = null;
+  while (lockFd === null) {
+    try {
+      lockFd = fs.openSync(lockFile, 'wx', 0o600);
+      fs.writeSync(lockFd, String(process.pid));
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      try {
+        const stat = fs.statSync(lockFile);
+        if (Date.now() - stat.mtimeMs > 30000) fs.unlinkSync(lockFile);
+      } catch (statError) {
+        if (statError.code !== 'ENOENT') throw statError;
+      }
+      if (Date.now() >= deadline) throw new Error('Timed out waiting for file lock: ' + path.basename(file));
+      Atomics.wait(lockWaitCell, 0, 0, 10);
+    }
+  }
+  try { return operation(); }
+  finally {
+    try { fs.closeSync(lockFd); } catch {}
+    try { fs.unlinkSync(lockFile); } catch {}
+  }
+}
+
 function loadState() {
   ensureStorage();
   if (!fs.existsSync(STATE_FILE)) return;
@@ -59,7 +124,10 @@ function loadState() {
       ...app,
       autoRestart: app.autoRestart !== false,
       desiredRunning: typeof app.desiredRunning === 'boolean' ? app.desiredRunning : Number.isInteger(app.pid),
-      restartDelayMs: Number.isInteger(app.restartDelayMs) ? Math.max(500, Math.min(app.restartDelayMs, 30000)) : 1000
+      restartDelayMs: Number.isInteger(app.restartDelayMs) ? Math.max(500, Math.min(app.restartDelayMs, 30000)) : 1000,
+      gracefulShutdownMs: Number.isInteger(app.gracefulShutdownMs) ? Math.max(1000, Math.min(app.gracefulShutdownMs, 30000)) : 5000,
+      waitForHealthyBeforeNext: app.waitForHealthyBeforeNext === true,
+      healthStartupTimeoutMs: Number.isInteger(app.healthStartupTimeoutMs) ? Math.max(5000, Math.min(app.healthStartupTimeoutMs, 120000)) : 30000
     }));
   } catch (error) {
     const backup = STATE_FILE + '.corrupt-' + Date.now();
@@ -70,14 +138,11 @@ function loadState() {
 
 function saveState() {
   ensureStorage();
-  const tmp = STATE_FILE + '.tmp-' + process.pid;
-  fs.writeFileSync(tmp, JSON.stringify({ version: VERSION, apps: state.apps }, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, STATE_FILE);
-  try { fs.chmodSync(STATE_FILE, 0o600); } catch {}
+  atomicWriteFile(STATE_FILE, JSON.stringify({ version: VERSION, apps: state.apps }, null, 2), 0o600);
 }
 
 function safeId() {
-  return require('node:crypto').randomBytes(8).toString('hex');
+  return crypto.randomBytes(8).toString('hex');
 }
 
 function logPath(app) {
@@ -171,8 +236,6 @@ function processMetrics(app) {
   return { cpu, memoryMb: totalRss * (4096) / (1024 * 1024), processes: count };
 }
 
-const MAX_LOG_BYTES = 2 * 1024 * 1024;
-
 function rotateLog(app, force = false) {
   const file = logPath(app);
   try {
@@ -186,22 +249,77 @@ function rotateLog(app, force = false) {
 }
 
 function appendLogChunk(app, chunk) {
+  const file = logPath(app);
   try {
-    const file = logPath(app);
     let data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
-    let currentSize = 0;
-    try { currentSize = fs.statSync(file).size; } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    if (currentSize + data.length > MAX_LOG_BYTES) {
-      rotateLog(app, true);
-      currentSize = 0;
-    }
-    if (data.length > MAX_LOG_BYTES) data = data.subarray(data.length - MAX_LOG_BYTES);
-    fs.appendFileSync(file, data, { mode: 0o600 });
-  } catch {}
+    if (!data.length) return true;
+    withFileLock(file, () => {
+      let currentSize = 0;
+      try { currentSize = fs.statSync(file).size; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      if (currentSize + data.length > MAX_LOG_BYTES) rotateLog(app, true);
+      if (data.length > MAX_LOG_BYTES) data = data.subarray(data.length - MAX_LOG_BYTES);
+      fs.appendFileSync(file, data, { mode: 0o600 });
+    });
+    logWarnings.delete(app.id);
+    return true;
+  } catch (error) {
+    logWarnings.set(app.id, error.message);
+    return false;
+  }
+}
+
+function eventPath(app) {
+  return path.join(LOG_DIR, app.id + '.events.jsonl');
+}
+
+function recordEvent(app, type, message, details = null) {
+  const file = eventPath(app);
+  const event = { timestamp: new Date().toISOString(), appId: app.id, appName: app.name, type, message };
+  if (details && typeof details === 'object') event.details = details;
+  const line = Buffer.from(JSON.stringify(event) + '\n');
+  try {
+    withFileLock(file, () => {
+      let size = 0;
+      try { size = fs.statSync(file).size; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      if (size + line.length > MAX_HISTORY_BYTES) {
+        try { fs.unlinkSync(file + '.1'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        try { fs.renameSync(file, file + '.1'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      fs.appendFileSync(file, line, { mode: 0o600 });
+    });
+    logWarnings.delete(app.id);
+    return true;
+  } catch (error) {
+    logWarnings.set(app.id, 'Event history write failed: ' + error.message);
+    return false;
+  }
 }
 
 function writeLog(app, message) {
-  appendLogChunk(app, '[' + new Date().toISOString() + '] ' + message + '\n');
+  return appendLogChunk(app, '[' + new Date().toISOString() + '] ' + message + '\n');
+}
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') &&
+      Boolean(url.hostname) && !url.username && !url.password;
+  } catch { return false; }
+}
+
+async function waitForHealthy(app) {
+  if (!app.healthCheckUrl) return true;
+  const timeoutMs = Math.max(5000, Math.min(Number(app.healthStartupTimeoutMs) || 30000, 120000));
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isAlive(app)) return false;
+    const remaining = Math.max(1000, deadline - Date.now());
+    if (await checkHealth(app.healthCheckUrl, Math.min(5000, remaining))) return true;
+    if (Date.now() < deadline) await sleep(Math.min(1000, deadline - Date.now()));
+  }
+  return false;
 }
 
 function checkHealth(url, timeoutMs) {
@@ -255,6 +373,7 @@ function startApp(app) {
   supervisor.unref();
   saveState();
   writeLog(app, 'Supervisor started (PID ' + app.pid + '); crash recovery is enabled.');
+  recordEvent(app, 'supervisor-start', 'Supervisor started.', { pid: app.pid });
 }
 
 async function runSupervisor(appId) {
@@ -314,10 +433,12 @@ async function runSupervisor(appId) {
     healthFailures = 0;
     if (!child.pid) {
       writeLog(app, 'Supervisor could not spawn the application process.');
+      recordEvent(app, 'spawn-error', 'Supervisor could not spawn the application process.');
       scheduleRestart();
       return;
     }
     writeLog(app, 'Application process started (PID ' + child.pid + ').');
+    recordEvent(app, 'process-start', 'Application process started.', { pid: child.pid });
     if (healthUrl) {
       healthTimer = setInterval(async () => {
         if (stopping || !child || child.exitCode !== null || healthBusy) return;
@@ -329,6 +450,7 @@ async function runSupervisor(appId) {
         writeLog(app, 'Health check ' + (healthy ? 'passed' : 'failed (' + healthFailures + '/' + healthFailureLimit + ')') + '.');
         if (!healthy && healthFailures >= healthFailureLimit) {
           writeLog(app, 'Health failure threshold reached; restarting application.');
+          recordEvent(app, 'health-failure', 'Health check failure threshold reached.', { failures: healthFailures });
           try { child.kill('SIGTERM'); } catch {}
           const target = child;
           setTimeout(() => { if (child === target && target.exitCode === null) { try { target.kill('SIGKILL'); } catch {} } }, 1000).unref();
@@ -339,6 +461,7 @@ async function runSupervisor(appId) {
     const spawned = child;
     spawned.once('error', error => {
       writeLog(app, 'Application spawn error: ' + error.message);
+      recordEvent(app, 'spawn-error', 'Application spawn error: ' + error.message);
       if (child === spawned) {
         child = null;
         if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
@@ -348,6 +471,7 @@ async function runSupervisor(appId) {
     spawned.once('exit', (code, signal) => {
       if (child !== spawned) return;
       writeLog(app, 'Application exited (code=' + code + ', signal=' + signal + ').');
+      recordEvent(app, 'app-exit', 'Application exited.', { code, signal, stopping });
       child = null;
       if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
       if (!stopping) scheduleRestart();
@@ -361,12 +485,14 @@ async function runSupervisor(appId) {
     while (restartTimes.length && now - restartTimes[0] > restartWindowMs) restartTimes.shift();
     if (maxRestarts > 0 && restartTimes.length > maxRestarts) {
       writeLog(app, 'Restart limit reached; supervisor stopped to prevent a crash loop.');
+      recordEvent(app, 'restart-limit', 'Restart limit reached; supervisor stopped.');
       stopping = true;
       process.exitCode = 1;
       return;
     }
     const delay = Math.min(maxDelay, baseDelay * Math.pow(2, Math.max(0, restartTimes.length - 1)));
     writeLog(app, 'Restarting application in ' + delay + 'ms (attempt ' + restartTimes.length + ').');
+    recordEvent(app, 'restart-scheduled', 'Application restart scheduled.', { delayMs: delay, attempt: restartTimes.length });
     restartTimer = setTimeout(launch, delay);
   };
   launch();
@@ -386,7 +512,7 @@ function isProcessGroupAlive(app) {
   }
 }
 
-async function stopApp(app, gracefulMs = 250) {
+async function stopApp(app, gracefulMs = Math.max(1000, Math.min(Number(app.gracefulShutdownMs) || 5000, 30000))) {
   const leaderAlive = isAlive(app);
   const groupAlive = isProcessGroupAlive(app);
   if (!leaderAlive && !groupAlive) {
@@ -419,11 +545,11 @@ async function stopApp(app, gracefulMs = 250) {
     }
   };
 
-  // Give the app a brief chance to flush data, then force-stop remaining group members.
+  // Let the supervisor forward SIGTERM; force-stop the process group only after the grace period.
   signalGroup('SIGTERM');
   const deadline = Date.now() + gracefulMs;
-  while (Date.now() < deadline && isAlive(app)) await sleep(25);
-  signalGroup('SIGKILL');
+  while (Date.now() < deadline && isAlive(app)) await sleep(50);
+  if (isProcessGroupAlive(app)) signalGroup('SIGKILL');
 
   // Verify the managed leader, not kill(0) on the group: Linux may retain zombie
   // descendants briefly even after SIGKILL, which must not stall the TUI.
@@ -439,6 +565,7 @@ async function stopApp(app, gracefulMs = 250) {
   app.stoppedAt = new Date().toISOString();
   saveState();
   writeLog(app, 'Stopped; termination signal sent to its process group.');
+  recordEvent(app, 'app-stopped', 'Application stopped by DEMONPM.', { gracefulShutdownMs: gracefulMs });
 }
 
 function clearScreen() {
@@ -615,17 +742,30 @@ async function addApp() {
   const restartDelayMs = Number(delayInput);
   if (!Number.isInteger(restartDelayMs) || restartDelayMs < 500 || restartDelayMs > 30000) throw new Error('Restart delay must be 500–30000ms.');
   const healthInput = await prompt('Health-check URL (blank disables HTTP health checks): ', '');
-  if (healthInput && !/^https?:\/\//i.test(healthInput)) throw new Error('Health-check URL must use http:// or https://.');
+  if (healthInput && !isHttpUrl(healthInput)) throw new Error('Health-check URL must be a valid http:// or https:// URL.');
   const healthIntervalMs = 15000;
   const healthTimeoutMs = 5000;
   const healthFailureLimit = 3;
+  const waitForHealthyBeforeNext = healthInput
+    ? (await prompt('Wait for this app to become healthy before starting the next app? (y/N): ', 'n')).toLowerCase() === 'y'
+    : false;
+  const healthStartupTimeoutMs = waitForHealthyBeforeNext
+    ? Number(await prompt('Health readiness timeout ms (5000–120000, default 30000): ', '30000'))
+    : 30000;
+  if (!Number.isInteger(healthStartupTimeoutMs) || healthStartupTimeoutMs < 5000 || healthStartupTimeoutMs > 120000) {
+    throw new Error('Health readiness timeout must be 5000–120000ms.');
+  }
+  const gracefulShutdownMs = Number(await prompt('Graceful shutdown timeout ms (1000–30000, default 5000): ', '5000'));
+  if (!Number.isInteger(gracefulShutdownMs) || gracefulShutdownMs < 1000 || gracefulShutdownMs > 30000) {
+    throw new Error('Graceful shutdown timeout must be 1000–30000ms.');
+  }
   const orderInput = await prompt('Startup order (lower numbers start first, default 100): ', '100');
   const startupOrder = Number(orderInput);
   if (!Number.isInteger(startupOrder) || startupOrder < 0 || startupOrder > 10000) throw new Error('Startup order must be 0–10000.');
   const limitInput = await prompt('Max restarts per 60 seconds (0 = unlimited): ', '0');
   const maxRestarts = Number(limitInput);
   if (!Number.isInteger(maxRestarts) || maxRestarts < 0 || maxRestarts > 1000) throw new Error('Restart limit must be 0–1000.');
-  const app = { id: safeId(), name, cwd, entry, args: parts, nodePath, env: {}, autoRestart: true, desiredRunning: false, restartDelayMs, maxRestartDelayMs: 30000, maxRestarts, restartWindowMs: 60000, healthCheckUrl: healthInput, healthIntervalMs, healthTimeoutMs, healthFailureLimit, startupOrder, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
+  const app = { id: safeId(), name, cwd, entry, args: parts, nodePath, env: {}, autoRestart: true, desiredRunning: false, restartDelayMs, gracefulShutdownMs, maxRestartDelayMs: 30000, maxRestarts, restartWindowMs: 60000, healthCheckUrl: healthInput, healthIntervalMs, healthTimeoutMs, healthFailureLimit, waitForHealthyBeforeNext, healthStartupTimeoutMs, startupOrder, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
   const resolved = path.resolve(cwd, entry);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error('Entry file not found: ' + resolved);
   state.apps.push(app);
@@ -672,9 +812,10 @@ async function importConfig() {
       id: safeId(), name: raw.name, cwd, entry, args: raw.args.slice(0, 256),
       nodePath, env: {}, autoRestart: raw.autoRestart !== false, desiredRunning: false,
       restartDelayMs: Number.isInteger(raw.restartDelayMs) ? Math.max(500, Math.min(raw.restartDelayMs, 30000)) : 1000,
+      gracefulShutdownMs: Number.isInteger(raw.gracefulShutdownMs) ? Math.max(1000, Math.min(raw.gracefulShutdownMs, 30000)) : 5000,
       maxRestartDelayMs: 30000,
       maxRestarts: Number.isInteger(raw.maxRestarts) ? Math.max(0, Math.min(raw.maxRestarts, 1000)) : 0,
-      restartWindowMs: 60000, healthCheckUrl: typeof raw.healthCheckUrl === 'string' && isHttpUrl(raw.healthCheckUrl) ? raw.healthCheckUrl : '', healthIntervalMs: 15000, healthTimeoutMs: 5000, healthFailureLimit: 3, startupOrder: Number.isInteger(raw.startupOrder) ? Math.max(0, Math.min(raw.startupOrder, 10000)) : 100, pid: null, procStartTicks: null, createdAt: new Date().toISOString()
+      restartWindowMs: 60000, healthCheckUrl: typeof raw.healthCheckUrl === 'string' && isHttpUrl(raw.healthCheckUrl) ? raw.healthCheckUrl : '', healthIntervalMs: 15000, healthTimeoutMs: 5000, healthFailureLimit: 3, waitForHealthyBeforeNext: raw.waitForHealthyBeforeNext === true, healthStartupTimeoutMs: Number.isInteger(raw.healthStartupTimeoutMs) ? Math.max(5000, Math.min(raw.healthStartupTimeoutMs, 120000)) : 30000, startupOrder: Number.isInteger(raw.startupOrder) ? Math.max(0, Math.min(raw.startupOrder, 10000)) : 100, pid: null, procStartTicks: null, createdAt: new Date().toISOString()
     });
   }
   state.apps.push(...imported);
@@ -711,9 +852,19 @@ async function startAllApps() {
   let started = 0;
   const errors = [];
   for (const app of ordered) {
-    if (isAlive(app)) continue;
-    try { startApp(app); started++; await sleep(250); }
-    catch (error) { errors.push(app.name + ': ' + error.message); }
+    try {
+      if (!isAlive(app)) { startApp(app); started++; }
+      if (app.waitForHealthyBeforeNext && app.healthCheckUrl) {
+        notice = 'Waiting for ' + app.name + ' health check before continuing…';
+        render();
+        if (!await waitForHealthy(app)) {
+          errors.push(app.name + ': health readiness timed out; later apps were not started.');
+          recordEvent(app, 'readiness-timeout', 'Health readiness timed out during start-all.');
+          break;
+        }
+      }
+      await sleep(250);
+    } catch (error) { errors.push(app.name + ': ' + error.message); }
   }
   notice = 'Start-all: ' + started + ' started in startup order.' + (errors.length ? ' ' + errors.slice(0,2).join('; ') : '');
 }
@@ -731,23 +882,35 @@ async function stopAllApps() {
 }
 
 async function viewCrashHistory(app) {
-  const file = logPath(app);
-  const previous = file + '.1';
-  if (!fs.existsSync(file) && !fs.existsSync(previous)) {
-    notice = 'No crash history for ' + app.name + '.';
-    return;
+  const files = [eventPath(app) + '.1', eventPath(app)];
+  const events = [];
+  for (const file of files) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event && typeof event.timestamp === 'string' && typeof event.type === 'string') {
+            events.push(event.timestamp + '  ' + event.type.toUpperCase() + ': ' + String(event.message || ''));
+          }
+        } catch {}
+      }
+    } catch {}
   }
-  let content = '';
-  try { if (fs.existsSync(previous)) content += fs.readFileSync(previous, 'utf8') + '\n'; } catch {}
-  try { if (fs.existsSync(file)) content += fs.readFileSync(file, 'utf8'); } catch {}
-  const events = content.split(/\r?\n/)
-    .filter(line => /exited \(code=|Restarting application|Restart limit reached|Supervisor error|Health failure threshold|spawn error/i.test(line));
+  const legacy = logPath(app);
+  try {
+    if (fs.existsSync(legacy)) {
+      events.push(...fs.readFileSync(legacy, 'utf8').split(/\r?\n/)
+        .filter(line => /exited \(code=|Restarting application|Restart limit reached|Health failure threshold|spawn error/i.test(line)));
+    }
+  } catch {}
   const tail = events.slice(-Math.max(10, (process.stdout.rows || 24) - 6));
   clearScreen();
-  console.log('\x1b[1;36mCRASH HISTORY · ' + app.name + '\x1b[0m  (press any key to return)\n');
-  console.log(tail.length ? tail.join('\n') : 'No crash/restart events recorded.');
+  console.log('\x1b[1;36mEVENT HISTORY · ' + app.name + '\x1b[0m  (press any key to return)\n');
+  console.log(tail.length ? tail.join('\n') : 'No lifecycle/crash events recorded.');
   await waitAnyKey();
-  notice = 'Returned from crash history for ' + app.name + '.';
+  notice = 'Returned from event history for ' + app.name + '.';
 }
 
 async function viewLogs(app) {
@@ -884,6 +1047,103 @@ async function action(key) {
   if (keyHandler && running) process.stdin.on('keypress', keyHandler);
 }
 
+async function runSelfTest() {
+  const results = [];
+  const warnings = [];
+  const check = (name, fn) => {
+    try { fn(); results.push({ name, ok: true }); }
+    catch (error) { results.push({ name, ok: false, error: error.message }); }
+  };
+
+  check('Storage directory and permissions', () => {
+    ensureStorage();
+    fs.accessSync(HOME, fs.constants.R_OK | fs.constants.W_OK);
+    fs.accessSync(LOG_DIR, fs.constants.R_OK | fs.constants.W_OK);
+  });
+
+  const atomicTest = path.join(HOME, '.self-test-' + process.pid + '.json');
+  check('Atomic state-file write', () => {
+    atomicWriteFile(atomicTest, '{"ok":true}', 0o600);
+    if (fs.readFileSync(atomicTest, 'utf8') !== '{"ok":true}') throw new Error('Read-back did not match.');
+    fs.unlinkSync(atomicTest);
+  });
+  try { fs.unlinkSync(atomicTest); } catch {}
+
+  const testApp = { id: 'selftest-' + crypto.randomBytes(6).toString('hex'), name: 'self-test' };
+  const testLog = logPath(testApp);
+  check('Locked log append and rotation', () => {
+    appendLogChunk(testApp, Buffer.alloc(Math.floor(MAX_LOG_BYTES * 0.75), 0x61));
+    appendLogChunk(testApp, Buffer.alloc(Math.floor(MAX_LOG_BYTES * 0.5), 0x62));
+    if (logWarnings.has(testApp.id)) throw new Error(logWarnings.get(testApp.id));
+    const activeSize = fs.statSync(testLog).size;
+    const backupSize = fs.statSync(testLog + '.1').size;
+    if (activeSize > MAX_LOG_BYTES || backupSize > MAX_LOG_BYTES || backupSize === 0) {
+      throw new Error('Rotation size bounds were not respected.');
+    }
+  });
+  for (const file of [testLog, testLog + '.1', testLog + '.lock']) {
+    try { fs.unlinkSync(file); } catch {}
+  }
+
+  check('Node executable', () => {
+    if (!fs.existsSync(NODE) || !fs.statSync(NODE).isFile()) throw new Error('Node executable is missing.');
+    if (process.platform !== 'win32') fs.accessSync(NODE, fs.constants.X_OK);
+  });
+
+  check('Saved configuration schema', () => {
+    if (!fs.existsSync(STATE_FILE)) return;
+    const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    if (!parsed || !Array.isArray(parsed.apps)) throw new Error('state.json must contain an apps array.');
+    for (const app of parsed.apps) {
+      if (!app || typeof app.id !== 'string' || typeof app.name !== 'string' ||
+          typeof app.cwd !== 'string' || typeof app.entry !== 'string' || !Array.isArray(app.args)) {
+        throw new Error('Invalid app entry in state.json.');
+      }
+      if (app.healthCheckUrl && !isHttpUrl(app.healthCheckUrl)) warnings.push(app.name + ': invalid health-check URL in saved config.');
+      if (!fs.existsSync(app.cwd) || !fs.existsSync(path.resolve(app.cwd, app.entry))) {
+        warnings.push(app.name + ': working directory or entry file is missing.');
+      }
+      if (app.pid && !isAlive(app)) {
+        warnings.push(app.name + ': saved supervisor PID is stale.');
+        if (isProcessGroupAlive(app)) warnings.push(app.name + ': process group remains after its supervisor PID; inspect for orphaned children (not killed automatically).');
+      }
+    }
+  });
+
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const child = spawn(NODE, ['-e', 'process.exit(0)'], { stdio: 'ignore', windowsHide: true });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill('SIGKILL'); } catch {}
+      reject(new Error('Node child-process smoke test timed out.'));
+    }, 5000);
+    child.once('error', error => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', code => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error('Node child process exited with code ' + code));
+    });
+  }).then(() => results.push({ name: 'Node child-process spawn', ok: true }))
+    .catch(error => results.push({ name: 'Node child-process spawn', ok: false, error: error.message }));
+
+  for (const result of results) {
+    console.log((result.ok ? 'PASS ' : 'FAIL ') + result.name + (result.error ? ': ' + result.error : ''));
+  }
+  for (const warning of warnings) console.log('WARN ' + warning);
+  const failed = results.filter(result => !result.ok).length;
+  console.log('\nDEMONPM JS ' + VERSION + ' self-test: ' + (results.length - failed) + '/' + results.length + ' checks passed; ' + warnings.length + ' warning(s).');
+  return failed === 0;
+}
+
 function shutdown() {
   if (!running) return;
   running = false;
@@ -906,8 +1166,14 @@ async function main() {
       try {
         startApp(app);
         writeLog(app, 'Startup recovery: supervisor relaunched by DEMONPM.');
+        recordEvent(app, 'startup-recovery', 'Supervisor relaunched during manager startup.');
+        if (app.waitForHealthyBeforeNext && app.healthCheckUrl && !await waitForHealthy(app)) {
+          writeLog(app, 'Startup recovery health readiness timed out.');
+          recordEvent(app, 'readiness-timeout', 'Health readiness timed out during startup recovery.');
+        }
       } catch (error) {
         writeLog(app, 'Startup recovery failed: ' + error.message);
+        recordEvent(app, 'startup-recovery-error', 'Startup recovery failed: ' + error.message);
       }
     }
   }
@@ -965,7 +1231,12 @@ async function main() {
   saveState();
 }
 
-if (process.argv[2] === '--supervise' && process.argv[3]) {
+if (process.argv[2] === '--self-test') {
+  runSelfTest().then(ok => { process.exitCode = ok ? 0 : 1; }).catch(error => {
+    console.error('DEMONPM self-test failed:', error.message);
+    process.exitCode = 1;
+  });
+} else if (process.argv[2] === '--supervise' && process.argv[3]) {
   runSupervisor(process.argv[3]).catch(error => {
     try { fs.appendFileSync(path.join(LOG_DIR, process.argv[3] + '.log'), '[' + new Date().toISOString() + '] Supervisor error: ' + error.message + '\\n'); } catch {}
     process.exitCode = 1;
