@@ -47,6 +47,17 @@ def stats(pid):
                 "ticks": int(fields[11]) + int(fields[12])}
     except (OSError, ValueError, IndexError): return {"rss_mb": None, "ticks": None}
 
+def terminate_group(pgid, grace=8):
+    try: os.killpg(int(pgid),signal.SIGTERM)
+    except ProcessLookupError: return
+    deadline=time.monotonic()+grace
+    while time.monotonic()<deadline:
+        try: os.killpg(int(pgid),0)
+        except ProcessLookupError: return
+        time.sleep(.1)
+    try: os.killpg(int(pgid),signal.SIGKILL)
+    except ProcessLookupError: pass
+
 class Manager:
     def __init__(self):
         HOME.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -163,16 +174,9 @@ class Manager:
             try: run_hooks(HOME / "plugins", "pre-stop", name)
             except Exception as exc: self.log(name, "pre-stop plugin failed: " + str(exc))
             a["autorestart"] = False
-            pid = p.pid if p and p.poll() is None else None
-            if pid:
-                try: os.killpg(int(pid), signal.SIGTERM)
-                except ProcessLookupError: pass
-                deadline = time.monotonic() + 8
-                while p and p.poll() is None and time.monotonic() < deadline: time.sleep(.1)
-                if p and p.poll() is None:
-                    try: os.killpg(p.pid, signal.SIGKILL)
-                    except ProcessLookupError: pass
-                    p.wait()
+            if p:
+                terminate_group(p.pid,8)
+                if p.poll() is None: p.wait()
             self.children.pop(name, None)
             a.update(status="stopped", pid=None, next_restart=0)
             if a.get("cgroup"):
@@ -201,6 +205,8 @@ class Manager:
                 p = self.children.get(name)
                 if p and p.poll() is not None:
                     code = p.returncode
+                    # A child may have forked workers that outlive its parent.
+                    terminate_group(p.pid,1)
                     self.children.pop(name, None)
                     a.update(status="stopped", pid=None, last_exit=code)
                     self.log(name, "exited code=%s" % code)
@@ -438,7 +444,7 @@ def request(q):
     return r["result"]
 
 def ssh_request(node,payload):
-    if not isinstance(node,str) or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,255}",node):
+    if not isinstance(node,str) or node.startswith("-") or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,255}",node):
         raise ValueError("node must be a simple SSH destination such as deploy@host")
     command=["ssh","-T","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes",
              "-o","ConnectTimeout=8","-o","ServerAliveInterval=10",
