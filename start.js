@@ -155,7 +155,7 @@ function isProcessGroupAlive(app) {
   }
 }
 
-async function stopApp(app, timeoutMs = 1500) {
+async function stopApp(app, gracefulMs = 250) {
   const leaderAlive = isAlive(app);
   const groupAlive = isProcessGroupAlive(app);
   if (!leaderAlive && !groupAlive) {
@@ -165,7 +165,7 @@ async function stopApp(app, timeoutMs = 1500) {
     return;
   }
 
-  // Never signal a reused PID if Linux can identify that the original leader changed.
+  // Guard against signalling a different process after PID reuse.
   if (leaderAlive && app.procStartTicks && process.platform === 'linux') {
     const actualTicks = procStartTicks(app.pid);
     if (actualTicks && actualTicks !== app.procStartTicks) {
@@ -187,24 +187,25 @@ async function stopApp(app, timeoutMs = 1500) {
     }
   };
 
+  // Give the app a brief chance to flush data, then force-stop remaining group members.
   signalGroup('SIGTERM');
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline && isProcessGroupAlive(app)) await sleep(50);
+  const deadline = Date.now() + gracefulMs;
+  while (Date.now() < deadline && isAlive(app)) await sleep(25);
+  signalGroup('SIGKILL');
 
-  // Escalate quickly, but still allow applications a short graceful-shutdown window.
-  if (isProcessGroupAlive(app)) signalGroup('SIGKILL');
-  const killDeadline = Date.now() + 1000;
-  while (Date.now() < killDeadline && isProcessGroupAlive(app)) await sleep(50);
-
-  if (isProcessGroupAlive(app)) {
-    throw new Error('Process group did not stop; the host may be preventing termination.');
+  // Verify the managed leader, not kill(0) on the group: Linux may retain zombie
+  // descendants briefly even after SIGKILL, which must not stall the TUI.
+  const verifyDeadline = Date.now() + 300;
+  while (Date.now() < verifyDeadline && isAlive(app)) await sleep(25);
+  if (isAlive(app)) {
+    throw new Error('Application did not stop; the host may be preventing termination.');
   }
 
   app.pid = null;
   app.procStartTicks = null;
   app.stoppedAt = new Date().toISOString();
   saveState();
-  writeLog(app, 'Stopped.');
+  writeLog(app, 'Stopped; termination signal sent to its process group.');
 }
 
 function clearScreen() {
@@ -443,7 +444,8 @@ async function main() {
   const onResize = () => render();
   process.stdout.on('resize', onResize);
   render();
-  const refresh = setInterval(() => { if (running) render(); }, 2000);
+  // Render only on user input or terminal resize. A periodic full-screen clear
+  // causes visible flicker and is unnecessary for process status display.
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
   await new Promise(resolve => {
@@ -451,7 +453,6 @@ async function main() {
       if (!running) { clearInterval(check); resolve(); }
     }, 100);
   });
-  clearInterval(refresh);
   process.stdout.off('resize', onResize);
   saveState();
 }
