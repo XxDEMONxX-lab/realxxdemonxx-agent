@@ -194,13 +194,20 @@ class Manager:
                         self.log(name, "memory limit exceeded: %s MB" % rss)
                         try: os.killpg(a["pid"], signal.SIGTERM)
                         except ProcessLookupError: pass
-                if a.get("status") == "online" and not self.health_ok(a):
-                    self.log(name, "health check failed; restarting")
-                    try:
-                        self.stop(name)
-                        a["autorestart"] = True
-                        self.start(name)
-                    except Exception as e: self.log(name, "health restart failed: " + str(e))
+                if a.get("status") == "online":
+                    if self.health_ok(a):
+                        a["health_failures"] = 0
+                    else:
+                        a["health_failures"] = a.get("health_failures", 0) + 1
+                        if a["health_failures"] >= 3:
+                            a["health_failures"] = 0
+                            self.log(name, "health check failed 3 times; restarting")
+                            self.notify(a, "health failure", "3 consecutive failed probes")
+                            try:
+                                self.stop(name)
+                                a["autorestart"] = True
+                                self.start(name)
+                            except Exception as e: self.log(name, "health restart failed: " + str(e))
 
     def dispatch(self, q):
         act, name = q.get("action"), q.get("name")
