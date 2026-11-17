@@ -437,6 +437,22 @@ def request(q):
     if not r.get("ok"): raise RuntimeError(r.get("error", "daemon error"))
     return r["result"]
 
+def ssh_request(node,payload):
+    if not isinstance(node,str) or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,255}",node):
+        raise ValueError("node must be a simple SSH destination such as deploy@host")
+    command=["ssh","-T","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes",
+             "-o","ConnectTimeout=8","-o","ServerAliveInterval=10",
+             node,"demonpm","remote-request"]
+    result=subprocess.run(command,input=json.dumps(payload)+"\n",capture_output=True,
+        text=True,timeout=35,check=False)
+    if result.returncode:
+        raise RuntimeError("SSH node %s failed: %s" % (node,result.stderr.strip() or result.returncode))
+    try: response=json.loads(result.stdout)
+    except ValueError: raise RuntimeError("SSH node %s returned invalid JSON" % node)
+    if not isinstance(response,dict) or "error" in response:
+        raise RuntimeError("SSH node %s returned an invalid daemon response" % node)
+    return response
+
 def main():
     p = argparse.ArgumentParser(prog="demonpm")
     p.add_argument("--version", action="version", version="demonpm " + VERSION)
@@ -457,7 +473,11 @@ def main():
         if a == "logs": x.add_argument("-n", "--lines", type=int, default=100)
     for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "daemon-foreground", "monit", "start-config", "deploy", "api"): sp.add_parser(a)
     x=sp.add_parser("scale"); x.add_argument("name"); x.add_argument("--replicas",type=int,required=True); x.add_argument("--base-port",type=int,required=True)
-    x=sp.add_parser("proxy-sync"); x.add_argument("cluster"); x.add_argument("--upstream-file",required=True); x.add_argument("--upstream-name",required=True); x.add_argument("--nginx",default="nginx")
+    x=sp.add_parser("proxy-sync"); x.add_argument("cluster"); x.add_argument("--upstream-file",required=True); x.add_argument("--upstream-name",required=True); x.add_argument("--server",action="append",default=[]); x.add_argument("--nginx",default="nginx")
+    x=sp.add_parser("cluster-start"); x.add_argument("name"); x.add_argument("--node",action="append",required=True); x.add_argument("--cwd",required=True); x.add_argument("--env",action="append",default=[]); x.add_argument("command",nargs=argparse.REMAINDER)
+    x=sp.add_parser("cluster-list"); x.add_argument("--node",action="append",required=True)
+    x=sp.add_parser("cluster-stop"); x.add_argument("name"); x.add_argument("--node",action="append",required=True)
+    sp.add_parser("remote-request")
     x=sp.add_parser("bluegreen"); x.add_argument("old"); x.add_argument("new"); x.add_argument("--upstream-file",required=True); x.add_argument("--upstream-name",required=True); x.add_argument("--server",required=True); x.add_argument("--health-url",required=True); x.add_argument("--nginx",default="nginx")
     sp.choices["api"].add_argument("--port", type=int, default=8765)
     sp.choices["api"].add_argument("--host",default="127.0.0.1")
@@ -468,6 +488,10 @@ def main():
     sp.choices["deploy"].add_argument("name")
     sp.choices["deploy"].add_argument("--branch")
     a = p.parse_args()
+    if a.action == "remote-request":
+        raw=sys.stdin.readline(1024*1024)
+        if not raw: p.error("remote-request expects one JSON request on stdin")
+        print(json.dumps(request(json.loads(raw)))); return 0
     if a.action == "daemon-foreground":
         Manager().serve(); return 0
     if a.action == "daemon-stop": request({"action": "shutdown"}); return 0
@@ -489,6 +513,35 @@ def main():
     if a.action == "scale":
         result=request({"action":"scale","name":a.name,"replicas":a.replicas,"base_port":a.base_port})
         print(json.dumps(result,indent=2)); return 0
+    if a.action == "cluster-start":
+        command=a.command[1:] if a.command[:1]==["--"] else a.command
+        if not command: p.error("cluster-start requires a command after --")
+        env={}
+        for item in a.env:
+            if "=" not in item: p.error("--env expects KEY=VALUE")
+            key,value=item.split("=",1); env[key]=value
+        payload={"action":"start","name":a.name,"command":command,"cwd":a.cwd,"env":env}
+        completed=[]
+        try:
+            for node in a.node:
+                completed.append((node,ssh_request(node,payload)))
+        except Exception:
+            for node,_ in completed:
+                try: ssh_request(node,{"action":"stop","name":a.name})
+                except Exception: pass
+            raise
+        print(json.dumps({"started":completed},indent=2)); return 0
+    if a.action == "cluster-list":
+        results=[]
+        for node in a.node:
+            result=ssh_request(node,{"action":"list"})
+            results.append({"node":node,"processes":result["processes"]})
+        print(json.dumps(results,indent=2)); return 0
+    if a.action == "cluster-stop":
+        results=[]
+        for node in a.node:
+            results.append({"node":node,"result":ssh_request(node,{"action":"stop","name":a.name})})
+        print(json.dumps(results,indent=2)); return 0
     if a.action == "proxy-sync":
         rows=request({"action":"list"})["processes"]
         from proxy import switch_upstream, healthy
@@ -497,7 +550,8 @@ def main():
             if row.get("cluster")==a.cluster and row.get("status")=="online" and row.get("port"):
                 if row.get("health_url") and not healthy(row["health_url"]): continue
                 servers.append("127.0.0.1:"+str(int(row["port"])))
-        if not servers: p.error("no healthy online replicas found")
+        servers.extend(a.server)
+        if not servers: p.error("no healthy online replicas found; add --server host:port for remote nodes")
         print(json.dumps(switch_upstream(a.upstream_file,a.upstream_name,servers,a.nginx),indent=2)); return 0
     if a.action == "bluegreen":
         rows=request({"action":"list"})["processes"]
