@@ -208,7 +208,7 @@ class Agent{
     },
     reviewIteration:async({task,iteration,changes,history,stagedFiles})=>{
      const evidence=changes.map(x=>({path:x.path,summary:x.summary}));const staged=[...stagedFiles].map(([path,content])=>({path,content:content.slice(0,6000)}));
-     const review=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:reviewer},{role:"user",content:"Original objective: "+prompt+"\nCurrent task: "+task+"\nPrevious reviews: "+JSON.stringify(history)+"\nWorker results: "+JSON.stringify(evidence).slice(0,35000)}],this.c);
+     const review=await completeWithFallback(this.c.provider,this.c.model,[{role:"system",content:reviewer},{role:"user",content:"Original objective: "+prompt+"\nCurrent task: "+task+"\nPrevious reviews: "+JSON.stringify(history)+"\nLatest worker summaries: "+JSON.stringify(evidence)+"\nAll staged file contents (capped at 6KB per file): "+JSON.stringify(staged).slice(0,35000)}],this.c);
      return parseObject(review.text,"Main-model review");
     }
    });}catch(e){console.log(color(e.message,"red"));for(const x of e.results||[])if(!x.ok)console.log("Worker "+x.index+" "+x.path+": "+x.error);return;}
