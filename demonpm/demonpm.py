@@ -20,6 +20,7 @@ def load(path, default):
     except (OSError, ValueError): return default
 
 def rotate(path):
+    # Called before a new process opens the log, never while a child has the file open.
     try:
         if path.stat().st_size < LIMIT: return
     except OSError: return
@@ -37,7 +38,6 @@ def rotate(path):
             if not chunk: break
             target.write(chunk)
     archive.unlink()
-
 def stats(pid):
     try:
         raw = Path("/proc/%d/stat" % pid).read_text()
