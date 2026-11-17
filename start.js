@@ -17,7 +17,7 @@ const readline = require('node:readline');
 const { promisify } = require('node:util');
 const sleep = promisify(setTimeout);
 
-const VERSION = '1.0.0';
+const VERSION = '6.0.0';
 const HOME = path.join(os.homedir(), '.demonpm-js');
 const STATE_FILE = path.join(HOME, 'state.json');
 const LOG_DIR = path.join(HOME, 'logs');
@@ -157,6 +157,11 @@ async function runSupervisor(appId) {
   if (!app) process.exit(2);
   const entryPath = path.resolve(app.cwd, app.entry);
   if (!fs.existsSync(entryPath) || !fs.statSync(entryPath).isFile()) process.exit(2);
+  const baseDelay = Math.max(500, Math.min(Number(app.restartDelayMs) || 1000, 30000));
+  const maxDelay = Math.max(baseDelay, Math.min(Number(app.maxRestartDelayMs) || 30000, 300000));
+  const maxRestarts = Math.max(0, Number.isInteger(app.maxRestarts) ? app.maxRestarts : 0);
+  const restartWindowMs = Math.max(10000, Number(app.restartWindowMs) || 60000);
+  const restartTimes = [];
 
   let stopping = false;
   let child = null;
@@ -204,8 +209,17 @@ async function runSupervisor(appId) {
   };
   const scheduleRestart = () => {
     if (stopping) return;
-    const delay = Math.max(500, Math.min(Number(app.restartDelayMs) || 1000, 30000));
-    writeLog(app, 'Restarting application in ' + delay + 'ms.');
+    const now = Date.now();
+    restartTimes.push(now);
+    while (restartTimes.length && now - restartTimes[0] > restartWindowMs) restartTimes.shift();
+    if (maxRestarts > 0 && restartTimes.length > maxRestarts) {
+      writeLog(app, 'Restart limit reached; supervisor stopped to prevent a crash loop.');
+      stopping = true;
+      process.exitCode = 1;
+      return;
+    }
+    const delay = Math.min(maxDelay, baseDelay * Math.pow(2, Math.max(0, restartTimes.length - 1)));
+    writeLog(app, 'Restarting application in ' + delay + 'ms (attempt ' + restartTimes.length + ').');
     restartTimer = setTimeout(launch, delay);
   };
   launch();
