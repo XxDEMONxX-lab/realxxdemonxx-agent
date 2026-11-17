@@ -556,6 +556,9 @@ def main():
     elif a.action in ("stop", "restart", "delete", "logs"):
         q["name"] = a.name
         if a.action == "logs": q["lines"] = a.lines
+    if a.action == "list-json":
+        result=request({"action":"list"})
+        print(json.dumps(result["processes"],indent=2)); return 0
     if a.action == "scale":
         result=request({"action":"scale","name":a.name,"replicas":a.replicas,"base_port":a.base_port})
         print(json.dumps(result,indent=2)); return 0
