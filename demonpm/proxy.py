@@ -21,7 +21,7 @@ def switch_upstream(path, upstream, servers, nginx="nginx"):
     if not servers:
         raise ValueError("upstream server list cannot be empty")
     for server in servers:
-        match = re.fullmatch(r"(?:[A-Za-z0-9.-]+|\\[[0-9A-Fa-f:]+\\]):([0-9]{1,5})", server) if isinstance(server, str) else None
+        match = re.fullmatch(r"(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\]):([0-9]{1,5})", server) if isinstance(server, str) else None
         if not match or not 1 <= int(match.group(1)) <= 65535:
             raise ValueError("upstream servers must be host:port entries")
     target = Path(path).expanduser().resolve()
