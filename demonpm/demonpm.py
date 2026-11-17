@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""demonpm 4.0: dependency-free Linux/Termux process supervisor."""
+"""demonpm 5.0: Linux/Termux process supervisor with clustering and deployment."""
 import argparse, copy, fcntl, gzip, hashlib, json, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
 from pathlib import Path
 
