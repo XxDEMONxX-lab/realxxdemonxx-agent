@@ -40,8 +40,9 @@ async function discoverFreeModels(id,c){
  const p=provider(id,c),k=key(p,c);if(!k)throw Error("Configure the OpenRouter API key first with /provider openrouter then /key");
  const data=await req(p.url+"/models",{headers:{Accept:"application/json",Authorization:"Bearer "+k}});
  return (data.data||[]).filter(x=>{
+  const hasPrice=x.pricing?.prompt!==undefined&&x.pricing?.prompt!==null&&x.pricing?.completion!==undefined&&x.pricing?.completion!==null;
   const prompt=Number(x.pricing?.prompt),completion=Number(x.pricing?.completion);
-  return typeof x.id==="string"&&(x.id.endsWith(":free")||(Number.isFinite(prompt)&&Number.isFinite(completion)&&prompt===0&&completion===0));
+  return typeof x.id==="string"&&(x.id.endsWith(":free")||(hasPrice&&Number.isFinite(prompt)&&Number.isFinite(completion)&&prompt===0&&completion===0));
  }).sort((a,b)=>(Number(b.context_length)||0)-(Number(a.context_length)||0)||a.id.localeCompare(b.id)).slice(0,6).map(x=>x.id);
 }
 async function completionStream(id,model,msg,c,onToken){
