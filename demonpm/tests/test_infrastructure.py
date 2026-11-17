@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from limits import attach
 from proxy import switch_upstream
 from plugins import load_plugins
-from demonpm import ssh_request, stats, rotate, LIMIT
+from demonpm import ssh_request, stats, rotate, LIMIT, Manager
 
 class InfrastructureTests(unittest.TestCase):
     def test_cgroup_limits_write_cpu_memory_and_pid(self):
@@ -39,6 +39,24 @@ class InfrastructureTests(unittest.TestCase):
             with patch("proxy.subprocess.run"):
                 switch_upstream(target,"api",["[::1]:8080"])
             self.assertIn("[::1]:8080",target.read_text())
+
+    def test_live_log_capture_rotates_while_process_runs(self):
+        import subprocess, threading, sys, gzip
+        with tempfile.TemporaryDirectory() as tmp:
+            home=Path(tmp)/"home"; logs=home/"logs"
+            with patch("demonpm.HOME",home), patch("demonpm.LOGS",logs), patch("demonpm.STATE",home/"state.json"):
+                manager=Manager()
+                process=subprocess.Popen([sys.executable,"-c",
+                    "import sys; sys.stdout.buffer.write(b'x' * (%d + 32))" % LIMIT],
+                    stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
+                manager.children["test"]=process
+                reader=threading.Thread(target=manager.capture_output,args=("test",process))
+                manager.log_threads["test"]=reader; reader.start()
+                self.assertEqual(process.wait(timeout=15),0)
+                reader.join(timeout=5)
+                self.assertFalse(reader.is_alive())
+                with gzip.open(logs/"test.log.1.gz","rb") as archive:
+                    self.assertEqual(len(archive.read()),LIMIT+32)
 
     def test_proc_stats_parse_current_process(self):
         import os
