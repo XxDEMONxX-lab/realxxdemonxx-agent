@@ -16,7 +16,7 @@ function buildProviderCandidates(provider,model,fallbacks,fallbackModels,pools,e
  const providers=[provider,...(enabled&&Array.isArray(fallbacks)?fallbacks:[])],out=[],seen=new Set();
  for(const id of providers){
   const primary=id===provider?model:fallbackModels?.[id];
-  const pool=Array.isArray(pools?.[id])?pools[id]:[];
+  const pool=enabled&&Array.isArray(pools?.[id])?pools[id]:[];
   const models=id===provider?[primary,...pool]:(pool.length?pool:[primary]);
   const limit=id===provider?7:6;
   for(const candidate of [...new Set(models)].filter(x=>typeof x==="string"&&x.trim()).slice(0,limit)){
