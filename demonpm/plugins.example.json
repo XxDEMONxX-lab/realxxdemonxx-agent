@@ -1,0 +1,8 @@
+[
+  {
+    "hook": "post-start",
+    "command": ["/plugin/notify.sh"],
+    "cwd": ".",
+    "timeout": 5
+  }
+]
