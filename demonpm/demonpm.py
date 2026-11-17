@@ -103,8 +103,41 @@ class Manager:
 
     def log(self, name, message):
         path = LOGS / (name + ".log")
-        with path.open("a", encoding="utf-8") as f:
-            f.write(time.strftime("[%Y-%m-%d %H:%M:%S] ") + message + "\n")
+        lock = self.log_locks.setdefault(name, threading.RLock())
+        with lock:
+            with path.open("a", encoding="utf-8") as stream:
+                stream.write(time.strftime("[%Y-%m-%d %H:%M:%S] ") + message + "\\n")
+
+    def capture_output(self, name, process):
+        path = LOGS / (name + ".log")
+        lock = self.log_locks.setdefault(name, threading.RLock())
+        output = None
+        try:
+            output = path.open("ab")
+            while True:
+                chunk = process.stdout.read(65536)
+                if not chunk: break
+                with lock:
+                    output.write(chunk)
+                    output.flush()
+                    if output.tell() >= LIMIT:
+                        output.close()
+                        rotate(path)
+                        output = path.open("ab")
+        except (OSError, ValueError) as exc:
+            self.log(name, "log capture failed: " + str(exc))
+        finally:
+            if output:
+                try: output.close()
+                except OSError: pass
+            if process.stdout:
+                try: process.stdout.close()
+                except OSError: pass
+
+    def join_log_thread(self, name):
+        thread = self.log_threads.pop(name, None)
+        if thread and thread is not threading.current_thread():
+            thread.join(timeout=3)
 
     def describe(self, name):
         a = self.apps[name]
