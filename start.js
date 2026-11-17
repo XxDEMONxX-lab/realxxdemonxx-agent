@@ -29,6 +29,8 @@ let notice = 'Use ↑/↓ to select, Enter to open, q to quit.';
 let running = true;
 let prompting = false;
 let actionBusy = false;
+let showHelp = false;
+let alternateScreen = false;
 let keyHandler;
 
 function ensureStorage() {
@@ -208,54 +210,93 @@ async function stopApp(app, gracefulMs = 250) {
   writeLog(app, 'Stopped; termination signal sent to its process group.');
 }
 
-function clearScreen() {
-  process.stdout.write('\x1b[2J\x1b[H');
-}
-
 function truncate(value, width) {
   const text = String(value ?? '');
+  if (width <= 0) return '';
   return text.length > width ? text.slice(0, Math.max(0, width - 1)) + '…' : text;
 }
 
 function render() {
-  // Do not clear/redraw the terminal while readline owns stdin; doing so
-  // interrupts the active line editor and can erase text being typed.
-  if (prompting || actionBusy) return;
-  const width = Math.max(54, Math.min(process.stdout.columns || 80, 110));
-  const line = '─'.repeat(width - 2);
-  clearScreen();
-  console.log('\x1b[1;36m╔' + '═'.repeat(width - 2) + '╗\x1b[0m');
-  console.log('\x1b[1;36m║\x1b[0m' + ' '.repeat(Math.max(0, Math.floor((width - 2 - 27) / 2))) +
-    '\x1b[1;37mDEMONPM JS v' + VERSION + '\x1b[0m' +
-    ' '.repeat(Math.max(0, width - 2 - 27 - Math.floor((width - 2 - 27) / 2))) + '\x1b[1;36m║\x1b[0m');
-  console.log('\x1b[1;36m╠' + '═'.repeat(width - 2) + '╣\x1b[0m');
-  console.log('\x1b[1;36m║\x1b[0m  \x1b[90mNode.js process manager · ' +
-    truncate(os.platform() + ' ' + os.arch(), width - 39) + '\x1b[0m' +
-    ' '.repeat(Math.max(0, width - 5 - 36 - (os.platform() + ' ' + os.arch()).length)) + '\x1b[1;36m║\x1b[0m');
-  console.log('\x1b[1;36m╠' + line + '╣\x1b[0m');
-  console.log('\x1b[1;37m  APPLICATIONS\x1b[0m');
+  if (prompting || actionBusy || !running) return;
+
+  const width = Math.max(36, Math.min(process.stdout.columns || 80, 110));
+  const height = Math.max(12, process.stdout.rows || 24);
+  const inner = width - 2;
+  const cyan = '\x1b[1;36m';
+  const muted = '\x1b[90m';
+  const reset = '\x1b[0m';
+  const lines = [];
+  const border = '─'.repeat(inner);
+  const top = '═'.repeat(inner);
+  const add = value => lines.push(value);
+  const pad = (value, size) => truncate(value, size).padEnd(size);
+  const frame = value => cyan + '║' + reset + ' ' + pad(value, inner - 2) + ' ' + cyan + '║' + reset;
+
+  add(cyan + '╔' + top + '╗' + reset);
+  add(cyan + '║' + reset + pad('  DEMONPM JS  ·  NODE PROCESS MANAGER', inner) + cyan + '║' + reset);
+  add(cyan + '╠' + border + '╣' + reset);
+  add(frame(muted + '↑/↓ or j/k navigate   Enter start/stop   ? help   q quit' + reset));
+  add(cyan + '╠' + border + '╣' + reset);
+  add(frame('\x1b[1;37m APPLICATIONS \x1b[0m' + muted + ' (' + state.apps.length + ')' + reset));
+
   if (!state.apps.length) {
-    console.log('  \x1b[90mNo applications configured. Choose “Add Node app” to begin.\x1b[0m');
+    add(frame(muted + 'No applications yet. Press A to add a Node.js app.' + reset));
   } else {
-    state.apps.forEach((app, index) => {
-      const active = index === selected;
-      const marker = active ? '\x1b[1;36m❯' : ' ';
-      const stateText = status(app);
-      const stateColor = stateText === 'RUNNING' ? '\x1b[1;32m' : '\x1b[90m';
-      const label = '  ' + marker + ' ' + truncate(app.name, 20).padEnd(20) +
-        ' ' + stateColor + stateText.padEnd(8) + '\x1b[0m ' +
-        truncate(path.join(app.cwd, app.entry), Math.max(10, width - 48));
-      console.log(label + (active ? '\x1b[0m' : ''));
-    });
+    const listCapacity = Math.max(1, Math.min(state.apps.length, height - 15));
+    let first = Math.max(0, Math.min(selected - Math.floor(listCapacity / 2), state.apps.length - listCapacity));
+    const last = Math.min(state.apps.length, first + listCapacity);
+    if (first > 0) add(frame(muted + '  ↑ ' + first + ' more above' + reset));
+    for (let i = first; i < last; i++) {
+      const app = state.apps[i];
+      const active = i === selected;
+      const runningText = status(app) === 'RUNNING';
+      const marker = active ? cyan + '❯' + reset : ' ';
+      const stateLabel = runningText ? '\x1b[1;32m● RUNNING' : muted + '○ STOPPED';
+      const leftWidth = Math.max(12, Math.floor(inner * 0.43));
+      const name = pad(app.name, leftWidth);
+      const file = truncate(path.join(app.cwd, app.entry), Math.max(8, inner - leftWidth - 18));
+      add(cyan + '║' + reset + ' ' + marker + ' ' +
+        (active ? '\x1b[1;37m' : '') + name + reset + ' ' +
+        stateLabel + reset + ' ' + muted + file + reset +
+        ' '.repeat(Math.max(0, inner - 3 - leftWidth - 1 - stateLabel.replace(/\x1b\[[0-9;]*m/g, '').length - 1 - file.length)) +
+        cyan + '║' + reset);
+    }
+    if (last < state.apps.length) add(frame(muted + '  ↓ ' + (state.apps.length - last) + ' more below' + reset));
   }
-  console.log('\x1b[1;36m╠' + line + '╣\x1b[0m');
-  console.log('\x1b[1;37m  ACTIONS\x1b[0m');
-  console.log('   [A] Add Node app       [S] Start selected     [X] Stop selected');
-  console.log('   [R] Restart selected   [L] View logs          [D] Delete entry');
-  console.log('   [M] Refresh            [Q] Quit');
-  console.log('\x1b[1;36m╠' + line + '╣\x1b[0m');
-  console.log('  ' + truncate(notice, width - 5));
-  console.log('\x1b[1;36m╚' + '═'.repeat(width - 2) + '╝\x1b[0m');
+
+  add(cyan + '╠' + border + '╣' + reset);
+  const app = state.apps[selected];
+  add(frame('\x1b[1;37m SELECTED \x1b[0m'));
+  if (app) {
+    add(frame('Name: ' + app.name));
+    add(frame('File: ' + path.join(app.cwd, app.entry)));
+    add(frame('PID: ' + (isAlive(app) ? app.pid : '—') +
+      '    Status: ' + status(app) +
+      (app.startedAt ? '    Started: ' + app.startedAt.replace('T', ' ').slice(0, 19) : '')));
+  } else {
+    add(frame(muted + 'Select an application to see details.' + reset));
+  }
+
+  add(cyan + '╠' + border + '╣' + reset);
+  if (showHelp) {
+    add(frame('\x1b[1;37m KEYBOARD HELP \x1b[0m'));
+    add(frame('[↑/↓] or [J/K]  Move selection'));
+    add(frame('[Home/G]       First app     [End/Shift+G] Last app'));
+    add(frame('[Enter/Space]  Start or stop selected app'));
+    add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart'));
+    add(frame('[L] Logs  [D] Delete  [M] Refresh status'));
+    add(frame('[?] Close help  [Q] Quit'));
+  } else {
+    add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [D] Delete'));
+    add(frame('[M] Refresh  [?] Help  [Q] Quit'));
+  }
+  add(cyan + '╠' + border + '╣' + reset);
+  add(frame((notice.startsWith('Error:') ? '\x1b[1;31m' : muted) + truncate(notice, inner - 2) + reset));
+  add(cyan + '╚' + top + '╝' + reset);
+
+  // Move to the home position and erase only the remainder; no full-screen flash.
+  const visible = lines.slice(0, height);
+  process.stdout.write('\x1b[H' + visible.join('\r\n') + '\x1b[J');
 }
 
 function prompt(question, initial = '') {
@@ -410,10 +451,12 @@ async function action(key) {
 }
 
 function shutdown() {
+  if (!running) return;
   running = false;
   if (keyHandler) process.stdin.off('keypress', keyHandler);
   if (process.stdin.isTTY && process.stdin.isRaw) process.stdin.setRawMode(false);
-  process.stdout.write('\x1b[0m\x1b[?25h\n');
+  process.stdout.write('\x1b[0m\x1b[?25h' + (alternateScreen ? '\x1b[?1049l' : '') + '\n');
+  alternateScreen = false;
 }
 
 async function main() {
@@ -426,15 +469,33 @@ async function main() {
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
   process.stdin.resume();
-  process.stdout.write('\x1b[?25l');
+  process.stdout.write('\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l');
+  alternateScreen = true;
   keyHandler = async (str, key = {}) => {
-    if (!running || prompting) return;
+    if (!running || prompting || actionBusy) return;
     if (key.ctrl && key.name === 'c') { shutdown(); return; }
-    if (key.name === 'up') selected = Math.max(0, selected - 1);
-    else if (key.name === 'down') selected = Math.min(state.apps.length - 1, selected + 1);
-    else if (key.name === 'q' || str === 'Q') { shutdown(); return; }
-    else if (key.name === 'return' && state.apps[selected]) {
-      notice = 'Selected: ' + state.apps[selected].name + '. Use S, X, R or L.';
+
+    if (key.name === 'up' || str === 'k' || str === 'K') {
+      selected = Math.max(0, selected - 1);
+    } else if (key.name === 'down' || str === 'j' || str === 'J') {
+      selected = Math.min(Math.max(0, state.apps.length - 1), selected + 1);
+    } else if (key.name === 'home' || str === 'g') {
+      selected = 0;
+    } else if (key.name === 'end' || str === 'G') {
+      selected = Math.max(0, state.apps.length - 1);
+    } else if (key.name === 'pageup') {
+      selected = Math.max(0, selected - Math.max(1, (process.stdout.rows || 24) - 15));
+    } else if (key.name === 'pagedown') {
+      selected = Math.min(Math.max(0, state.apps.length - 1), selected + Math.max(1, (process.stdout.rows || 24) - 15));
+    } else if (key.name === 'q' || str === 'Q') {
+      shutdown();
+      return;
+    } else if (key.name === 'return' || key.name === 'space') {
+      const app = state.apps[selected];
+      if (app) await action(isAlive(app) ? 'x' : 's');
+      else notice = 'Press A to add your first Node.js app.';
+    } else if (str === '?' || str === 'h' || str === 'H') {
+      showHelp = !showHelp;
     } else if (str && 'asxrldm'.includes(str.toLowerCase())) {
       await action(str.toLowerCase());
     }
