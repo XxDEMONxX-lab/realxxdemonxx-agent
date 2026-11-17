@@ -324,7 +324,6 @@ class Agent{
   if(!input)input=await this.ask("Choose mode: normal or coding: ");
   const [action,...parts]=input.trim().split(/\s+/);
   if(action==="normal"){this.c.mode="normal";save(this.c);console.log("Normal mode enabled · one AI handles chat.");}
-  else if(action==="main"&&parts[0]==="model"){if(!this.c.model)throw Error("Select the main model first with /models and /model MODEL_ID.");const selected=provider(this.c.provider,this.c);if(selected.kind!=="ollama"&&!key(selected,this.c))throw Error("Main model API key missing. Configure /provider "+this.c.provider+" then /key.");this.c.mode="main";save(this.c);console.log("Main-model routing enabled · the main model classifies every task; coding tasks go to five workers, other tasks receive a normal answer and a coding-task reminder.");}
   else if(action==="coding"){
    const configured=validateCodingModels(this.c.codingModels,this.c);
    this.c.mode="coding";save(this.c);console.log("Coding mode enabled · 5 AI specialists will work in parallel.");
