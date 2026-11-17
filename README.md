@@ -47,7 +47,7 @@ The agent runs a bounded multi-round tool loop: it can list/read/search files, i
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
 Use /models to discover current models and /models all to query the registry.
-Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable it. Each fallback needs a model and credentials.
+Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MODEL_ID`; each fallback needs credentials. Automatic failover is limited to rate limits, transient server errors, and network timeouts. `/keys` reports which providers have credentials without exposing secrets.\n\nOpenRouter free models can be discovered with `/free auto openrouter`; this stores up to six zero-priced models (ranked by advertised context length) as a fallback pool. Use `/free set PROVIDER MODEL1,MODEL2,...` to explicitly mark up to six models as free for another provider, `/free list` to inspect pools, and `/free clear PROVIDER` to remove one. Free-tier status is not exposed consistently by every provider, so the agent never guesses that an arbitrary model is free or silently adds a paid model.
 
 ## Commands
 | Command | Purpose |
@@ -62,7 +62,7 @@ Configure failover with /fallback groq MODEL_ID. Use /fallbacks off to disable i
 | /base URL | Override endpoint |
 | /custom | Add compatible provider |
 | /fallback ID MODEL | Configure failover |
-| /fallbacks on or off | Toggle failover |
+| /fallbacks on or off | Toggle failover |\n| /failover [on or off or PROVIDER MODEL] | Configure provider failover |\n| /free auto or set or list or clear | Manage explicitly free model pools |\n| /keys | Show API-key configuration status (never the key values) |
 | /status | Show configuration |
 | /files, /read PATH | Inspect project |
 | /search QUERY | Search tracked and unignored project files |
