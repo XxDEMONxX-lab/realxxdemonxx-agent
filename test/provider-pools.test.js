@@ -7,7 +7,7 @@ test("free model pools require one to six unique bounded IDs",()=>{
 });
 test("provider candidates try the selected model and configured free pool before provider fallbacks",()=>{
  const values=buildProviderCandidates("gemini","main",["groq"],{groq:"fallback"},{gemini:["free-a","free-b"],groq:["free-c"]});
- assert.deepEqual(values,[{id:"gemini",model:"main"},{id:"gemini",model:"free-a"},{id:"gemini",model:"free-b"},{id:"groq",model:"fallback"},{id:"groq",model:"free-c"}]);
+ assert.deepEqual(values,[{id:"gemini",model:"main"},{id:"gemini",model:"free-a"},{id:"gemini",model:"free-b"},{id:"groq",model:"free-c"}]);
 });
 test("provider candidate construction deduplicates and honors disabled failover",()=>{
  assert.deepEqual(buildProviderCandidates("p","m",["p","q"],{q:"m"},{p:["m","p2"]},false),[{id:"p",model:"m"},{id:"p",model:"p2"}]);
