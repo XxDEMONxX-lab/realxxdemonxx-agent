@@ -336,8 +336,17 @@ async function runSupervisor(appId) {
       }, healthIntervalMs);
       healthTimer.unref();
     }
-    child.once('error', error => writeLog(app, 'Application spawn error: ' + error.message));
-    child.once('exit', (code, signal) => {
+    const spawned = child;
+    spawned.once('error', error => {
+      writeLog(app, 'Application spawn error: ' + error.message);
+      if (child === spawned) {
+        child = null;
+        if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
+        if (!stopping) scheduleRestart();
+      }
+    });
+    spawned.once('exit', (code, signal) => {
+      if (child !== spawned) return;
       writeLog(app, 'Application exited (code=' + code + ', signal=' + signal + ').');
       child = null;
       if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
@@ -722,13 +731,20 @@ async function stopAllApps() {
 
 async function viewCrashHistory(app) {
   const file = logPath(app);
-  if (!fs.existsSync(file)) { notice = 'No crash history for ' + app.name + '.'; return; }
-  const events = fs.readFileSync(file, 'utf8').split(/\\r?\\n/)
-    .filter(line => /exited \\(code=|Restarting application|Restart limit reached|Supervisor error|Health failure threshold|spawn error/i.test(line));
+  const previous = file + '.1';
+  if (!fs.existsSync(file) && !fs.existsSync(previous)) {
+    notice = 'No crash history for ' + app.name + '.';
+    return;
+  }
+  let content = '';
+  try { if (fs.existsSync(previous)) content += fs.readFileSync(previous, 'utf8') + '\n'; } catch {}
+  try { if (fs.existsSync(file)) content += fs.readFileSync(file, 'utf8'); } catch {}
+  const events = content.split(/\r?\n/)
+    .filter(line => /exited \(code=|Restarting application|Restart limit reached|Supervisor error|Health failure threshold|spawn error/i.test(line));
   const tail = events.slice(-Math.max(10, (process.stdout.rows || 24) - 6));
   clearScreen();
-  console.log('\\x1b[1;36mCRASH HISTORY · ' + app.name + '\\x1b[0m  (press any key to return)\\n');
-  console.log(tail.length ? tail.join('\\n') : 'No crash/restart events recorded.');
+  console.log('\x1b[1;36mCRASH HISTORY · ' + app.name + '\x1b[0m  (press any key to return)\n');
+  console.log(tail.length ? tail.join('\n') : 'No crash/restart events recorded.');
   await waitAnyKey();
   notice = 'Returned from crash history for ' + app.name + '.';
 }
