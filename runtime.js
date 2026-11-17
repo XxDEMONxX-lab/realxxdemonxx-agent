@@ -8,7 +8,7 @@ const {findSymbols,diagnoseProject}=require("./indexer");
 const {runSubagents}=require("./subagents");
 const {runCodingTeam}=require("./coding-team");
 const {runOrchestrationLoop}=require("./orchestrator");
-const {normalizeFreePool,buildProviderCandidates,isRetryableProviderError}=require("./provider-pools");
+const {normalizeFreePool,buildProviderCandidates,isRetryableProviderError,isProviderQuotaError}=require("./provider-pools");
 const {classifyTask}=require("./task-router");
 const {hashFile,atomicWrite,applyTextPatch}=require("./transactions");
 const ROOT=path.resolve(process.env.DEMON_PROJECT||process.cwd()),DIR=path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),".config"),"demon-agent"),FILE=path.join(DIR,"config.json");
@@ -31,8 +31,8 @@ async function completion(id,model,msg,c){const p=provider(id,c),k=key(p,c);let 
  if(p.kind==="ollama"){d=await req(p.url+"/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({model,messages:msg,stream:false})});if(typeof d.message?.content!=="string")throw Error("Bad Ollama response");return d.message.content;}
  if(!k)throw Error("API key missing");d=await req(p.url+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",Authorization:"Bearer "+k},body:JSON.stringify({model,messages:msg,temperature:.2})});const t=d.choices?.[0]?.message?.content;if(typeof t!=="string")throw Error("Bad chat response");return t;}
 async function completeWithFallback(id,model,msg,c){
- const candidates=buildProviderCandidates(id,model,c.fallbacks,c.fallbackModels,c.freeModelPools,c.autoFallback),failures=[];
- for(const candidate of candidates){const spinner=new Spinner("Thinking · "+candidate.id+" / "+candidate.model);spinner.start();try{const text=await completion(candidate.id,candidate.model,msg,c);spinner.stop(color("Response ready · "+candidate.id,"g"));return {provider:candidate.id,model:candidate.model,text};}catch(error){spinner.stop(color(candidate.id+" / "+candidate.model+" failed: "+error.message,"y"));failures.push(candidate.id+"/"+candidate.model+": "+error.message);if(!isRetryableProviderError(error))throw error;}}
+ const candidates=buildProviderCandidates(id,model,c.fallbacks,c.fallbackModels,c.freeModelPools,c.autoFallback),failures=[];let quotaProvider=null;
+ for(const candidate of candidates){if(candidate.id===quotaProvider)continue;const spinner=new Spinner("Thinking · "+candidate.id+" / "+candidate.model);spinner.start();try{const text=await completion(candidate.id,candidate.model,msg,c);spinner.stop(color("Response ready · "+candidate.id,"g"));return {provider:candidate.id,model:candidate.model,text};}catch(error){spinner.stop(color(candidate.id+" / "+candidate.model+" failed: "+error.message,"y"));failures.push(candidate.id+"/"+candidate.model+": "+error.message);if(isProviderQuotaError(error)){quotaProvider=candidate.id;continue;}if(!isRetryableProviderError(error))throw error;}}
  throw Error("All free-pool and provider failover candidates failed: "+failures.join(" | "));
 }
 async function discoverFreeModels(id,c){
@@ -137,7 +137,9 @@ class Agent{
   let finalAnswer,finalUsed,historyAnswer;
   for(let round=0;round<maxRounds;round++){
    let answer,used;
+   let quotaProvider=null;
    for(const candidate of candidates){
+    if(candidate.id===quotaProvider)continue;
     const {id,model}=candidate,sp=new Spinner("Thinking · "+candidate.id+" / "+candidate.model);
     sp.start();
     try{
@@ -148,7 +150,7 @@ class Agent{
       :await completion(id,model,messages,this.c);
      if(!agent){if(this.onStream)this.onStream("\n");else stdout.write("\n");}
      used=id;sp.stop(color("Response ready · "+id,"g"));break;
-    }catch(e){sp.stop(color(id+" failed: "+e.message,"y"));}
+    }catch(e){sp.stop(color(id+" failed: "+e.message,"y"));if(isProviderQuotaError(e))quotaProvider=id;}
    }
    if(answer===undefined){console.log(color("All providers failed","red"));break;}
    finalAnswer=answer;finalUsed=used;if(!agent)historyAnswer=answer;
