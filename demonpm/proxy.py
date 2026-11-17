@@ -18,8 +18,12 @@ def healthy(url, timeout=3):
 def switch_upstream(path, upstream, servers, nginx="nginx"):
     if not upstream.replace("_","").replace("-","").isalnum():
         raise ValueError("invalid nginx upstream name")
-    if not servers or any(not isinstance(x,str) or not x or any(c in x for c in ";{}\n\r") for x in servers):
-        raise ValueError("invalid upstream server list")
+    if not servers:
+        raise ValueError("upstream server list cannot be empty")
+    for server in servers:
+        match = re.fullmatch(r"(?:[A-Za-z0-9.-]+|\\[[0-9A-Fa-f:]+\\]):([0-9]{1,5})", server) if isinstance(server, str) else None
+        if not match or not 1 <= int(match.group(1)) <= 65535:
+            raise ValueError("upstream servers must be host:port entries")
     target = Path(path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     content = "upstream %s {\n    least_conn;\n%s\n}\n" % (
