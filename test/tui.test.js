@@ -124,6 +124,11 @@ test("slash command menu filters known commands and completes selection",async()
  assert.equal(COMMANDS.some(x=>x[0]==="/verify"),true);
  ui.finishInput("");await p;
 });
+test("Escape aborts active work without exiting the TUI",()=>{
+ const ui=makeTui(),controller=new AbortController();ui.busy=true;ui.activeController=controller;
+ ui.onKeypress("",{name:"escape"});
+ assert.equal(controller.signal.aborted,true);assert.equal(ui.exitRequested,false);assert.equal(ui.status,"CANCELLING");
+});
 test("Escape closes slash command suggestions",async()=>{
  const ui=makeTui(),p=ui.readLine("MESSAGE");
  ui.onKeypress("/",{name:"/"});
