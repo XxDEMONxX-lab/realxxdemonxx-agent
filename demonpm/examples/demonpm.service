@@ -8,6 +8,7 @@ ExecStart=%h/.local/bin/demonpm daemon-foreground
 Restart=on-failure
 RestartSec=2
 UMask=0077
+Delegate=yes
 KillMode=mixed
 TimeoutStopSec=15
 
