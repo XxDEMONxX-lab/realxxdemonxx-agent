@@ -251,7 +251,8 @@ def main():
     for a in ("stop", "restart", "delete", "logs"):
         x = sp.add_parser(a); x.add_argument("name")
         if a == "logs": x.add_argument("-n", "--lines", type=int, default=100)
-    for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "monit", "start-config", "deploy"): sp.add_parser(a)
+    for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "monit", "start-config", "deploy", "api"): sp.add_parser(a)
+    sp.choices["api"].add_argument("--port", type=int, default=8765)
     sp.choices["start-config"].add_argument("file")
     sp.choices["deploy"].add_argument("name")
     sp.choices["deploy"].add_argument("--branch")
@@ -271,6 +272,10 @@ def main():
     elif a.action in ("stop", "restart", "delete", "logs"):
         q["name"] = a.name
         if a.action == "logs": q["lines"] = a.lines
+    if a.action == "api":
+        from api import main as api_main
+        sys.argv = [sys.argv[0], "--port", str(a.port)]
+        api_main(); return 0
     if a.action == "monit":
         from tui import main as tui_main
         tui_main(); return 0
