@@ -4,10 +4,12 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 %h/.local/bin/demonpm.py _daemon
+ExecStart=%h/.local/bin/demonpm daemon-foreground
 Restart=on-failure
 RestartSec=2
 UMask=0077
+KillMode=mixed
+TimeoutStopSec=15
 
 [Install]
 WantedBy=default.target
