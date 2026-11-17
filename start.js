@@ -109,6 +109,58 @@ function status(app) {
   return isAlive(app) ? 'RUNNING' : 'STOPPED';
 }
 
+const metricSamples = new Map();
+function processMetrics(app) {
+  if (process.platform !== 'linux' || !isAlive(app)) return null;
+  let entries;
+  try { entries = fs.readdirSync('/proc'); } catch { return null; }
+  const processes = new Map();
+  for (const item of entries) {
+    if (!/^\\d+$/.test(item)) continue;
+    try {
+      const raw = fs.readFileSync('/proc/' + item + '/stat', 'utf8');
+      const end = raw.lastIndexOf(')');
+      if (end < 0) continue;
+      const f = raw.slice(end + 2).trim().split(/\\s+/);
+      const pid = Number(item);
+      processes.set(pid, { pid, ppid: Number(f[1]), ticks: Number(f[11]) + Number(f[12]), rss: Math.max(0, Number(f[21])) });
+    } catch {}
+  }
+  const children = new Map();
+  for (const proc of processes.values()) {
+    if (!children.has(proc.ppid)) children.set(proc.ppid, []);
+    children.get(proc.ppid).push(proc);
+  }
+  const stack = [app.pid];
+  const seen = new Set();
+  let totalTicks = 0;
+  let totalRss = 0;
+  let count = 0;
+  while (stack.length) {
+    const pid = stack.pop();
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    const proc = processes.get(pid);
+    if (!proc) continue;
+    totalTicks += proc.ticks;
+    totalRss += proc.rss;
+    count++;
+    for (const child of children.get(pid) || []) stack.push(child.pid);
+  }
+  if (!count) return null;
+  const now = Date.now();
+  const previous = metricSamples.get(app.id);
+  let cpu = 0;
+  if (previous && now > previous.time && totalTicks >= previous.ticks) {
+    const elapsed = (now - previous.time) / 1000;
+    const hz = 100;
+    cpu = ((totalTicks - previous.ticks) / hz) / elapsed * 100;
+    cpu = Math.max(0, Math.min(cpu, os.cpus().length * 100));
+  }
+  metricSamples.set(app.id, { time: now, ticks: totalTicks });
+  return { cpu, memoryMb: totalRss * (os.constants?.pagesize || 4096) / (1024 * 1024), processes: count };
+}
+
 function rotateLog(app) {
   const file = logPath(app);
   try {
@@ -376,9 +428,12 @@ function render() {
     add(frame('Name: ' + app.name));
     add(frame('File: ' + path.join(app.cwd, app.entry)));
     add(frame('Node: ' + (app.nodePath || NODE)));
+    const metrics = processMetrics(app);
     add(frame('PID: ' + (isAlive(app) ? app.pid : '—') +
       '    Status: ' + status(app) +
       (app.startedAt ? '    Started: ' + app.startedAt.replace('T', ' ').slice(0, 19) : '')));
+    if (metrics) add(frame('Tree: ' + metrics.processes + ' processes   CPU: ' + metrics.cpu.toFixed(1) + '%   RAM: ' + metrics.memoryMb.toFixed(1) + ' MB'));
+    else add(frame('CPU/RAM: unavailable (Linux /proc metrics require a running app).'));
   } else {
     add(frame(muted + 'Select an application to see details.' + reset));
   }
@@ -652,6 +707,7 @@ async function main() {
   const onResize = () => render();
   process.stdout.on('resize', onResize);
   render();
+  const metricsTimer = setInterval(() => { if (running && !prompting && !actionBusy) render(); }, 1000);
   // Render only on user input or terminal resize. A periodic full-screen clear
   // causes visible flicker and is unnecessary for process status display.
   process.once('SIGINT', shutdown);
@@ -661,6 +717,7 @@ async function main() {
       if (!running) { clearInterval(check); resolve(); }
     }, 100);
   });
+  clearInterval(metricsTimer);
   process.stdout.off('resize', onResize);
   saveState();
 }
