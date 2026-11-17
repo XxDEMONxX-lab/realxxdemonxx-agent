@@ -187,6 +187,9 @@ function truncate(value, width) {
 }
 
 function render() {
+  // Do not clear/redraw the terminal while readline owns stdin; doing so
+  // interrupts the active line editor and can erase text being typed.
+  if (prompting) return;
   const width = Math.max(54, Math.min(process.stdout.columns || 80, 110));
   const line = '─'.repeat(width - 2);
   clearScreen();
