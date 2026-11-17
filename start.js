@@ -87,8 +87,15 @@ function withFileLock(file, operation) {
   let lockFd = null;
   while (lockFd === null) {
     try {
-      lockFd = fs.openSync(lockFile, 'wx', 0o600);
-      fs.writeSync(lockFd, String(process.pid));
+      const candidateFd = fs.openSync(lockFile, 'wx', 0o600);
+      try {
+        fs.writeSync(candidateFd, String(process.pid));
+        lockFd = candidateFd;
+      } catch (error) {
+        try { fs.closeSync(candidateFd); } catch {}
+        try { fs.unlinkSync(lockFile); } catch {}
+        throw error;
+      }
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
       try {
@@ -1103,6 +1110,17 @@ async function runSelfTest() {
       if (!fs.existsSync(app.cwd) || !fs.existsSync(path.resolve(app.cwd, app.entry))) {
         warnings.push(app.name + ': working directory or entry file is missing.');
       }
+      const configuredNode = typeof app.nodePath === 'string' && path.isAbsolute(app.nodePath) ? app.nodePath : NODE;
+      if (!fs.existsSync(configuredNode) || !fs.statSync(configuredNode).isFile()) {
+        warnings.push(app.name + ': configured Node.js executable is missing.');
+      } else if (process.platform !== 'win32') {
+        try { fs.accessSync(configuredNode, fs.constants.X_OK); }
+        catch { warnings.push(app.name + ': configured Node.js executable is not executable.'); }
+      }
+      if (!app.args.every(arg => typeof arg === 'string')) warnings.push(app.name + ': arguments contain non-string values.');
+      if (app.env !== undefined && (!app.env || typeof app.env !== 'object' || Array.isArray(app.env))) {
+        warnings.push(app.name + ': environment configuration is not an object.');
+      }
       if (app.pid && !isAlive(app)) {
         warnings.push(app.name + ': saved supervisor PID is stale.');
         if (isProcessGroupAlive(app)) warnings.push(app.name + ': process group remains after its supervisor PID; inspect for orphaned children (not killed automatically).');
@@ -1238,7 +1256,19 @@ if (process.argv[2] === '--self-test') {
   });
 } else if (process.argv[2] === '--supervise' && process.argv[3]) {
   runSupervisor(process.argv[3]).catch(error => {
-    try { fs.appendFileSync(path.join(LOG_DIR, process.argv[3] + '.log'), '[' + new Date().toISOString() + '] Supervisor error: ' + error.message + '\\n'); } catch {}
+    const message = 'Supervisor error: ' + error.message;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      const app = Array.isArray(parsed.apps) ? parsed.apps.find(item => item.id === process.argv[3]) : null;
+      if (app) {
+        writeLog(app, message);
+        recordEvent(app, 'supervisor-error', message);
+      } else {
+        fs.appendFileSync(path.join(LOG_DIR, process.argv[3] + '.log'), '[' + new Date().toISOString() + '] ' + message + '\\n');
+      }
+    } catch {
+      try { fs.appendFileSync(path.join(LOG_DIR, process.argv[3] + '.log'), '[' + new Date().toISOString() + '] ' + message + '\\n'); } catch {}
+    }
     process.exitCode = 1;
   });
 } else {
