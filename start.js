@@ -27,6 +27,7 @@ const state = { apps: [] };
 let selected = 0;
 let notice = 'Use ↑/↓ to select, Enter to open, q to quit.';
 let running = true;
+let prompting = false;
 let keyHandler;
 
 function ensureStorage() {
@@ -225,14 +226,23 @@ function render() {
 
 function prompt(question, initial = '') {
   return new Promise((resolve, reject) => {
+    // Line prompts temporarily own stdin. Never let typed characters fall through
+    // to the menu hotkeys (e.g. "LHA" triggering L=logs and A=add).
+    prompting = true;
+    if (keyHandler) process.stdin.off('keypress', keyHandler);
     if (process.stdin.isTTY && process.stdin.isRaw) process.stdin.setRawMode(false);
-    process.stdin.pause();
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl.question(question, answer => {
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
       rl.close();
-      resolve(answer.trim() || initial);
-    });
-    rl.on('SIGINT', () => { rl.close(); reject(new Error('Cancelled.')); });
+      prompting = false;
+      if (error) reject(error);
+      else resolve(value.trim() || initial);
+    };
+    rl.question(question, answer => finish(null, answer));
+    rl.on('SIGINT', () => finish(new Error('Cancelled.')));
   });
 }
 
@@ -382,7 +392,7 @@ async function main() {
   process.stdin.resume();
   process.stdout.write('\x1b[?25l');
   keyHandler = async (str, key = {}) => {
-    if (!running) return;
+    if (!running || prompting) return;
     if (key.ctrl && key.name === 'c') { shutdown(); return; }
     if (key.name === 'up') selected = Math.max(0, selected - 1);
     else if (key.name === 'down') selected = Math.min(state.apps.length - 1, selected + 1);
