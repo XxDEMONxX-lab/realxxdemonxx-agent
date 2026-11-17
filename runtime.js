@@ -132,13 +132,13 @@ class Agent{
   const loaded=contextSnapshot(this.ctx),history=boundedHistory(this.hist);
   const sys=(agent?SYSTEM:CHAT_SYSTEM)+skillPrompt(this.skills.filter(x=>x.name===this.activeSkill))+toolsPrompt(this.mcpTools)+(this.memory?"\nProject memory:\n"+this.memory:"")+(loaded?"\nLoaded files:\n"+loaded:"");
   const messages=[{role:"system",content:sys},...history,{role:"user",content:prompt}];
-  const ids=[...new Set([this.c.provider,...(this.c.autoFallback?this.c.fallbacks:[])])];
+  const candidates=buildProviderCandidates(this.c.provider,this.c.model,this.c.fallbacks,this.c.fallbackModels,this.c.freeModelPools,this.c.autoFallback);
   const maxRounds=agent&&execute?6:1;
   let finalAnswer,finalUsed,historyAnswer;
   for(let round=0;round<maxRounds;round++){
    let answer,used;
-   for(const id of ids){
-    const model=id===this.c.provider?this.c.model:this.c.fallbackModels[id],sp=new Spinner("Thinking · "+id);
+   for(const candidate of candidates){
+    const {id,model}=candidate,sp=new Spinner("Thinking · "+candidate.id+" / "+candidate.model);
     sp.start();
     try{
      if(!model)throw Error("Fallback model not configured");
