@@ -791,12 +791,12 @@ async function main() {
       shutdown();
       return;
     } else if (key.name === 'return' || key.name === 'space') {
-      const app = state.apps[selected];
+      const app = visibleApps()[selected];
       if (app) await action(isAlive(app) ? 'x' : 's');
       else notice = 'Press A to add your first Node.js app.';
     } else if (str === '?' || str === 'h' || str === 'H') {
       showHelp = !showHelp;
-    } else if (str && 'asxrledmfvbi o'.replace(/ /g, '').includes(str.toLowerCase())) {
+    } else if (str && 'asxrledmfvb io'.replace(/ /g, '').includes(str.toLowerCase())) {
       await action(str.toLowerCase());
     }
     render();
