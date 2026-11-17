@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """demonpm 4.0: dependency-free Linux/Termux process supervisor."""
-import argparse, copy, gzip, hashlib, json, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
+import argparse, copy, fcntl, gzip, hashlib, json, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
 from pathlib import Path
 
 VERSION = "5.0.0"
@@ -163,7 +163,7 @@ class Manager:
             try: run_hooks(HOME / "plugins", "pre-stop", name)
             except Exception as exc: self.log(name, "pre-stop plugin failed: " + str(exc))
             a["autorestart"] = False
-            pid = p.pid if p and p.poll() is None else a.get("pid")
+            pid = p.pid if p and p.poll() is None else None
             if pid:
                 try: os.killpg(int(pid), signal.SIGTERM)
                 except ProcessLookupError: pass
@@ -205,6 +205,16 @@ class Manager:
                     a.update(status="stopped", pid=None, last_exit=code)
                     self.log(name, "exited code=%s" % code)
                     self.notify(a, "exited", "exit code %s" % code)
+                    if code:
+                        try:
+                            from plugins import run_hooks
+                            run_hooks(HOME / "plugins", "on-crash", name)
+                        except Exception as exc: self.log(name, "on-crash plugin failed: " + str(exc))
+                    if a.get("cgroup"):
+                        try:
+                            from limits import detach
+                            detach(a.pop("cgroup", None))
+                        except Exception: pass
                     count, limit = a.get("restarts", 0), a.get("max_restarts", 20)
                     if a.get("autorestart", True) and (limit < 0 or count < limit):
                         a["restarts"] = count + 1
@@ -339,6 +349,11 @@ class Manager:
         raise ValueError("unknown action: " + str(act))
 
     def serve(self):
+        lock_path=HOME / "daemon.lock"
+        self.lock_file=lock_path.open("a+")
+        os.chmod(lock_path,0o600)
+        try: fcntl.flock(self.lock_file.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError: raise RuntimeError("another demonpm daemon already owns the lock")
         SOCK.unlink(missing_ok=True)
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.bind(str(SOCK)); os.chmod(SOCK, 0o600); s.listen(32); s.settimeout(1)
@@ -382,7 +397,16 @@ def alive():
 def ensure():
     HOME.mkdir(mode=0o700, parents=True, exist_ok=True)
     if alive(): return
-    SOCK.unlink(missing_ok=True)
+    if SOCK.exists():
+        probe=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+        probe.settimeout(.5)
+        error=probe.connect_ex(str(SOCK))
+        probe.close()
+        if error == 0:
+            raise RuntimeError("daemon socket accepts connections but did not answer ping; refusing to unlink a live socket")
+        if error not in (2, 111, 61):
+            raise RuntimeError("cannot safely determine daemon socket state (errno %s)" % error)
+        SOCK.unlink(missing_ok=True)
     log = (HOME / "daemon.log").open("a")
     subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "_daemon"],
         stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True, close_fds=True)
