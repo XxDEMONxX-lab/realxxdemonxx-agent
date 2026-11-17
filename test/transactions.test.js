@@ -34,7 +34,9 @@ test("atomic write preserves existing file permissions",()=>{
  const f=fixture();try{
   fs.writeFileSync(f.file,"before",{mode:0o640});
   fs.chmodSync(f.file,0o640);
-  atomicWrite(f.file,"after");
+  // A restrictive umask must not silently change the preserved file mode.
+  const previousUmask=process.umask(0o077);
+  try{atomicWrite(f.file,"after");}finally{process.umask(previousUmask);}
   assert.equal(fs.statSync(f.file).mode&0o777,0o640);
  }finally{f.close();}
 });
