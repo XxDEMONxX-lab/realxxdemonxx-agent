@@ -12,6 +12,7 @@ from demonpm import ssh_request, stats, rotate, LIMIT, Manager
 class InfrastructureTests(unittest.TestCase):
     def test_cgroup_limits_write_cpu_memory_and_pid(self):
         with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp,"cgroup.subtree_control").write_text("cpu memory")
             group=attach(1234,"web",cpu_percent=50,memory_mb=128,root=tmp)
             path=Path(group)
             self.assertEqual((path/"cpu.max").read_text(),"50000 100000")
