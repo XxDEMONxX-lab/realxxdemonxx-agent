@@ -19,7 +19,7 @@ const https = require('node:https');
 const { promisify } = require('node:util');
 const sleep = promisify(setTimeout);
 
-const VERSION = '6.0.0';
+const VERSION = '7.0.0';
 const HOME = path.join(os.homedir(), '.demonpm-js');
 const STATE_FILE = path.join(HOME, 'state.json');
 const LOG_DIR = path.join(HOME, 'logs');
@@ -171,22 +171,32 @@ function processMetrics(app) {
   return { cpu, memoryMb: totalRss * (4096) / (1024 * 1024), processes: count };
 }
 
-function rotateLog(app) {
+const MAX_LOG_BYTES = 2 * 1024 * 1024;
+
+function rotateLog(app, force = false) {
   const file = logPath(app);
   try {
-    if (fs.statSync(file).size < 2 * 1024 * 1024) return;
+    const size = fs.statSync(file).size;
+    if (!force && size < MAX_LOG_BYTES) return;
     try { fs.unlinkSync(file + '.1'); } catch {}
     fs.renameSync(file, file + '.1');
-  } catch {}
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
 }
 
 function appendLogChunk(app, chunk) {
   try {
     const file = logPath(app);
-    rotateLog(app);
-    fs.appendFileSync(file, chunk, { mode: 0o600 });
-    // Keep the active log bounded even when a process emits a single huge chunk.
-    if (fs.statSync(file).size > 2 * 1024 * 1024) rotateLog(app);
+    let data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    let currentSize = 0;
+    try { currentSize = fs.statSync(file).size; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (currentSize + data.length > MAX_LOG_BYTES) {
+      rotateLog(app, true);
+      currentSize = 0;
+    }
+    if (data.length > MAX_LOG_BYTES) data = data.subarray(data.length - MAX_LOG_BYTES);
+    fs.appendFileSync(file, data, { mode: 0o600 });
   } catch {}
 }
 
@@ -595,7 +605,7 @@ async function addApp() {
   const restartDelayMs = Number(delayInput);
   if (!Number.isInteger(restartDelayMs) || restartDelayMs < 500 || restartDelayMs > 30000) throw new Error('Restart delay must be 500–30000ms.');
   const healthInput = await prompt('Health-check URL (blank disables HTTP health checks): ', '');
-  if (healthInput && !/^https?:\\/\\//i.test(healthInput)) throw new Error('Health-check URL must use http:// or https://.');
+  if (healthInput && !/^https?:\/\//i.test(healthInput)) throw new Error('Health-check URL must use http:// or https://.');
   const healthIntervalMs = 15000;
   const healthTimeoutMs = 5000;
   const healthFailureLimit = 3;
