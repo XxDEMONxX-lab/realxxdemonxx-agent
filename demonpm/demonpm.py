@@ -457,18 +457,23 @@ def ensure():
         probe.settimeout(.5)
         error=probe.connect_ex(str(SOCK))
         probe.close()
-        if error == 0:
-            raise RuntimeError("daemon socket accepts connections but did not answer ping; refusing to unlink a live socket")
-        if error not in (2, 111, 61):
-            raise RuntimeError("cannot safely determine daemon socket state (errno %s)" % error)
-        SOCK.unlink(missing_ok=True)
+        if error != 0:
+            if error not in (2, 111, 61):
+                raise RuntimeError("cannot safely determine daemon socket state (errno %s)" % error)
+            SOCK.unlink(missing_ok=True)
+        else:
+            # A listening socket may still be restoring saved apps; wait instead of spawning a second daemon.
+            for _ in range(240):
+                if alive(): return
+                time.sleep(.25)
+            raise RuntimeError("daemon socket is live but did not answer ping; inspect " + str(HOME / "daemon.log"))
     log = (HOME / "daemon.log").open("a")
     subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "_daemon"],
         stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True, close_fds=True)
     log.close()
-    for _ in range(50):
+    for _ in range(240):
         if alive(): return
-        time.sleep(.1)
+        time.sleep(.25)
     raise RuntimeError("daemon failed to start; inspect " + str(HOME / "daemon.log"))
 
 def request(q):
