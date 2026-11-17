@@ -3,7 +3,7 @@
 import argparse, json, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
 from pathlib import Path
 
-VERSION = "4.0.0"
+VERSION = "5.0.0"
 HOME = Path(os.environ.get("DEMONPM_HOME", Path.home() / ".demonpm"))
 SOCK, STATE, SAVED, LOGS = (HOME / x for x in ("demonpm.sock", "state.json", "saved.json", "logs"))
 LIMIT, RETAIN = 5 * 1024 * 1024, 3
