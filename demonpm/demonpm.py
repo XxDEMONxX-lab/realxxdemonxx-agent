@@ -251,7 +251,10 @@ def main():
     for a in ("stop", "restart", "delete", "logs"):
         x = sp.add_parser(a); x.add_argument("name")
         if a == "logs": x.add_argument("-n", "--lines", type=int, default=100)
-    for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "monit"): sp.add_parser(a)
+    for a in ("list", "list-json", "save", "resurrect", "daemon-stop", "monit", "start-config", "deploy"): sp.add_parser(a)
+    sp.choices["start-config"].add_argument("file")
+    sp.choices["deploy"].add_argument("name")
+    sp.choices["deploy"].add_argument("--branch")
     a = p.parse_args()
     if a.action == "_daemon": Manager().serve(); return 0
     if a.action == "daemon-stop": request({"action": "shutdown"}); return 0
@@ -271,6 +274,24 @@ def main():
     if a.action == "monit":
         from tui import main as tui_main
         tui_main(); return 0
+    if a.action == "start-config":
+        from config import load_config
+        apps = load_config(a.file)
+        for app in apps:
+            request({"action":"start","name":app["name"],"command":app["command"],
+                "cwd":app.get("cwd"),"env":app.get("env",{}),
+                "autorestart":app.get("autorestart",True),
+                "max_restarts":app.get("max_restarts",20),
+                "health_url":app.get("health_url")})
+        print("Started %d applications in dependency order" % len(apps)); return 0
+    if a.action == "deploy":
+        listing = request({"action":"list"})["processes"]
+        app = next((x for x in listing if x["name"] == a.name), None)
+        if not app or not app.get("cwd"): p.error("deploy requires a registered app with --cwd")
+        from deploy import deploy
+        result = deploy(app["cwd"], a.branch,
+            restart=lambda: request({"action":"restart","name":a.name}))
+        print(json.dumps(result, indent=2)); return 0
     r = request(q)
     if a.action == "list-json":
         print(json.dumps(r["processes"], indent=2)); return 0
