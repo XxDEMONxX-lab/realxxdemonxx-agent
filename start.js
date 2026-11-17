@@ -673,7 +673,7 @@ async function importConfig() {
       restartDelayMs: Number.isInteger(raw.restartDelayMs) ? Math.max(500, Math.min(raw.restartDelayMs, 30000)) : 1000,
       maxRestartDelayMs: 30000,
       maxRestarts: Number.isInteger(raw.maxRestarts) ? Math.max(0, Math.min(raw.maxRestarts, 1000)) : 0,
-      restartWindowMs: 60000, healthCheckUrl: typeof raw.healthCheckUrl === 'string' && /^https?:\\/\\//i.test(raw.healthCheckUrl) ? raw.healthCheckUrl : '', healthIntervalMs: 15000, healthTimeoutMs: 5000, healthFailureLimit: 3, startupOrder: Number.isInteger(raw.startupOrder) ? Math.max(0, Math.min(raw.startupOrder, 10000)) : 100, pid: null, procStartTicks: null, createdAt: new Date().toISOString()
+      restartWindowMs: 60000, healthCheckUrl: typeof raw.healthCheckUrl === 'string' && isHttpUrl(raw.healthCheckUrl) ? raw.healthCheckUrl : '', healthIntervalMs: 15000, healthTimeoutMs: 5000, healthFailureLimit: 3, startupOrder: Number.isInteger(raw.startupOrder) ? Math.max(0, Math.min(raw.startupOrder, 10000)) : 100, pid: null, procStartTicks: null, createdAt: new Date().toISOString()
     });
   }
   state.apps.push(...imported);
