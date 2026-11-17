@@ -26,4 +26,7 @@ def deploy(repo, branch=None, restart=None):
         # Rollback is safe because deployment refuses dirty trees before fetching.
         subprocess.run(["git","reset","--hard",previous], cwd=root, check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if restart:
+            try: restart()
+            except Exception: pass
         raise
