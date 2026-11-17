@@ -47,11 +47,12 @@ def stats(pid):
                 "ticks": int(fields[11]) + int(fields[12])}
     except (OSError, ValueError, IndexError): return {"rss_mb": None, "ticks": None}
 
-def terminate_group(pgid, grace=8):
+def terminate_group(pgid, grace=8, process=None):
     try: os.killpg(int(pgid),signal.SIGTERM)
     except ProcessLookupError: return
     deadline=time.monotonic()+grace
     while time.monotonic()<deadline:
+        if process is not None: process.poll()  # Reap the direct child while waiting for its workers.
         try: os.killpg(int(pgid),0)
         except ProcessLookupError: return
         time.sleep(.1)
@@ -189,7 +190,7 @@ class Manager:
                     a["cgroup"] = attach(p.pid, name, a.get("cpu_percent", 0),
                         a.get("hard_memory_mb", 0), a.get("cgroup_root", "/sys/fs/cgroup"))
             except Exception:
-                terminate_group(p.pid,1)
+                terminate_group(p.pid,1,p)
                 if p.poll() is None: p.wait()
                 self.join_log_thread(name)
                 self.children.pop(name,None)
@@ -213,7 +214,7 @@ class Manager:
             except Exception as exc: self.log(name, "pre-stop plugin failed: " + str(exc))
             a["autorestart"] = False
             if p:
-                terminate_group(p.pid,8)
+                terminate_group(p.pid,8,p)
                 if p.poll() is None: p.wait()
                 self.join_log_thread(name)
             self.children.pop(name, None)
