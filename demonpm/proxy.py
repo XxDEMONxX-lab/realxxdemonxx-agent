@@ -1,5 +1,5 @@
 """Nginx upstream generation and atomic blue/green traffic switching."""
-import os, subprocess, tempfile
+import os, re, subprocess, tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 import urllib.request
