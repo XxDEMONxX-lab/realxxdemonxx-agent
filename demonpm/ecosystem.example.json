@@ -1,0 +1,22 @@
+{
+  "apps": [
+    {
+      "name": "discord-bot",
+      "command": [
+        "python3",
+        "bot.py"
+      ],
+      "cwd": "/home/user/bot",
+      "env": {},
+      "requires": [],
+      "autorestart": true,
+      "max_restarts": 20,
+      "health_url": null,
+      "watch": [
+        "bot.py"
+      ],
+      "max_memory_mb": 256,
+      "restart_every": 0
+    }
+  ]
+}
