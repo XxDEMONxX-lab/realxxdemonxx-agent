@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """demonpm 4.0: dependency-free Linux/Termux process supervisor."""
-import argparse, json, os, signal, socket, subprocess, sys, threading, time, urllib.request
+import argparse, json, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
 from pathlib import Path
 
 VERSION = "4.0.0"
@@ -147,10 +147,14 @@ class Manager:
 
     def dispatch(self, q):
         act, name = q.get("action"), q.get("name")
+        if name is not None and (not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", name) or name in (".", "..")):
+            raise ValueError("name must be 1-64 safe characters: letters, digits, dot, underscore or hyphen")
         if act == "ping": return {"version": VERSION}
         if act == "start":
             if not name or name in self.apps: raise ValueError("name missing or already exists")
             cmd = q.get("command")
+            if not isinstance(q.get("env", {}), dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in q.get("env", {}).items()):
+                raise ValueError("env must be a string-to-string object")
             if not isinstance(cmd, list) or not cmd or not all(isinstance(x, str) for x in cmd):
                 raise ValueError("command must be a non-empty argument array")
             self.apps[name] = {"command": cmd, "cwd": q.get("cwd"), "env": q.get("env", {}),
@@ -198,6 +202,10 @@ class Manager:
                 except Exception as e: out = {"ok": False, "error": str(e)}
                 c.sendall((json.dumps(out) + "\n").encode())
         s.close(); SOCK.unlink(missing_ok=True)
+        # A deliberate daemon shutdown also shuts down its managed process groups.
+        for name in list(self.apps):
+            try: self.stop(name)
+            except Exception: pass
 
 def alive():
     try:
