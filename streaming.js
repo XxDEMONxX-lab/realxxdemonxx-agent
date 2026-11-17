@@ -76,11 +76,11 @@ async function readOllama(response,onToken,state){
  }finally{try{reader.releaseLock();}catch{}}
 }
 
-async function streamCompletion(provider,apiKey,model,messages,onToken){
+async function streamCompletion(provider,apiKey,model,messages,onToken,externalSignal){
  if(!provider||!["openai","anthropic","gemini","ollama"].includes(provider.kind))throw Error("Unsupported streaming provider");
  if(provider.kind!=="ollama"&&!apiKey)throw Error("API key missing");
  if(typeof onToken!=="function")throw Error("A streaming callback is required");
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),120000);
+ const controller=new AbortController(),abort=()=>controller.abort(externalSignal?.reason),timer=setTimeout(()=>controller.abort(new Error("Request timeout")),120000);if(externalSignal?.aborted)abort();else externalSignal?.addEventListener("abort",abort,{once:true});
  const state={text:""};
  let url,headers={"content-type":"application/json"},body;
  if(provider.kind==="openai"){
@@ -108,9 +108,9 @@ async function streamCompletion(provider,apiKey,model,messages,onToken){
   if(!state.text)throw Error("Streaming provider returned no text");
   return state.text;
  }catch(error){
-  if(error.name==="AbortError")throw Error("Streaming request timed out");
+  if(externalSignal?.aborted){const cancelled=Error("Request cancelled");cancelled.name="AbortError";throw cancelled;}if(controller.signal.aborted)throw Error("Streaming request timed out");
   throw error;
- }finally{clearTimeout(timer);}
+ }finally{clearTimeout(timer);externalSignal?.removeEventListener("abort",abort);}
 }
 
 module.exports={streamCompletion,parseSSE};
