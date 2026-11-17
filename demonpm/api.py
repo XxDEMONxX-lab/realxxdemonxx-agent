@@ -1,5 +1,5 @@
 """RBAC HTTP API and browser dashboard. Remote binds require TLS."""
-import argparse, hashlib, hmac, json, os, secrets, socket, ssl
+import argparse, hashlib, hmac, json, os, re, secrets, socket, ssl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -38,6 +38,9 @@ def main():
         if not isinstance(tokens,dict): raise ValueError("token store must be a JSON object")
     except FileNotFoundError: pass
     except ValueError as exc: p.error("invalid token store: "+str(exc))
+    if any(not isinstance(k,str) or not re.fullmatch(r"[0-9a-f]{64}",k) or role not in ("viewer","operator","admin") for k,role in tokens.items()):
+        p.error("token store contains an invalid token hash or role")
+    if token_file.exists(): os.chmod(token_file,0o600)
     if a.create_token:
         raw=secrets.token_urlsafe(32)
         tokens[hashlib.sha256(raw.encode()).hexdigest()]=a.create_token
@@ -67,6 +70,9 @@ def main():
         return response["result"]
     class Handler(BaseHTTPRequestHandler):
         server_version="demonpm"
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(5)
         def log_message(self,*args): pass
         def role(self):
             supplied=self.headers.get("Authorization","")
@@ -83,7 +89,9 @@ def main():
             body=obj if isinstance(obj,bytes) else json.dumps(obj).encode()
             self.send_response(status); self.send_header("Content-Type",ctype)
             self.send_header("Content-Length",str(len(body))); self.send_header("X-Content-Type-Options","nosniff")
-            self.send_header("Cache-Control","no-store"); self.end_headers(); self.wfile.write(body)
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Content-Security-Policy","default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'")
+            self.end_headers(); self.wfile.write(body)
         def do_GET(self):
             if self.path=="/": return self.send(200,PAGE.encode(),"text/html; charset=utf-8")
             role=self.role()
@@ -103,7 +111,10 @@ def main():
                     return self.send(403,{"error":"action not permitted for role"})
                 self.send(200,call(body))
             except Exception as e: self.send(400,{"error":str(e)})
-    server=ThreadingHTTPServer((a.host,a.port),Handler)
+    class DashboardServer(ThreadingHTTPServer):
+        address_family=socket.AF_INET6 if ":" in a.host else socket.AF_INET
+        allow_reuse_address=True
+    server=DashboardServer((a.host,a.port),Handler)
     server.daemon_threads=True
     if a.tls_cert:
         context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
