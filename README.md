@@ -47,13 +47,16 @@ The agent runs a bounded multi-round tool loop: it can list/read/search files, i
 ## Providers
 OpenAI, OpenRouter, Groq, Together, Cerebras, DeepSeek, Mistral, Fireworks, xAI, SambaNova, Perplexity, Anthropic, Gemini, Ollama and custom OpenAI-compatible endpoints.
 Use /models to discover current models and /models all to query the registry.
-Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MODEL_ID`; each fallback needs credentials. Automatic failover is limited to rate limits, transient server errors, and network timeouts. `/keys` reports which providers have credentials without exposing secrets.\n\nOpenRouter free models can be discovered with `/free auto openrouter`; this stores up to six zero-priced models (ranked by advertised context length) as a fallback pool. Use `/free set PROVIDER MODEL1,MODEL2,...` to explicitly mark up to six models as free for another provider, `/free list` to inspect pools, and `/free clear PROVIDER` to remove one. Free-tier status is not exposed consistently by every provider, so the agent never guesses that an arbitrary model is free or silently adds a paid model.
+Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MODEL_ID`; each fallback needs credentials. Automatic failover is limited to rate limits, transient server errors, and network timeouts. `/keys` reports which providers have credentials without exposing secrets.
+
+OpenRouter free models can be discovered with `/free auto openrouter`; this stores up to six zero-priced models (ranked by advertised context length) as a fallback pool. Use `/free set PROVIDER MODEL1,MODEL2,...` to explicitly mark up to six models as free for another provider, `/free list` to inspect pools, and `/free clear PROVIDER` to remove one. Free-tier status is not exposed consistently by every provider, so the agent never guesses that an arbitrary model is free or silently adds a paid model.
 
 ## Commands
 | Command | Purpose |
 |---|---|
 | /mode | Select normal or five-AI coding mode; `/mode set SLOT PROVIDER MODEL` configures a coding slot |
-| /mode coding | Main model routes each message and iteratively orchestrates five workers until complete or the round limit |\n| /orchestrator [1-8] | Configure the maximum planner/worker/review rounds (default 4) |
+| /mode coding | Main model routes each message and iteratively orchestrates five workers until complete or the round limit |
+| /orchestrator [1-8] | Configure the maximum planner/worker/review rounds (default 4) |
 | /providers | List providers |
 | /provider ID | Select provider |
 | /key | Save hidden API key |
@@ -62,7 +65,10 @@ Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MO
 | /base URL | Override endpoint |
 | /custom | Add compatible provider |
 | /fallback ID MODEL | Configure failover |
-| /fallbacks on or off | Toggle failover |\n| /failover [on or off or PROVIDER MODEL] | Configure provider failover |\n| /free auto or set or list or clear | Manage explicitly free model pools |\n| /keys | Show API-key configuration status (never the key values) |
+| /fallbacks on or off | Toggle failover |
+| /failover [on or off or PROVIDER MODEL] | Configure provider failover |
+| /free auto or set or list or clear | Manage explicitly free model pools |
+| /keys | Show API-key configuration status (never the key values) |
 | /status | Show configuration |
 | /files, /read PATH | Inspect project |
 | /search QUERY | Search tracked and unignored project files |
@@ -81,7 +87,8 @@ Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MO
 | /agent TASK | Execute approved coding actions |
 | /plan TASK | Show a plan without executing actions |
 | /run COMMAND | Execute a shell command with approval |
-| /test | Run npm test with approval |\n| /verify | Check JavaScript syntax, then optionally run the full test suite |
+| /test | Run npm test with approval |
+| /verify | Check JavaScript syntax, then optionally run the full test suite |
 | /mcp add ID | Configure an MCP stdio server |
 | /mcp tools ID | Discover its tools |
 | /mcp list or remove ID | Manage configured MCP servers |
@@ -101,7 +108,11 @@ Configure provider failover with `/fallback groq MODEL_ID` or `/failover groq MO
 | /clear | Clear conversation |
 | /exit | Quit |
 
-## Transactional editing (3.0)\n\nAgent write actions must include `expectedHash` from the latest read; use `null` only when creating a new file. The runtime checks the hash again at commit time, then writes through an fsynced temporary file and atomic rename. Patch actions require a matching SHA-256 and one unique exact-text context. This prevents an agent from silently overwriting edits made by you or another process while it was reasoning. Each edit still requires approval and runs the configured lifecycle hooks.\n\n## Lifecycle hooks
+## Transactional editing (3.0)
+
+Agent write actions must include `expectedHash` from the latest read; use `null` only when creating a new file. The runtime checks the hash again at commit time, then writes through an fsynced temporary file and atomic rename. Patch actions require a matching SHA-256 and one unique exact-text context. This prevents an agent from silently overwriting edits made by you or another process while it was reasoning. Each edit still requires approval and runs the configured lifecycle hooks.
+
+## Lifecycle hooks
 
 Optional hooks run before or after file writes and shell commands: `before_write`, `after_write`, `before_run`, and `after_run`. Configure them with `/hook add EVENT`; each hook uses an executable plus a JSON argument array and an optional environment-variable allowlist. Every hook invocation requires its own approval. A failed or denied `before_*` hook blocks the operation; an `after_*` hook reports its result after the operation. Hooks run without a shell and do not inherit provider API keys by default.
 
@@ -118,7 +129,9 @@ GitHub read operations and CI inspection require the official `gh` CLI to be ins
 ## TUI
 Full-screen alternate-screen interface with a continuously animated activity spinner, live streamed tokens, full-width wrapped transcript and live slash-command suggestions, and terminal-resize redraws. Input is handled in raw terminal mode with cursor editing, Home/End, Delete/Backspace, command history (Up/Down), Ctrl+A/E/U/W editing shortcuts, live `/` command menu with prefix filtering, Up/Down selection, Tab completion and Escape dismissal, Ctrl+K command palette, and Ctrl+C exit. Approval prompts use the same in-screen input editor; no readline prompt is drawn outside the UI. Transcript scrolling supports PageUp/PageDown, Ctrl+Up/Ctrl+Down (three-line steps), and `/scroll up`, `/scroll down`, `/scroll bottom`; the scroll offset is clamped to the available transcript and the status bar shows the current offset. Terminal state (raw mode, cursor visibility, alternate screen, signal handlers) is restored on shutdown. `NO_COLOR=1` disables prompt colors; terminal control sequences remain enabled.
 
-Typing `/` opens the command menu immediately; continue typing to filter commands. Use Up/Down to navigate all matches, Tab to complete the selected command, or Escape to dismiss suggestions. The chat transcript spans the terminal width and expands to use the available terminal height.\n\n## Tests
+Typing `/` opens the command menu immediately; continue typing to filter commands. Use Up/Down to navigate all matches, Tab to complete the selected command, or Escape to dismiss suggestions. The chat transcript spans the terminal width and expands to use the available terminal height.
+
+## Tests
 ~~~sh
 npm test
 ~~~
