@@ -47,6 +47,17 @@ def stats(pid):
                 "ticks": int(fields[11]) + int(fields[12])}
     except (OSError, ValueError, IndexError): return {"rss_mb": None, "ticks": None}
 
+def default_cgroup_root():
+    configured=os.environ.get("DEMONPM_CGROUP_ROOT")
+    if configured: return configured
+    try:
+        for line in Path("/proc/self/cgroup").read_text().splitlines():
+            if line.startswith("0::"):
+                relative=line.split("::",1)[1].lstrip("/")
+                return str(Path("/sys/fs/cgroup") / relative)
+    except OSError: pass
+    return "/sys/fs/cgroup"
+
 def terminate_group(pgid, grace=8, process=None):
     try: os.killpg(int(pgid),signal.SIGTERM)
     except ProcessLookupError: return
@@ -335,7 +346,7 @@ class Manager:
                 "max_memory_mb": q.get("max_memory_mb", 0), "discord_webhook": q.get("discord_webhook"),
                 "requires": q.get("requires", []), "cluster": q.get("cluster"),
                 "cpu_percent": q.get("cpu_percent", 0), "hard_memory_mb": q.get("hard_memory_mb", 0),
-                "cgroup_root": q.get("cgroup_root", "/sys/fs/cgroup")}
+                "cgroup_root": q.get("cgroup_root", default_cgroup_root())}
             self.save()
             return self.start(name)
         if act == "describe":
