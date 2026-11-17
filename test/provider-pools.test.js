@@ -10,7 +10,7 @@ test("provider candidates try the selected model and configured free pool before
  assert.deepEqual(values,[{id:"gemini",model:"main"},{id:"gemini",model:"free-a"},{id:"gemini",model:"free-b"},{id:"groq",model:"free-c"}]);
 });
 test("provider candidate construction deduplicates and honors disabled failover",()=>{
- assert.deepEqual(buildProviderCandidates("p","m",["p","q"],{q:"m"},{p:["m","p2"]},false),[{id:"p",model:"m"},{id:"p",model:"p2"}]);
+ assert.deepEqual(buildProviderCandidates("p","m",["p","q"],{q:"m"},{p:["m","p2"]},false),[{id:"p",model:"m"}]);
 });
 test("provider-wide quota errors are distinguished from transient model failures",()=>{
  assert.equal(isProviderQuotaError(new Error("HTTP 429: quota exceeded")),true);
