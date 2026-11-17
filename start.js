@@ -134,6 +134,11 @@ function startApp(app) {
   if (!fs.existsSync(entryPath) || !fs.statSync(entryPath).isFile()) {
     throw new Error('Node entry file does not exist: ' + entryPath);
   }
+  const nodePath = app.nodePath || NODE;
+  if (!path.isAbsolute(nodePath) || !fs.existsSync(nodePath) || !fs.statSync(nodePath).isFile()) throw new Error('Configured Node.js executable is invalid: ' + nodePath);
+  if (process.platform !== 'win32') {
+    try { fs.accessSync(nodePath, fs.constants.X_OK); } catch { throw new Error('Configured Node.js executable is not executable: ' + nodePath); }
+  }
 
   // A detached supervisor owns the app's process group and restarts crashed bots.
   const supervisor = spawn(NODE, [__filename, '--supervise', app.id], {
@@ -167,6 +172,8 @@ async function runSupervisor(appId) {
   if (!app) process.exit(2);
   const entryPath = path.resolve(app.cwd, app.entry);
   if (!fs.existsSync(entryPath) || !fs.statSync(entryPath).isFile()) process.exit(2);
+  const nodePath = app.nodePath || NODE;
+  if (!path.isAbsolute(nodePath) || !fs.existsSync(nodePath) || !fs.statSync(nodePath).isFile()) process.exit(2);
   const baseDelay = Math.max(500, Math.min(Number(app.restartDelayMs) || 1000, 30000));
   const maxDelay = Math.max(baseDelay, Math.min(Number(app.maxRestartDelayMs) || 30000, 300000));
   const maxRestarts = Math.max(0, Number.isInteger(app.maxRestarts) ? app.maxRestarts : 0);
@@ -195,7 +202,7 @@ async function runSupervisor(appId) {
     if (stopping) return;
     const fd = fs.openSync(logPath(app), 'a', 0o600);
     try {
-      child = spawn(NODE, [entryPath, ...(Array.isArray(app.args) ? app.args : [])], {
+      child = spawn(nodePath, [entryPath, ...(Array.isArray(app.args) ? app.args : [])], {
         cwd: app.cwd,
         env: { ...process.env, ...(app.env || {}) },
         detached: false,
@@ -368,6 +375,7 @@ function render() {
   if (app) {
     add(frame('Name: ' + app.name));
     add(frame('File: ' + path.join(app.cwd, app.entry)));
+    add(frame('Node: ' + (app.nodePath || NODE)));
     add(frame('PID: ' + (isAlive(app) ? app.pid : '—') +
       '    Status: ' + status(app) +
       (app.startedAt ? '    Started: ' + app.startedAt.replace('T', ' ').slice(0, 19) : '')));
@@ -382,10 +390,10 @@ function render() {
     add(frame('[Home/G]       First app     [End/Shift+G] Last app'));
     add(frame('[Enter/Space]  Start or stop selected app'));
     add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart'));
-    add(frame('[L] Logs  [D] Delete  [M] Refresh status'));
+    add(frame('[L] Logs  [E] Environment  [D] Delete  [M] Refresh status'));
     add(frame('[?] Close help  [Q] Quit'));
   } else {
-    add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [D] Delete'));
+    add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [E] Env  [D] Delete'));
     add(frame('[M] Refresh  [?] Help  [Q] Quit'));
   }
   add(cyan + '╠' + border + '╣' + reset);
@@ -459,19 +467,40 @@ async function addApp() {
   if (!entry.toLowerCase().endsWith('.js') && !entry.toLowerCase().endsWith('.cjs') && !entry.toLowerCase().endsWith('.mjs')) {
     throw new Error('Only JavaScript entry files (.js, .cjs, .mjs) are supported.');
   }
+  const nodeInput = await prompt('Node.js executable (blank = current Node): ', NODE);
+  const nodePath = path.resolve(nodeInput || NODE);
+  if (!fs.existsSync(nodePath) || !fs.statSync(nodePath).isFile()) throw new Error('Node.js executable not found: ' + nodePath);
+  if (process.platform !== 'win32') {
+    try { fs.accessSync(nodePath, fs.constants.X_OK); } catch { throw new Error('Node.js executable is not executable: ' + nodePath); }
+  }
   const delayInput = await prompt('Restart delay in ms (500–30000, default 1000): ', '1000');
   const restartDelayMs = Number(delayInput);
   if (!Number.isInteger(restartDelayMs) || restartDelayMs < 500 || restartDelayMs > 30000) throw new Error('Restart delay must be 500–30000ms.');
   const limitInput = await prompt('Max restarts per 60 seconds (0 = unlimited): ', '0');
   const maxRestarts = Number(limitInput);
   if (!Number.isInteger(maxRestarts) || maxRestarts < 0 || maxRestarts > 1000) throw new Error('Restart limit must be 0–1000.');
-  const app = { id: safeId(), name, cwd, entry, args: parts, env: {}, autoRestart: true, desiredRunning: false, restartDelayMs, maxRestartDelayMs: 30000, maxRestarts, restartWindowMs: 60000, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
+  const app = { id: safeId(), name, cwd, entry, args: parts, nodePath, env: {}, autoRestart: true, desiredRunning: false, restartDelayMs, maxRestartDelayMs: 30000, maxRestarts, restartWindowMs: 60000, pid: null, procStartTicks: null, createdAt: new Date().toISOString() };
   const resolved = path.resolve(cwd, entry);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error('Entry file not found: ' + resolved);
   state.apps.push(app);
   selected = state.apps.length - 1;
   saveState();
   notice = name + ' added. Press S to start it.';
+}
+
+async function editEnvironment(app) {
+  const env = app.env && typeof app.env === 'object' && !Array.isArray(app.env) ? { ...app.env } : {};
+  const key = await prompt('Environment variable name (blank to cancel): ');
+  if (!key) { notice = 'Environment edit cancelled.'; return; }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new Error('Invalid environment variable name.');
+  if (['PATH', 'HOME', 'NODE_OPTIONS', 'LD_PRELOAD'].includes(key)) throw new Error('This variable is protected from editing in the TUI.');
+  const exists = Object.prototype.hasOwnProperty.call(env, key);
+  const value = await prompt(exists ? 'New value (blank deletes this variable): ' : 'Value: ');
+  if (exists && value === '') delete env[key];
+  else env[key] = value;
+  app.env = env;
+  saveState();
+  notice = exists && value === '' ? 'Environment variable deleted.' : 'Environment variable saved.';
 }
 
 async function viewLogs(app) {
@@ -528,6 +557,9 @@ async function action(key) {
         break;
       case 'l':
         if (app) await viewLogs(app);
+        break;
+      case 'e':
+        if (app) await editEnvironment(app);
         break;
       case 'd':
         if (!app) break;
@@ -611,7 +643,7 @@ async function main() {
       else notice = 'Press A to add your first Node.js app.';
     } else if (str === '?' || str === 'h' || str === 'H') {
       showHelp = !showHelp;
-    } else if (str && 'asxrldm'.includes(str.toLowerCase())) {
+    } else if (str && 'asxrledm'.includes(str.toLowerCase())) {
       await action(str.toLowerCase());
     }
     render();
