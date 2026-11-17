@@ -9,7 +9,7 @@ def main():
     p.add_argument("--port",type=int,default=8765)
     p.add_argument("--home",default=str(Path.home()/".demonpm"))
     a=p.parse_args()
-    if a.host not in ("127.0.0.1","::1","localhost"):
+    if a.host not in ("127.0.0.1","localhost"):
         p.error("API is deliberately restricted to loopback; use an SSH tunnel for remote access")
     home=Path(a.home); home.mkdir(mode=0o700,parents=True,exist_ok=True)
     token_path=home/"api.token"
@@ -56,7 +56,7 @@ def main():
                 self.send(200,call(body))
             except Exception as e: self.send(400,{"error":str(e)})
     server=ThreadingHTTPServer((a.host,a.port),Handler)
-    print("demonpm API listening on %s:%d; bearer token: %s" % (a.host,a.port,token),flush=True)
+    print("demonpm API listening on %s:%d; token stored in %s" % (a.host,a.port,token_path),flush=True)
     server.serve_forever()
 
 if __name__=="__main__": main()
