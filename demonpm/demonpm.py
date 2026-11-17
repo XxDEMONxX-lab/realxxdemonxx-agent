@@ -102,7 +102,11 @@ class Manager:
         if name in stack: raise ValueError("dependency cycle: " + " -> ".join(stack + (name,)))
         stack = stack + (name,)
         with self.lock:
+            if name not in self.apps: raise ValueError("unknown process: " + name)
             a = self.apps[name]
+            for dep in a.get("requires", []):
+                if dep not in self.apps: raise ValueError("unknown dependency: " + dep)
+                if self.apps[dep].get("status") != "online": self.start(dep, stack)
             old = self.children.get(name)
             if old and old.poll() is None: return self.describe(name)
             env = os.environ.copy()
@@ -218,6 +222,9 @@ class Manager:
                 "requires": q.get("requires", [])}
             self.save()
             return self.start(name)
+        if act == "describe":
+            if name not in self.apps: raise ValueError("unknown process: " + str(name))
+            return self.describe(name)
         if act == "list": return {"processes": [self.describe(n) for n in sorted(self.apps)]}
         if act == "stop": return self.stop(name)
         if act == "restart":
