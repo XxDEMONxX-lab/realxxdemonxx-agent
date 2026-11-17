@@ -10,7 +10,18 @@ def attach(pid, name, cpu_percent=0, memory_mb=0, root="/sys/fs/cgroup"):
     if memory_mb and int(memory_mb) < 16:
         raise ValueError("cgroup memory limit must be at least 16 MiB")
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)
-    base = Path(root) / "demonpm"
+    root_path=Path(root)
+    required=[]
+    if cpu_percent: required.append("cpu")
+    if memory_mb: required.append("memory")
+    try:
+        enabled=(root_path/"cgroup.subtree_control").read_text(encoding="ascii").split()
+        missing=[controller for controller in required if controller not in enabled]
+        if missing:
+            raise RuntimeError("cgroup controllers are not enabled in %s: %s" % (root_path,", ".join(missing)))
+    except OSError as exc:
+        raise RuntimeError("cgroup-v2 subtree is not delegated at %s: %s" % (root_path,exc))
+    base = root_path / "demonpm"
     group = base / safe
     try:
         base.mkdir(exist_ok=True)
