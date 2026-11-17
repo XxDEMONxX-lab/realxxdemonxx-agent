@@ -50,7 +50,21 @@ demonpm start web --cwd "$HOME/web" -- python3 app.py
 demonpm scale web --replicas 3 --base-port 8100
 ~~~
 
-This creates `web-1`, `web-2`, and `web-3` with ports 8100–8102. Then generate and activate an Nginx upstream file:
+This creates `web-1`, `web-2`, and `web-3` with ports 8100–8102. For replicas on other hosts, install demonpm on each host, configure SSH keys and known_hosts, then orchestrate them over strict-host-key SSH:
+
+~~~sh
+demonpm cluster-start web --node deploy@node-a --node deploy@node-b --cwd /srv/web --env PORT=8100 -- python3 app.py
+demonpm cluster-list --node deploy@node-a --node deploy@node-b
+demonpm cluster-stop web --node deploy@node-a --node deploy@node-b
+~~~
+
+Remote nodes must have the same app path, Python/runtime dependencies, and demonpm installed. SSH uses BatchMode and StrictHostKeyChecking; host keys must already be trusted. Cluster-start rolls back instances it started if a later node fails. Add remote endpoints to the Nginx upstream with `--server`:
+
+~~~sh
+demonpm proxy-sync web --upstream-name web_backend --upstream-file /etc/nginx/conf.d/web-upstream.conf --server 10.0.0.12:8100 --server 10.0.0.13:8100
+~~~
+
+Then generate and activate an Nginx upstream file:
 
 ~~~sh
 demonpm proxy-sync web --upstream-name web_backend --upstream-file /etc/nginx/conf.d/web-upstream.conf
@@ -103,7 +117,7 @@ For remote access, use TLS:
 demonpm api --host 0.0.0.0 --port 8765 --tls-cert /path/fullchain.pem --tls-key /path/privkey.pem
 ~~~
 
-Never expose the API over plain HTTP. The token store is hashed and stored in `~/.demonpm/api.tokens.json` with owner-only permissions. The dashboard does not persist the token in browser storage.
+Never expose the API over plain HTTP. The token store is hashed and stored in `~/.demonpm/api.tokens.json` with owner-only permissions. The dashboard does not persist the token in browser storage. Create scoped tokens with `demonpm api --create-token viewer` or `--create-token operator`; token creation takes effect immediately.
 
 ## Plugin hooks (bubblewrap required)
 
@@ -132,7 +146,7 @@ Requires an explicit app working directory, a clean Git tree and a fast-forward 
 - Environment variables are persisted for resurrection. Avoid placing long-lived secrets in shared state or committing config files.
 - Remote API requires TLS and RBAC tokens. Prefer a firewall or private VPN in addition to TLS.
 - Plugin hooks require bubblewrap and fail closed without it.
-- Local replicas and Nginx upstreams are single-host only. No distributed scheduler, multi-host cluster, built-in service discovery, or Kubernetes integration.
+- SSH-based multi-host lifecycle orchestration and manual Nginx endpoints are supported. This is not a distributed scheduler: there is no automatic node discovery, consensus, fencing, cross-node failover, or Kubernetes integration.
 - No generic proxy can guarantee blue-green zero downtime for arbitrary applications.
 - Hard CPU/memory limits require delegated Linux cgroup v2; not generally available in Termux.
 
