@@ -43,9 +43,37 @@ class Manager:
         os.chmod(HOME, 0o700)
         self.apps, self.children, self.cpu = load(STATE, {}), {}, {}
         self.lock, self.alive = threading.RLock(), True
+        self.watch_state = {}
 
     def save(self):
         with self.lock: atomic(STATE, self.apps)
+
+    def snapshot(self, paths):
+        digest = hashlib.sha256()
+        for raw in paths:
+            root = Path(raw).expanduser()
+            items = [root] if root.is_file() else root.rglob("*")
+            for item in sorted(items, key=str):
+                if not item.is_file() or any(part in (".git","node_modules","__pycache__") for part in item.parts):
+                    continue
+                try:
+                    st = item.stat()
+                    digest.update(str(item).encode())
+                    digest.update(("%d:%d" % (st.st_mtime_ns, st.st_size)).encode())
+                except OSError:
+                    continue
+        return digest.hexdigest()
+
+    def notify(self, app, event, detail):
+        hook = app.get("discord_webhook")
+        if not hook: return
+        body = json.dumps({"content":"[demonpm] %s: %s" % (event, detail)}).encode()
+        req = urllib.request.Request(hook, data=body,
+            headers={"Content-Type":"application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=4): pass
+        except Exception as exc:
+            self.log("demonpm", "webhook notification failed: " + str(exc))
 
     def log(self, name, message):
         path = LOGS / (name + ".log")
@@ -85,6 +113,9 @@ class Manager:
             self.children[name] = p
             a.update(status="online", pid=p.pid, started=time.time(), next_restart=0)
             self.log(name, "started pid=%d" % p.pid)
+            self.notify(a, "started", "pid %d" % p.pid)
+            if a.get("watch"):
+                self.watch_state[name] = self.snapshot(a["watch"])
             self.save()
             return self.describe(name)
 
@@ -127,6 +158,7 @@ class Manager:
                     self.children.pop(name, None)
                     a.update(status="stopped", pid=None, last_exit=code)
                     self.log(name, "exited code=%s" % code)
+                    self.notify(a, "exited", "exit code %s" % code)
                     count, limit = a.get("restarts", 0), a.get("max_restarts", 20)
                     if a.get("autorestart", True) and (limit < 0 or count < limit):
                         a["restarts"] = count + 1
@@ -137,6 +169,24 @@ class Manager:
                     except Exception as e:
                         self.log(name, "restart failed: " + str(e))
                         a["next_restart"] = time.time() + 60
+                if a.get("status") == "online" and a.get("watch"):
+                    current = self.snapshot(a["watch"])
+                    if current != self.watch_state.get(name, current):
+                        self.watch_state[name] = current
+                        self.log(name, "watched files changed; restarting")
+                        try: self.stop(name); a["autorestart"] = True; self.start(name)
+                        except Exception as exc: self.log(name, "watch restart failed: " + str(exc))
+                if a.get("status") == "online" and a.get("restart_every"):
+                    if time.time() - a.get("started", time.time()) >= a["restart_every"]:
+                        self.log(name, "scheduled restart")
+                        try: self.stop(name); a["autorestart"] = True; self.start(name)
+                        except Exception as exc: self.log(name, "scheduled restart failed: " + str(exc))
+                if a.get("status") == "online" and a.get("max_memory_mb"):
+                    rss = stats(a.get("pid")).get("rss_mb") if a.get("pid") else None
+                    if rss is not None and rss > a["max_memory_mb"]:
+                        self.log(name, "memory limit exceeded: %s MB" % rss)
+                        try: os.killpg(a["pid"], signal.SIGTERM)
+                        except ProcessLookupError: pass
                 if a.get("status") == "online" and not self.health_ok(a):
                     self.log(name, "health check failed; restarting")
                     try:
@@ -159,7 +209,10 @@ class Manager:
                 raise ValueError("command must be a non-empty argument array")
             self.apps[name] = {"command": cmd, "cwd": q.get("cwd"), "env": q.get("env", {}),
                 "autorestart": q.get("autorestart", True), "max_restarts": q.get("max_restarts", 20),
-                "health_url": q.get("health_url"), "restarts": 0, "status": "stopped", "pid": None}
+                "health_url": q.get("health_url"), "restarts": 0, "status": "stopped", "pid": None,
+                "watch": q.get("watch", []), "restart_every": q.get("restart_every", 0),
+                "max_memory_mb": q.get("max_memory_mb", 0), "discord_webhook": q.get("discord_webhook"),
+                "requires": q.get("requires", [])}
             self.save()
             return self.start(name)
         if act == "list": return {"processes": [self.describe(n) for n in sorted(self.apps)]}
