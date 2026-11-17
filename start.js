@@ -116,12 +116,12 @@ function processMetrics(app) {
   try { entries = fs.readdirSync('/proc'); } catch { return null; }
   const processes = new Map();
   for (const item of entries) {
-    if (!/^\\d+$/.test(item)) continue;
+    if (!/^\d+$/.test(item)) continue;
     try {
       const raw = fs.readFileSync('/proc/' + item + '/stat', 'utf8');
       const end = raw.lastIndexOf(')');
       if (end < 0) continue;
-      const f = raw.slice(end + 2).trim().split(/\\s+/);
+      const f = raw.slice(end + 2).trim().split(/\s+/);
       const pid = Number(item);
       processes.set(pid, { pid, ppid: Number(f[1]), ticks: Number(f[11]) + Number(f[12]), rss: Math.max(0, Number(f[21])) });
     } catch {}
@@ -158,7 +158,7 @@ function processMetrics(app) {
     cpu = Math.max(0, Math.min(cpu, os.cpus().length * 100));
   }
   metricSamples.set(app.id, { time: now, ticks: totalTicks });
-  return { cpu, memoryMb: totalRss * (os.constants?.pagesize || 4096) / (1024 * 1024), processes: count };
+  return { cpu, memoryMb: totalRss * (4096) / (1024 * 1024), processes: count };
 }
 
 function rotateLog(app) {
