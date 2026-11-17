@@ -47,3 +47,12 @@ test("invalid iteration output fails closed",async()=>{
 test("max iteration setting is bounded",async()=>{
  await assert.rejects(()=>runOrchestrationLoop({task:"task",maxIterations:99,runIteration:async()=>[],reviewIteration:async()=>({complete:true})}),/between 1 and 8/);
 });
+
+test("cancellation stops before starting another orchestration round",async()=>{
+ const controller=new AbortController();let rounds=0;
+ await assert.rejects(()=>runOrchestrationLoop({task:"task",maxIterations:4,signal:controller.signal,
+  runIteration:async()=>{rounds++;controller.abort();return [{path:"a.js",content:"x"}];},
+  reviewIteration:async()=>({complete:false,nextTask:"again"})
+ }),{name:"AbortError"});
+ assert.equal(rounds,1);
+});
