@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from limits import attach
 from proxy import switch_upstream
 from plugins import load_plugins
+from demonpm import ssh_request
 
 class InfrastructureTests(unittest.TestCase):
     def test_cgroup_limits_write_cpu_memory_and_pid(self):
@@ -30,6 +31,18 @@ class InfrastructureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
                 switch_upstream(Path(tmp)/"upstream.conf","api",["127.0.0.1:80; malicious"])
+
+    def test_ssh_node_rejects_remote_command_injection(self):
+        with self.assertRaises(ValueError):
+            ssh_request("host; touch /tmp/pwned", {"action":"list"})
+
+    def test_ssh_request_uses_fixed_remote_command(self):
+        import subprocess
+        completed=subprocess.CompletedProcess([],0,'{"processes":[]}',"")
+        with patch("demonpm.subprocess.run",return_value=completed) as run:
+            self.assertEqual(ssh_request("deploy@example.com",{"action":"list"}),{"processes":[]})
+            self.assertEqual(run.call_args.args[0][-2:],["demonpm","remote-request"])
+            self.assertIn("StrictHostKeyChecking=yes",run.call_args.args[0])
 
     def test_plugin_manifest_requires_valid_hook(self):
         with tempfile.TemporaryDirectory() as tmp:
