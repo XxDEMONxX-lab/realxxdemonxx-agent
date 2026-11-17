@@ -526,8 +526,9 @@ function render() {
     add(frame('[Home/G]       First app     [End/Shift+G] Last app'));
     add(frame('[Enter/Space]  Start or stop selected app'));
     add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart'));
-    add(frame('[L] Logs  [E] Env  [V] Mark  [F] Filter  [B] Bulk  [I] Import'));
-    add(frame('[?] Close help  [Q] Quit'));
+    add(frame('[L] Logs  [E] Env  [C] Crash history  [T] Startup order'));
+    add(frame('[V] Mark  [F] Filter  [B] Bulk  [I] Import  [O] Export'));
+    add(frame('[P] Start all  [Z] Stop all  [?] Close help  [Q] Quit'));
   } else {
     add(frame('[A] Add  [S] Start  [X] Stop  [R] Restart  [L] Logs  [E] Env'));
     add(frame('[V] Mark  [F] Filter  [B] Bulk  [I] Import  [O] Export  [C] Crashes  [T] Order'));
