@@ -16,7 +16,7 @@ def healthy(url, timeout=3):
         return False
 
 def switch_upstream(path, upstream, servers, nginx="nginx"):
-    if not upstream.replace("_","").replace("-","").isalnum():
+    if not isinstance(upstream,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}",upstream):
         raise ValueError("invalid nginx upstream name")
     if not servers:
         raise ValueError("upstream server list cannot be empty")
